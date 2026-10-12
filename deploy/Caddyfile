@@ -1,0 +1,31 @@
+{
+  local_certs
+  email admin@imac.local
+}
+
+imac.local, :443 {
+  # Proxy API requests to the app service
+  handle /api/* {
+    reverse_proxy app:3001
+  }
+
+  # Serve the built React frontend
+  handle {
+    root * /srv/web
+    try_files {path} /index.html
+    file_server
+  }
+
+  # Security headers
+  header {
+    X-Frame-Options DENY
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+}
+
+# Redirect HTTP to HTTPS
+http://imac.local {
+  redir https://{host}{uri} permanent
+}

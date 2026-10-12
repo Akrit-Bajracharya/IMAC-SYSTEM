@@ -1,0 +1,81 @@
+{
+  "brand": {
+    "name": "IMAC Nepal",
+    "portalTitle": "Internal Staff Portal"
+  },
+  "auth": {
+    "login": {
+      "title": "Sign In to IMAC Nepal",
+      "username": "Username",
+      "usernamePlaceholder": "Enter your username",
+      "password": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "submit": "Sign In",
+      "loggingIn": "Signing In...",
+      "errors": {
+        "invalidCredentials": "Invalid username or password.",
+        "accountLocked": "Account is locked due to too many failed attempts. Try again after {{time}}.",
+        "networkError": "Network error. Please check your internet connection and try again.",
+        "generic": "An unexpected error occurred. Please try again."
+      }
+    },
+    "changePassword": {
+      "title": "Change Password",
+      "subtitle": "Please update your password before continuing.",
+      "currentPassword": "Current Password",
+      "currentPasswordPlaceholder": "Enter your current password",
+      "newPassword": "New Password",
+      "newPasswordPlaceholder": "Enter your new password",
+      "confirmPassword": "Confirm New Password",
+      "confirmPasswordPlaceholder": "Confirm your new password",
+      "submit": "Update Password",
+      "submitting": "Updating Password...",
+      "success": "Password changed successfully.",
+      "mismatch": "Passwords do not match.",
+      "tooShort": "Password must be at least 1 character.",
+      "errors": {
+        "wrongCurrentPassword": "The current password you provided is incorrect.",
+        "generic": "Failed to update password. Please try again."
+      }
+    },
+    "logout": "Log Out"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "settings": "Settings",
+    "auditLog": "Audit Log",
+    "workLog": "Work Log",
+    "leave": "Leave",
+    "overtime": "Overtime",
+    "projects": "Projects"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "unauthorized": "You are not authorized to view this page.",
+    "notFound": "Page not found.",
+    "back": "Go Back",
+    "backToHome": "Return to Dashboard",
+    "close": "Close"
+  },
+  "roles": {
+    "system_admin": "System Admin",
+    "hr_admin": "HR Admin",
+    "project_manager": "Project Manager",
+    "employee": "Employee",
+    "viewer": "Viewer"
+  },
+  "dashboard": {
+    "admin": {
+      "title": "Admin Dashboard",
+      "welcome": "Welcome, {{name}}!",
+      "note": "Full dashboard coming in Phase 7."
+    },
+    "employee": {
+      "title": "Employee Dashboard",
+      "welcome": "Welcome, {{name}}!",
+      "note": "Full dashboard coming in Phase 7."
+    }
+  }
+}

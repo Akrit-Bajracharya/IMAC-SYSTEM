@@ -1,0 +1,73 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: imac_db
+      POSTGRES_USER: imac_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imac_user -d imac_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - imac_net
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://imac_user:${POSTGRES_PASSWORD}@postgres:5432/imac_db
+      PORT: 3001
+      NODE_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-IMAC_SESSION}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://imac.local}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADMIN1_USERNAME: ${ADMIN1_USERNAME}
+      ADMIN1_DISPLAY_NAME: ${ADMIN1_DISPLAY_NAME}
+      ADMIN1_PASSWORD: ${ADMIN1_PASSWORD}
+      ADMIN2_USERNAME: ${ADMIN2_USERNAME}
+      ADMIN2_DISPLAY_NAME: ${ADMIN2_DISPLAY_NAME}
+      ADMIN2_PASSWORD: ${ADMIN2_PASSWORD}
+      ADMIN_REQUIRE_PASSWORD_CHANGE: ${ADMIN_REQUIRE_PASSWORD_CHANGE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - imac_net
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ../apps/web/dist:/srv/web:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - imac_net
+
+volumes:
+  postgres_data:
+  uploads:
+  caddy_data:
+  caddy_config:
+
+networks:
+  imac_net:
+    driver: bridge

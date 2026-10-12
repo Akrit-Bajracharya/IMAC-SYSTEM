@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SystemRole {
+  system_admin
+  hr_admin
+  project_manager
+  employee
+  viewer
+}
+
+model User {
+  id                 String           @id @default(uuid())
+  username           String           @unique
+  displayName        String
+  passwordHash       String
+  systemRole         SystemRole       @default(employee)
+  isActive           Boolean          @default(true)
+  mustChangePassword Boolean          @default(true)
+  failedLoginCount   Int              @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  employeeProfile    EmployeeProfile?
+  sessions           Session[]
+  auditLogsAsActor   AuditLog[]       @relation("AuditActor")
+}
+
+model EmployeeProfile {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id])
+  employeeCode        String    @unique
+  department          String?
+  jobTitle            String?
+  startDate           DateTime?
+  standardShiftHours  Float     @default(8)
+  workingDaysPerWeek  Int       @default(5)
+  managerUserId       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model Session {
+  id           String   @id
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  expiresAt    DateTime
+  lastActiveAt DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  actorUserId    String?
+  actor          User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  action         String
+  entityType     String?
+  entityId       String?
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+}
