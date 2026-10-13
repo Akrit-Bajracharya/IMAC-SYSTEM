@@ -5,26 +5,33 @@ import { can, type Action } from '../lib/permissions.js';
 
 export type AuthRequest = Request & { user?: AuthUser; sessionId?: string };
 
+// SEC-02: requireAuth is wrapped in try/catch so that any database error
+// (e.g. connection pool exhausted) is forwarded to next(err) → errorHandler,
+// returning HTTP 500 instead of hanging the request or crashing the process.
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  const cookieName = process.env['SESSION_COOKIE_NAME'] ?? 'IMAC_SESSION';
-  const sessionId = req.cookies?.[cookieName];
-  if (!sessionId) return res.status(401).json({ error: 'unauthenticated', message: 'Not authenticated' });
+  try {
+    const cookieName = process.env['SESSION_COOKIE_NAME'] ?? 'IMAC_SESSION';
+    const sessionId = req.cookies?.[cookieName];
+    if (!sessionId) return res.status(401).json({ error: 'unauthenticated', message: 'Not authenticated' });
 
-  const session = await getSession(sessionId);
-  if (!session || !session.user.isActive) {
-    res.clearCookie(cookieName);
-    return res.status(401).json({ error: 'unauthenticated', message: 'Session expired or invalid' });
+    const session = await getSession(sessionId);
+    if (!session || !session.user.isActive) {
+      res.clearCookie(cookieName);
+      return res.status(401).json({ error: 'unauthenticated', message: 'Session expired or invalid' });
+    }
+
+    req.user = {
+      id: session.user.id,
+      username: session.user.username,
+      displayName: session.user.displayName,
+      systemRole: session.user.systemRole as SystemRole,
+      mustChangePassword: session.user.mustChangePassword,
+    };
+    req.sessionId = session.id;
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  req.user = {
-    id: session.user.id,
-    username: session.user.username,
-    displayName: session.user.displayName,
-    systemRole: session.user.systemRole as SystemRole,
-    mustChangePassword: session.user.mustChangePassword,
-  };
-  req.sessionId = session.id;
-  next();
 }
 
 export function requireRole(...roles: SystemRole[]) {

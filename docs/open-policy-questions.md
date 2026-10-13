@@ -36,15 +36,15 @@ This document tracks unresolved policy, organizational, and operational decision
 
 8. **Admin Self-Password Reset Guard**
    - **Question**: Should system administrators be blocked from using the administrative temporary password reset endpoint on their own account (`POST /api/admin/users/:id/reset-password`), requiring them instead to change passwords via the standard authenticated `/change-password` endpoint?
-   - **Current Implementation**: Allowed in Phase 0; self-target check (`req.user?.id === targetId`) is present on deactivation and role updates, but omitted on password reset.
+   - **Current Implementation**: Blocked (HTTP 400 `invalid_action`); administrators must use `/api/auth/change-password` to change their own password, preserving audit clarity and requiring the current password.
 
 9. **Cross-Admin Password Reset & Sudo Mode**
    - **Question**: Can one system administrator (`boss` or `akrit`) unilaterally reset the password of another system administrator, or should administrative actions targeting other administrators require credential re-verification (sudo mode) or mutual confirmation?
-   - **Current Implementation**: Any `system_admin` can reset any user's password without re-entering credentials.
+   - **Current Implementation**: Allowed and fully audited; any `system_admin` can reset another user's (including another admin's) password without re-entering credentials. A policy question remains whether sudo-mode re-authentication should be required for cross-admin actions in future phases.
 
 10. **Administrative Password Reset Throttling**
     - **Question**: What is the maximum permitted rate of temporary password generations per administrator per hour?
-    - **Current Implementation**: No rate limit on administrative password resets; limited only by authenticated session checks.
+    - **Current Implementation**: Rate limited at 10 requests per 15 minutes per IP (`resetPasswordLimiter`).
 
 ---
 

@@ -21,3 +21,13 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
 export function generateTempPassword(): string {
   return nanoid(20);
 }
+
+// SEC-05: Pre-compute a dummy Argon2id hash once at startup.
+// Used by the login route to run a constant-time hash comparison even when the
+// username is not found, preventing user enumeration via response-time differences.
+// The plaintext is irrelevant; verifyPassword against this hash always returns false.
+const _dummyHashPromise = hashPassword('__imac_sys_dummy_timing_placeholder__');
+
+export async function getDummyHash(): Promise<string> {
+  return _dummyHashPromise;
+}

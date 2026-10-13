@@ -9,6 +9,8 @@ vi.mock('../services/password.js', () => ({
   verifyPassword: vi.fn(),
   hashPassword: vi.fn().mockResolvedValue('hashed_new_password'),
   generateTempPassword: vi.fn().mockReturnValue('temp-pass-12345'),
+  // SEC-05: getDummyHash is used by the login route for constant-time comparisons
+  getDummyHash: vi.fn().mockResolvedValue('dummy-hash-for-timing'),
 }));
 
 const app = createApp({ csrfDisabled: true });

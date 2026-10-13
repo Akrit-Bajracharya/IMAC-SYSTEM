@@ -2,25 +2,28 @@ import { Router } from 'express';
 import { loginSchema, changePasswordSchema } from '@imac/shared';
 import { db } from '../db.js';
 import { config } from '../config.js';
-import { verifyPassword, hashPassword } from '../services/password.js';
+import { verifyPassword, hashPassword, getDummyHash } from '../services/password.js';
 import { getSettingNumber } from '../services/settings.js';
 import { createSession, deleteSession } from '../services/session.js';
 import { createAuditEntry } from '../services/auditLog.js';
 import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { generateToken } from '../lib/csrf.js';
 
 export const authRouter = Router();
 
-// GET /csrf
+// GET /csrf — returns a CSRF token cookie+value for the double-submit pattern.
+// This endpoint is exempt from CSRF validation (it IS the token-issue endpoint).
 authRouter.get('/csrf', (req, res) => {
   const token = generateToken(req, res);
   res.json({ csrfToken: token });
 });
 
 // POST /login
-authRouter.post('/login', validate(loginSchema), async (req, res) => {
-  const { username, password } = req.body;
+authRouter.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
+  // SEC-09: username has already been trimmed and lowercased by loginSchema validation.
+  const { username, password } = req.body as { username: string; password: string };
   const ipAddress = req.ip;
 
   const user = await db.user.findFirst({
@@ -32,7 +35,11 @@ authRouter.post('/login', validate(loginSchema), async (req, res) => {
     },
   });
 
+  // SEC-05: Always run a constant-time hash comparison even when the user is not
+  // found or is inactive. This prevents user enumeration via response-time differences
+  // between "username exists" and "username does not exist" paths.
   if (!user || !user.isActive) {
+    await verifyPassword(await getDummyHash(), password); // result intentionally discarded
     await createAuditEntry({
       action: 'auth.login.failed',
       entityType: 'User',
@@ -100,7 +107,7 @@ authRouter.post('/login', validate(loginSchema), async (req, res) => {
     });
   }
 
-  // Reset failed login count and clear lockout
+  // Reset failed login count and clear lockout on successful authentication.
   await db.user.update({
     where: { id: user.id },
     data: {
@@ -116,7 +123,11 @@ authRouter.post('/login', validate(loginSchema), async (req, res) => {
     httpOnly: true,
     path: '/',
     sameSite: 'strict',
-    secure: config.isProduction,
+    // SEC-08: The Secure flag is set whenever NODE_ENV is 'production' OR the
+    // SESSION_COOKIE_SECURE env var is explicitly set to 'true'. The latter allows
+    // local network deployments using the Caddy HTTPS reverse proxy to enforce the
+    // Secure attribute without changing NODE_ENV.
+    secure: process.env['NODE_ENV'] === 'production' || process.env['SESSION_COOKIE_SECURE'] === 'true',
   });
 
   await createAuditEntry({
@@ -136,10 +147,10 @@ authRouter.post('/login', validate(loginSchema), async (req, res) => {
       mustChangePassword: user.mustChangePassword,
     },
   });
-});
+}));
 
 // POST /logout
-authRouter.post('/logout', requireAuth, async (req: AuthRequest, res) => {
+authRouter.post('/logout', requireAuth, asyncHandler(async (req: AuthRequest, res) => {
   if (req.sessionId) {
     await deleteSession(req.sessionId);
   }
@@ -155,7 +166,7 @@ authRouter.post('/logout', requireAuth, async (req: AuthRequest, res) => {
   });
 
   return res.status(200).json({ ok: true });
-});
+}));
 
 // GET /me
 authRouter.get('/me', requireAuth, (req: AuthRequest, res) => {
@@ -163,8 +174,8 @@ authRouter.get('/me', requireAuth, (req: AuthRequest, res) => {
 });
 
 // POST /change-password
-authRouter.post('/change-password', requireAuth, validate(changePasswordSchema), async (req: AuthRequest, res) => {
-  const { currentPassword, newPassword } = req.body;
+authRouter.post('/change-password', requireAuth, validate(changePasswordSchema), asyncHandler(async (req: AuthRequest, res) => {
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
   const minPasswordLength = await getSettingNumber('auth.minPasswordLength', 10);
 
   if (newPassword.length < minPasswordLength) {
@@ -209,4 +220,4 @@ authRouter.post('/change-password', requireAuth, validate(changePasswordSchema),
   });
 
   return res.status(200).json({ ok: true });
-});
+}));

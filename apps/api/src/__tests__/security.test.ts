@@ -12,6 +12,7 @@ vi.mock('../services/password.js', () => ({
   verifyPassword: vi.fn(),
   hashPassword: vi.fn().mockResolvedValue('hashed_test_password'),
   generateTempPassword: vi.fn().mockReturnValue('temp-password-12345'),
+  getDummyHash: vi.fn().mockResolvedValue('dummy-argon2-hash-for-timing'),
 }));
 
 // Mock logger to verify error logging
@@ -136,7 +137,7 @@ describe('Security & Vulnerability Test Suite', () => {
       expect(cookieStr).not.toContain('attacker-fixed-session-id');
     });
 
-    it('security weakness: login does not delete pre-existing sessions from the database', async () => {
+    it('security policy status (SEC-07): login preserves concurrent session policy as documented in open questions', async () => {
       const app = createApp({ csrfDisabled: true });
       vi.mocked(db.user.findFirst).mockResolvedValue(mockAdminUser as any);
       vi.mocked(passwordService.verifyPassword).mockResolvedValue(true);
@@ -148,7 +149,8 @@ describe('Security & Vulnerability Test Suite', () => {
         .set('Cookie', ['IMAC_SESSION=existing-prior-session-id'])
         .send({ username: 'boss', password: 'correct_password' });
 
-      // Verifies weakness: db.session.delete or deleteMany is NOT invoked for the old session cookie upon login
+      // Verifies documented policy: db.session.delete is not called upon login
+      // until multi-session vs single-session policy decision is confirmed by IMAC.
       expect(db.session.delete).not.toHaveBeenCalled();
       expect(db.session.deleteMany).not.toHaveBeenCalled();
     });
@@ -179,7 +181,7 @@ describe('Security & Vulnerability Test Suite', () => {
       expect(cookieStr).toMatch(/Path=\//i);
     });
 
-    it('security weakness: Secure flag is omitted in non-production environments', async () => {
+    it('SEC-08: Secure flag is omitted in non-production development by default', async () => {
       const app = createApp({ csrfDisabled: true });
       vi.mocked(db.user.findFirst).mockResolvedValue(mockAdminUser as any);
       vi.mocked(passwordService.verifyPassword).mockResolvedValue(true);
@@ -192,8 +194,36 @@ describe('Security & Vulnerability Test Suite', () => {
 
       const setCookie = res.headers['set-cookie'];
       const cookieStr = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-      // In NODE_ENV=test (non-production), Secure flag is missing, even though local network HTTPS is required
+      // In default test/dev, Secure is false so HTTP dev environments work
       expect(cookieStr).not.toMatch(/;\s*Secure/i);
+    });
+
+    it('SEC-08: Secure flag is enforced when NODE_ENV=production or SESSION_COOKIE_SECURE=true', async () => {
+      const originalEnv = process.env['SESSION_COOKIE_SECURE'];
+      process.env['SESSION_COOKIE_SECURE'] = 'true';
+
+      try {
+        const app = createApp({ csrfDisabled: true });
+        vi.mocked(db.user.findFirst).mockResolvedValue(mockAdminUser as any);
+        vi.mocked(passwordService.verifyPassword).mockResolvedValue(true);
+        vi.mocked(db.user.update).mockResolvedValue(mockAdminUser as any);
+        vi.mocked(db.session.create).mockResolvedValue({ id: 'secure-session-id' } as any);
+
+        const res = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'boss', password: 'correct_password' });
+
+        const setCookie = res.headers['set-cookie'];
+        expect(setCookie).toBeDefined();
+        const cookieStr = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+        expect(cookieStr).toMatch(/;\s*Secure/i);
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env['SESSION_COOKIE_SECURE'];
+        } else {
+          process.env['SESSION_COOKIE_SECURE'] = originalEnv;
+        }
+      }
     });
 
     it('CSRF cookie includes HttpOnly, SameSite=Strict, and Path=/ attributes', async () => {
@@ -262,9 +292,8 @@ describe('Security & Vulnerability Test Suite', () => {
         ...mockAdminUser,
         lockedUntil: new Date(Date.now() + 10 * 60 * 1000),
       };
-      // findFirst is queried with mode: 'insensitive'
       (vi.mocked(db.user.findFirst) as any).mockImplementation(async ({ where }: any) => {
-        if (where.username.mode === 'insensitive' && where.username.equals.toLowerCase() === 'boss') {
+        if (where.username.equals.toLowerCase() === 'boss') {
           return lockedUser as any;
         }
         return null;
@@ -278,50 +307,44 @@ describe('Security & Vulnerability Test Suite', () => {
       expect(res.body.error).toBe('account_locked');
     });
 
-    it('security weakness: trailing whitespace in username creates lockout inconsistency', async () => {
+    it('SEC-09: trailing and leading whitespace in username is trimmed and correctly matches user', async () => {
       const app = createApp({ csrfDisabled: true });
-      // When user enters "boss ", Prisma findFirst searches for exact string "boss "
       (vi.mocked(db.user.findFirst) as any).mockImplementation(async ({ where }: any) => {
         if (where.username.equals === 'boss') {
           return mockAdminUser as any;
         }
-        // "boss " does not match DB username "boss"
         return null;
       });
-
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ username: 'boss ', password: 'wrong_password' });
-
-      // Unsanitized whitespace fails username lookup instead of being trimmed
-      expect(res.status).toBe(401);
-      // Because findFirst returned null, the real user's failedLoginCount was NOT incremented
-      expect(db.user.update).not.toHaveBeenCalled();
-    });
-
-    it('security weakness: response timing difference between valid and invalid usernames', async () => {
-      const app = createApp({ csrfDisabled: true });
-      // When username is invalid: returns immediately without verifyPassword
-      vi.mocked(db.user.findFirst).mockResolvedValue(null);
-
-      const resInvalid = await request(app)
-        .post('/api/auth/login')
-        .send({ username: 'nonexistent_user', password: 'wrong_password' });
-
-      expect(resInvalid.status).toBe(401);
-      expect(passwordService.verifyPassword).not.toHaveBeenCalled();
-
-      // When username is valid: verifyPassword IS called
-      vi.mocked(db.user.findFirst).mockResolvedValue(mockAdminUser as any);
       vi.mocked(passwordService.verifyPassword).mockResolvedValue(false);
       vi.mocked(db.user.update).mockResolvedValue(mockAdminUser as any);
 
-      const resValid = await request(app)
+      const res = await request(app)
         .post('/api/auth/login')
-        .send({ username: 'boss', password: 'wrong_password' });
+        .send({ username: '  boss  ', password: 'wrong_password' });
 
-      expect(resValid.status).toBe(401);
-      expect(passwordService.verifyPassword).toHaveBeenCalled();
+      // Sanitized whitespace successfully matches the user and increments lockout count
+      expect(res.status).toBe(401);
+      expect(db.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockAdminUser.id },
+          data: { failedLoginCount: 1 },
+        }),
+      );
+    });
+
+    it('SEC-05: password verification runs dummy hash check when username does not exist', async () => {
+      const app = createApp({ csrfDisabled: true });
+      vi.mocked(db.user.findFirst).mockResolvedValue(null);
+      vi.mocked(passwordService.verifyPassword).mockResolvedValue(false);
+
+      const resInvalid = await request(app)
+        .post('/api/auth/login')
+        .send({ username: 'nonexistent_user', password: 'any_password' });
+
+      expect(resInvalid.status).toBe(401);
+      // Dummy hash is verified to prevent timing differences
+      expect(passwordService.getDummyHash).toHaveBeenCalled();
+      expect(passwordService.verifyPassword).toHaveBeenCalledWith('dummy-argon2-hash-for-timing', 'any_password');
     });
   });
 
@@ -329,41 +352,35 @@ describe('Security & Vulnerability Test Suite', () => {
   /* 4. CSRF Protection & Surface Audit                                         */
   /* -------------------------------------------------------------------------- */
   describe('4. CSRF Protection & Route Coverage', () => {
-    it('security weakness: administrative routes (/api/admin/*) lack CSRF protection middleware', async () => {
-      // createApp with default settings (CSRF middleware mounted)
-      const app = createApp();
+    it('SEC-01 & SEC-04: administrative routes (/api/admin/*) enforce CSRF and return 403 when token is missing', async () => {
+      // createApp with csrfEnabled: true
+      const app = createApp({ csrfEnabled: true });
       vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
       vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
-      vi.mocked(db.user.findUnique).mockResolvedValue(mockEmployeeUser as any);
-      vi.mocked(db.user.update).mockResolvedValue({ ...mockEmployeeUser, isActive: false } as any);
-      vi.mocked(db.session.deleteMany).mockResolvedValue({ count: 1 });
 
       // Call state-changing admin endpoint WITHOUT any CSRF token header or cookie
       const res = await request(app)
         .patch('/api/admin/users/employee-uuid-2/deactivate')
         .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`]);
 
-      // Weakness: The request succeeds because csrfMiddleware was NOT mounted on adminUsersRouter in app.ts!
-      expect(res.status).toBe(200);
-      expect(res.body.ok).toBe(true);
+      // Safe behaviour: 403 Forbidden with csrf_invalid
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('csrf_invalid');
     });
 
-    it('security weakness: settings admin route (/api/admin/settings) lacks CSRF protection', async () => {
-      const app = createApp();
+    it('SEC-01 & SEC-04: settings admin route (/api/admin/settings) enforces CSRF and returns 403', async () => {
+      const app = createApp({ csrfEnabled: true });
       vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
       vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
-      vi.mocked(db.systemSetting.findUnique).mockResolvedValue({ key: 'auth.lockoutThreshold', value: '5' } as any);
-      vi.mocked(db.systemSetting.upsert).mockResolvedValue({ key: 'auth.lockoutThreshold', value: '10' } as any);
 
-      // State-changing PATCH request to /api/admin/settings/:key WITHOUT CSRF token
       const res = await request(app)
         .patch('/api/admin/settings/auth.lockoutThreshold')
         .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`])
         .send({ value: '10' });
 
-      // Weakness: adminSettingsRouter is unprotected by CSRF middleware
-      expect(res.status).toBe(200);
-      expect(res.body.ok).toBe(true);
+      // Safe behaviour: 403 Forbidden with csrf_invalid
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('csrf_invalid');
     });
   });
 
@@ -527,7 +544,7 @@ describe('Security & Vulnerability Test Suite', () => {
 
       expect(res.status).toBe(401);
       expect(res.body.error).toBe('invalid_credentials');
-      expect(passwordService.verifyPassword).not.toHaveBeenCalled();
+      expect(passwordService.getDummyHash).toHaveBeenCalled();
     });
 
     it('immediately rejects existing session when user becomes deactivated and clears cookie', async () => {
@@ -603,7 +620,7 @@ describe('Security & Vulnerability Test Suite', () => {
       expect(res.body.error).toBe('not_found');
     });
 
-    it('password reset invalidates all active sessions and sets mustChangePassword', async () => {
+    it('password reset invalidates all active sessions, sets mustChangePassword, and sets Cache-Control: no-store (SEC-10)', async () => {
       const app = createApp({ csrfDisabled: true });
       vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
       vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
@@ -617,6 +634,8 @@ describe('Security & Vulnerability Test Suite', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.temporaryPassword).toBe('temp-password-12345');
+      // SEC-10: Cache-Control: no-store header prevents proxy/browser caching
+      expect(res.headers['cache-control']).toBe('no-store');
       expect(db.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: mockEmployeeUser.id },
@@ -628,21 +647,43 @@ describe('Security & Vulnerability Test Suite', () => {
       });
     });
 
-    it('security weakness: admin can reset their own password via admin reset endpoint without self-reset block', async () => {
+    it('SEC-06: blocks admin from resetting their own password via admin reset endpoint', async () => {
       const app = createApp({ csrfDisabled: true });
       vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
       vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
-      vi.mocked(db.user.findUnique).mockResolvedValue(mockAdminUser as any);
-      vi.mocked(db.user.update).mockResolvedValue({ ...mockAdminUser, mustChangePassword: true } as any);
-      vi.mocked(db.session.deleteMany).mockResolvedValue({ count: 1 });
 
       // Admin targets their own ID: /api/admin/users/:adminId/reset-password
       const res = await request(app)
         .post(`/api/admin/users/${mockAdminUser.id}/reset-password`)
         .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`]);
 
-      // Weakness: Unlike deactivate and role change, reset-password lacks self-target check (req.user.id === targetId)
-      expect(res.status).toBe(200);
+      // Safe behaviour: 400 invalid_action
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_action');
+      expect(res.body.message).toContain('change-password');
+    });
+
+    it('SEC-10: user creation endpoint returns Cache-Control: no-store when temporary password is issued', async () => {
+      const app = createApp({ csrfDisabled: true });
+      vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.user.findUnique).mockResolvedValue(null);
+      vi.mocked(db.user.create).mockResolvedValue({
+        id: 'new-user-uuid',
+        username: 'new_hire',
+        displayName: 'New Hire',
+        systemRole: 'employee',
+        isActive: true,
+        mustChangePassword: true,
+      } as any);
+
+      const res = await request(app)
+        .post('/api/admin/users')
+        .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`])
+        .send({ username: 'new_hire', displayName: 'New Hire', systemRole: 'employee' });
+
+      expect(res.status).toBe(201);
+      expect(res.headers['cache-control']).toBe('no-store');
       expect(res.body.temporaryPassword).toBeDefined();
     });
   });
@@ -652,7 +693,6 @@ describe('Security & Vulnerability Test Suite', () => {
   /* -------------------------------------------------------------------------- */
   describe('9. Async Unhandled Errors & Server Resilience', () => {
     it('errorHandler middleware logs error and returns HTTP 500 without crashing', async () => {
-      // Test the central errorHandler middleware directly
       const mockReq = {} as Request;
       const mockJson = vi.fn();
       const mockStatus = vi.fn().mockReturnValue({ json: mockJson });
@@ -665,7 +705,6 @@ describe('Security & Vulnerability Test Suite', () => {
       const testError = new Error('Database connection pool exhausted: DB down');
       errorHandler(testError, mockReq, mockRes, mockNext);
 
-      // Verifies requirements: logs error, returns 500, never crashes
       expect(logger.error).toHaveBeenCalledWith({ err: testError }, 'Unhandled error');
       expect(mockStatus).toHaveBeenCalledWith(500);
       expect(mockJson).toHaveBeenCalledWith({
@@ -694,47 +733,30 @@ describe('Security & Vulnerability Test Suite', () => {
       );
     });
 
-    it('security weakness: async routes in Express 4 omit try/catch, resulting in unhandledRejection events', async () => {
-      // Intercept unhandledRejection temporarily so Vitest runner does not crash
-      const originalListeners = process.rawListeners('unhandledRejection');
-      process.removeAllListeners('unhandledRejection');
-
-      let capturedRejection: unknown = null;
-      const rejectionPromise = new Promise((resolve) => {
-        process.once('unhandledRejection', (reason) => {
-          capturedRejection = reason;
-          resolve(reason);
-        });
-      });
-
+    it('SEC-02: unhandled async DB error in route returns HTTP 500 cleanly via asyncHandler', async () => {
       const app = createApp({ csrfDisabled: true });
       vi.mocked(db.user.findFirst).mockRejectedValue(new Error('Connection terminated: DB down'));
 
-      try {
-        // Trigger async route that rejects
-        request(app)
-          .post('/api/auth/login')
-          .send({ username: 'boss', password: 'password' })
-          .end(() => {
-            // Callback intentionally empty; request hangs or rejects in Express 4
-          });
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ username: 'boss', password: 'password' });
 
-        // Await the unhandledRejection event emitted by Node.js due to Express 4's async gap
-        await Promise.race([
-          rejectionPromise,
-          new Promise((resolve) => setTimeout(resolve, 500)),
-        ]);
-      } finally {
-        // Restore Vitest's process listeners
-        process.removeAllListeners('unhandledRejection');
-        for (const listener of originalListeners) {
-          process.on('unhandledRejection', listener as any);
-        }
-      }
+      // Safe behaviour: asyncHandler catches the error, passes to errorHandler, returns 500 cleanly
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('internal_error');
+    });
 
-      // Verifies critical weakness: An unhandled rejection was produced because Express 4 does not catch async errors
-      expect(capturedRejection).toBeInstanceOf(Error);
-      expect((capturedRejection as Error).message).toContain('DB down');
+    it('SEC-02: unhandled async DB error in requireAuth middleware returns HTTP 500 cleanly', async () => {
+      const app = createApp({ csrfDisabled: true });
+      vi.mocked(db.session.findUnique).mockRejectedValue(new Error('DB pool exhausted during session lookup'));
+
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set('Cookie', ['IMAC_SESSION=some-session-id']);
+
+      // Safe behaviour: try/catch in requireAuth catches the error, passes to errorHandler, returns 500 cleanly
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('internal_error');
     });
   });
 });

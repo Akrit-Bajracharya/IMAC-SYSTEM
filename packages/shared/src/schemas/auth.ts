@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required').max(64),
+  // SEC-09: trim whitespace and lowercase before lookup so 'boss ', 'BoSs' etc. all
+  // map to the same DB row and lockout counter, preventing bypass via username variants.
+  username: z.string().min(1, 'Username is required').max(64).trim().toLowerCase(),
   password: z.string().min(1, 'Password is required').max(256),
 });
 
