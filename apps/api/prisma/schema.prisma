@@ -46,6 +46,30 @@ model EmployeeProfile {
   managerUserId       String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  workRoles           EmployeeWorkRole[]
+}
+
+model WorkRole {
+  id                 String             @id @default(uuid())
+  name               String             @unique
+  description        String?
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  employeeWorkRoles  EmployeeWorkRole[]
+}
+
+model EmployeeWorkRole {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  workRoleId        String
+  workRole          WorkRole        @relation(fields: [workRoleId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([employeeProfileId, workRoleId])
 }
 
 model Session {

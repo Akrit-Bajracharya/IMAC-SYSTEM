@@ -85,3 +85,7 @@ This document tracks unresolved policy, organizational, and operational decision
 6. **Leave Availability Synchronization**
    - **Question**: Should approved leaves automatically adjust employee availability status across active assignments?
    - **Current Implementation**: `leave.autoSetAvailability = "true"`.
+
+7. **Work Role Customization & Assignment Authority**
+   - **Question**: Who may create work roles and customize an employee's assigned work roles (system admin only, or also HR or project managers)? (Master Brief Part C, item 6)
+   - **Current Implementation**: Restricted exclusively to `system_admin` in `apps/api/src/lib/permissions.ts`. All admin work role creation, editing, deactivation, and assignment endpoints enforce `requireRole('system_admin')` / `can(user, 'workrole:*')`.

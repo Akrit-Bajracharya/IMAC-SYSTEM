@@ -9,7 +9,14 @@ export type Action =
   | 'user:changeRole'
   | 'settings:read'
   | 'settings:update'
-  | 'auditlog:read';
+  | 'auditlog:read'
+  | 'workrole:create'
+  | 'workrole:read'
+  | 'workrole:update'
+  | 'workrole:deactivate'
+  | 'workrole:assign'
+  | 'workrole:remove'
+  | 'workrole:readEmployee';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
@@ -22,6 +29,13 @@ export function can(user: AuthUser, action: Action): boolean {
     case 'settings:read':
     case 'settings:update':
     case 'auditlog:read':
+    case 'workrole:create':
+    case 'workrole:read':
+    case 'workrole:update':
+    case 'workrole:deactivate':
+    case 'workrole:assign':
+    case 'workrole:remove':
+    case 'workrole:readEmployee':
       return role === 'system_admin';
 
     case 'user:read':
