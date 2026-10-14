@@ -13,6 +13,7 @@ import { adminUsersRouter } from './routes/admin/users.js';
 import { adminSettingsRouter } from './routes/admin/settings.js';
 import { adminWorkRolesRouter } from './routes/admin/workRoles.js';
 import { workRolesRouter } from './routes/workRoles.js';
+import { employeesRouter } from './routes/employees.js';
 
 export interface AppOptions {
   /** Disable CSRF protection entirely (use only in automated tests). */
@@ -129,6 +130,8 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api/admin/settings', csrfMiddleware, adminSettingsRouter); // SEC-01 (was unprotected)
   app.use('/api/admin/work-roles', csrfMiddleware, adminWorkRolesRouter);
   app.use('/api/work-roles', workRolesRouter);
+  app.use('/api/employees', employeesRouter);
+  app.use('/api/directory', employeesRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {

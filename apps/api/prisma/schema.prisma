@@ -30,7 +30,8 @@ model User {
 
   employeeProfile    EmployeeProfile?
   sessions           Session[]
-  auditLogsAsActor   AuditLog[]       @relation("AuditActor")
+  auditLogsAsActor   AuditLog[]          @relation("AuditActor")
+  availabilityStatus AvailabilityStatus?
 }
 
 model EmployeeProfile {
@@ -103,3 +104,23 @@ model AuditLog {
   ipAddress      String?
   createdAt      DateTime @default(now())
 }
+
+enum Availability {
+  available
+  busy_in_meeting
+  out_of_office
+  on_leave
+  working_remotely
+}
+
+model AvailabilityStatus {
+  id        String       @id @default(uuid())
+  userId    String       @unique
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    Availability @default(available)
+  message   String?
+  expiresAt DateTime?
+  source    String       @default("manual")
+  updatedAt DateTime     @updatedAt
+}
+

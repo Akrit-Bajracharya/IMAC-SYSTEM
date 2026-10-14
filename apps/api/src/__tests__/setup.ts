@@ -38,6 +38,7 @@ vi.mock('../db.js', () => ({
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      upsert: vi.fn(),
     },
     workRole: {
       findUnique: vi.fn(),
@@ -54,6 +55,14 @@ vi.mock('../db.js', () => ({
       create: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
+    },
+    availabilityStatus: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
     },
   },
 }));
