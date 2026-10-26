@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
+  BookUser,
   ClipboardList,
   Calendar,
   Clock,
@@ -23,6 +24,12 @@ export function EmployeeLayout() {
       label: t('nav.dashboard'),
       icon: LayoutDashboard,
       end: true,
+    },
+    {
+      to: '/employee/directory',
+      label: t('nav.directory'),
+      icon: BookUser,
+      end: false,
     },
     {
       to: '/employee/work-log',

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
   Users,
+  Briefcase,
+  BookUser,
   Settings,
   FileText,
   LogOut,
@@ -28,6 +30,18 @@ export function AdminLayout() {
       to: '/admin/users',
       label: t('nav.users'),
       icon: Users,
+      end: false,
+    },
+    {
+      to: '/admin/work-roles',
+      label: t('nav.workRoles'),
+      icon: Briefcase,
+      end: false,
+    },
+    {
+      to: '/admin/directory',
+      label: t('nav.directory'),
+      icon: BookUser,
       end: false,
     },
     {

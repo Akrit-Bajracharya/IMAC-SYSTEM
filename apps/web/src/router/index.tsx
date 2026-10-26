@@ -10,6 +10,10 @@ import { LoginPage } from '../pages/auth/LoginPage.js';
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage.js';
 import { AdminDashboardPage } from '../pages/dashboard/AdminDashboardPage.js';
 import { EmployeeDashboardPage } from '../pages/dashboard/EmployeeDashboardPage.js';
+import { UsersListPage } from '../pages/admin/UsersListPage.js';
+import { WorkRolesPage } from '../pages/admin/WorkRolesPage.js';
+import { EmployeeWorkRolesPage } from '../pages/admin/EmployeeWorkRolesPage.js';
+import { DirectoryPage } from '../pages/directory/DirectoryPage.js';
 import { NotFoundPage } from '../pages/errors/NotFoundPage.js';
 
 function RootRedirect() {
@@ -72,8 +76,28 @@ export const router = createBrowserRouter([
                 element: <AdminDashboardPage />,
               },
               {
+                path: 'users',
+                element: <UsersListPage />,
+              },
+              {
+                path: 'users/:userId/work-roles',
+                element: <EmployeeWorkRolesPage />,
+              },
+              {
+                path: 'work-roles',
+                element: <WorkRolesPage />,
+              },
+              {
+                path: 'work-roles/assign/:userId',
+                element: <EmployeeWorkRolesPage />,
+              },
+              {
+                path: 'directory',
+                element: <DirectoryPage />,
+              },
+              {
                 path: '*',
-                element: <AdminDashboardPage />,
+                element: <NotFoundPage />,
               },
             ],
           },
@@ -95,8 +119,12 @@ export const router = createBrowserRouter([
                 element: <EmployeeDashboardPage />,
               },
               {
+                path: 'directory',
+                element: <DirectoryPage />,
+              },
+              {
                 path: '*',
-                element: <EmployeeDashboardPage />,
+                element: <NotFoundPage />,
               },
             ],
           },

@@ -70,24 +70,70 @@ Across all APIs in the IMAC Operations System:
 
 ---
 
-### 4. What is Untested (Awaiting Environment / Next Steps)
-- Applying migrations to live PostgreSQL database container in Docker.
-- React frontend UI screens for user administration, work role assignments, and employee directory (Phase 1 frontend).
-- End-to-end browser integration tests with Playwright (scheduled for Phase 7).
+---
+
+## Current Milestone: Admin Screens & Employee Directory (Phase 1 Frontend) — COMPLETED
+
+### 1. What Was Built
+- **API Integration Services (`apps/web/src/api`)**:
+  - `adminUsers.ts`: typed clients for user listing, fetching, creation, profile updates, system role changes, deactivation, and password resets.
+  - `adminWorkRoles.ts`: typed clients for work-role catalogue CRUD, deactivation, reactivation, employee role assignments, and removals.
+  - `directory.ts`: typed client for employee directory listing with search and department filtering.
+- **Shared Dialogs & UI Components (`apps/web/src/components`)**:
+  - `ConfirmationModal`: accessible modal for dangerous actions (deactivations, password resets, role removals) with custom confirm/cancel labels and loading indicators.
+  - `TemporaryPasswordModal`: displays generated temporary passwords **exactly once** upon account creation or password reset. Features single-click clipboard copying with visual feedback and an explicit security warning that the password cannot be retrieved again.
+  - `AvailabilityBadge`: color-coded badge indicating staff availability (`available`, `busy_in_meeting`, `out_of_office`, `on_leave`, `working_remotely`) and status notes.
+  - `Dialog` and `Select`: styled, accessible dialog and select primitives.
+- **Administrative Screens (`apps/web/src/pages/admin`)**:
+  - `UsersListPage` (`/admin/users`):
+    - Real-time search across display name, username, employee code, and department.
+    - Role filter dropdown (`system_admin`, `hr_admin`, `project_manager`, `employee`, `viewer`).
+    - Account status filter dropdown (`active`, `inactive`).
+    - "Create User" modal collecting credentials and initial profile operational parameters.
+    - Employee profile editor modal (`EmployeeProfileModal`) for updating operational attributes and system roles.
+    - Password reset confirmation flow displaying the one-time temporary password.
+    - Account deactivation confirmation flow.
+    - Direct link to work-role assignments.
+  - `WorkRolesPage` (`/admin/work-roles`):
+    - Catalogue listing of all work categories with name, scope description, active status, and creation date.
+    - Create Work Role modal.
+    - Rename and edit description modal.
+    - Deactivate and reactivate flows with confirmation dialogs.
+  - `EmployeeWorkRolesPage` (`/admin/users/:userId/work-roles` and `/admin/work-roles/assign/:userId`):
+    - Employee profile summary card (shift hours, working days, code, department).
+    - Assignment dropdown displaying unassigned active work roles.
+    - Assigned roles listing with remove action and confirmation modal.
+- **Employee Directory (`apps/web/src/pages/directory/DirectoryPage.tsx`)**:
+  - Mounted at `/admin/directory` and `/employee/directory`.
+  - Accessible to all authenticated staff members.
+  - Role-based field redaction:
+    - Regular staff see: display name, department, job title, availability badge and message.
+    - Privileged staff (`system_admin`, `hr_admin`) additionally see: employee code, system role badge, daily shift hours, working days per week, start date, and username.
+  - Real-time search by name/title/department and department filtering.
+- **Role-Based Navigation & Access Guards**:
+  - `AdminLayout`: navigation sidebar includes Dashboard, Users, Work Roles, and Directory.
+  - `EmployeeLayout`: navigation sidebar includes Dashboard, Directory, Work Log, Leave, Overtime (Admin links hidden from non-admin roles).
+  - Non-admin attempts to access `/admin/*` directly are intercepted by `ProtectedRoute` and render a friendly 403 `UnauthorizedPage`.
+- **Localization**:
+  - All user-facing text, field labels, confirmation dialogs, notifications, and error/empty states fully mapped to `react-i18next` keys in `apps/web/src/i18n/locales/en.json`.
 
 ---
 
-### 5. Assumptions Made
-- The canonical identifier `employeeId` used in routes and frontend calls represents `userId` (UUID).
-- HR administrators are permitted to update employee profile operational fields (`user:update`), but are strictly barred from altering system roles (`user:changeRole`).
-- Deactivating an employee account immediately clears all associated active sessions in PostgreSQL (`deleteUserSessions`).
+### 2. Backend API Endpoint Updates
+- **User Reactivation Endpoint (`PATCH /api/admin/users/:id/reactivate`)**:
+  - Implemented in `apps/api/src/routes/admin/users.ts` mirroring the deactivate route.
+  - Enforces `user:reactivate` permission (`system_admin` only).
+  - Sets `isActive: true`, clears failed-login lockout (`failedLoginCount: 0`, `lockedUntil: null`), logs audit event `user.reactivated`, and returns 404 for unknown users.
+  - Connected in `apps/web/src/pages/admin/UsersListPage.tsx` with full confirmation modal, loading, success, and error states.
 
 ---
 
-### 6. What the Next Step Needs (Phase 1 Frontend)
-- System admin UI screens in `apps/web`:
-  - User creation, deactivation, and system role management modal/page.
-  - Temporary password display dialog with one-time copy button.
-  - Employee profile editor (department, job title, shift hours, working days).
-  - Work role catalogue and employee work role assignment screen.
-  - Searchable employee directory table/cards with role-based field visibility and availability indicators.
+### 3. Verification & Test Results
+- **Type Checking**:
+  - Clean across all workspaces (`packages/shared`, `apps/api`, `apps/web`) via `npm run typecheck`.
+- **Linting**:
+  - Clean across workspaces via `npm run lint`.
+- **Frontend Production Build**:
+  - `npm run build --workspace=apps/web` compiled with Vite into `dist/` with 0 errors.
+- **Integration & Unit Tests**:
+  - Vitest test suite (`apps/api`): 5 test suites, **134 passing tests (0 failures)**.

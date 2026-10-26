@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app.js';
 import { db } from '../db.js';
+import * as passwordService from '../services/password.js';
+
+// Mock password service to avoid slow hashing in unit tests
+vi.mock('../services/password.js', () => ({
+  verifyPassword: vi.fn(),
+  hashPassword: vi.fn().mockResolvedValue('hashed_new_password'),
+  generateTempPassword: vi.fn().mockReturnValue('temp-pass-12345'),
+  getDummyHash: vi.fn().mockResolvedValue('dummy-hash-for-timing'),
+}));
 
 describe('User & Employee Administration and Directory Tests', () => {
   beforeEach(() => {
@@ -311,6 +320,124 @@ describe('User & Employee Administration and Directory Tests', () => {
         }),
       );
     });
+
+    it('admin can reactivate a deactivated user and clear failed-login lockout', async () => {
+      const app = createApp({ csrfDisabled: true });
+      const mockDeactivatedUser = {
+        ...mockEmployeeUser,
+        isActive: false,
+        failedLoginCount: 4,
+        lockedUntil: new Date(Date.now() + 15 * 60 * 1000),
+      };
+
+      vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.user.findUnique).mockResolvedValue(mockDeactivatedUser as any);
+      vi.mocked(db.user.update).mockResolvedValue({
+        ...mockDeactivatedUser,
+        isActive: true,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      } as any);
+
+      const res = await request(app)
+        .patch(`/api/admin/users/${mockEmployeeUser.id}/reactivate`)
+        .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(db.user.update).toHaveBeenCalledWith({
+        where: { id: mockEmployeeUser.id },
+        data: {
+          isActive: true,
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
+      });
+      expect(db.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'user.reactivated',
+            entityType: 'User',
+            entityId: mockEmployeeUser.id,
+            actorUserId: mockAdminUser.id,
+          }),
+        }),
+      );
+    });
+
+    it('reactivating an unknown user id returns 404', async () => {
+      const app = createApp({ csrfDisabled: true });
+      vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.user.findUnique).mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch('/api/admin/users/non-existent-user-id/reactivate')
+        .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`]);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+      expect(db.user.update).not.toHaveBeenCalled();
+    });
+
+    it('reactivated user can log in again', async () => {
+      const app = createApp({ csrfDisabled: true });
+      const mockDeactivatedUser = {
+        ...mockEmployeeUser,
+        isActive: false,
+        failedLoginCount: 5,
+        lockedUntil: new Date(Date.now() + 15 * 60 * 1000),
+      };
+
+      // 1. Deactivated user cannot log in
+      vi.mocked(db.user.findFirst).mockResolvedValue(mockDeactivatedUser as any);
+      vi.mocked(passwordService.verifyPassword).mockResolvedValue(false);
+
+      const rejectedLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ username: mockEmployeeUser.username, password: 'password123' });
+
+      expect(rejectedLogin.status).toBe(401);
+
+      // 2. Admin reactivates user
+      vi.mocked(db.session.findUnique).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.session.update).mockResolvedValue(mockAdminSession as any);
+      vi.mocked(db.user.findUnique).mockResolvedValue(mockDeactivatedUser as any);
+      vi.mocked(db.user.update).mockResolvedValue({
+        ...mockDeactivatedUser,
+        isActive: true,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      } as any);
+
+      const reactivateRes = await request(app)
+        .patch(`/api/admin/users/${mockEmployeeUser.id}/reactivate`)
+        .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`]);
+
+      expect(reactivateRes.status).toBe(200);
+      expect(reactivateRes.body.ok).toBe(true);
+
+      // 3. Reactivated user logs in successfully
+      const mockReactivatedUser = {
+        ...mockEmployeeUser,
+        isActive: true,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      };
+      vi.mocked(db.user.findFirst).mockResolvedValue(mockReactivatedUser as any);
+      vi.mocked(passwordService.verifyPassword).mockResolvedValue(true);
+      vi.mocked(db.session.create).mockResolvedValue({ id: 'new-reactivated-session' } as any);
+
+      const successfulLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ username: mockEmployeeUser.username, password: 'password123' });
+
+      expect(successfulLogin.status).toBe(200);
+      expect(successfulLogin.body.user).toBeDefined();
+      expect(successfulLogin.body.user.username).toBe(mockEmployeeUser.username);
+      expect(successfulLogin.headers['set-cookie']).toBeDefined();
+    });
   });
 
   /* -------------------------------------------------------------------------- */
@@ -357,6 +484,34 @@ describe('User & Employee Administration and Directory Tests', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.error).toBe('forbidden');
+    });
+
+    it('employee gets 403 when attempting to reactivate a user', async () => {
+      const app = createApp({ csrfDisabled: true });
+      vi.mocked(db.session.findUnique).mockResolvedValue(mockEmployeeSession as any);
+      vi.mocked(db.session.update).mockResolvedValue(mockEmployeeSession as any);
+
+      const res = await request(app)
+        .patch(`/api/admin/users/${mockOtherEmployeeUser.id}/reactivate`)
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`]);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('forbidden');
+      expect(db.user.update).not.toHaveBeenCalled();
+    });
+
+    it('HR cannot reactivate users with HTTP 403 Forbidden', async () => {
+      const app = createApp({ csrfDisabled: true });
+      vi.mocked(db.session.findUnique).mockResolvedValue(mockHrSession as any);
+      vi.mocked(db.session.update).mockResolvedValue(mockHrSession as any);
+
+      const res = await request(app)
+        .patch(`/api/admin/users/${mockEmployeeUser.id}/reactivate`)
+        .set('Cookie', [`IMAC_SESSION=${mockHrSession.id}`]);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('forbidden');
+      expect(db.user.update).not.toHaveBeenCalled();
     });
 
     const nonAdminRoles = [

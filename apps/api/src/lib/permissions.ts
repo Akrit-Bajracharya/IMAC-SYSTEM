@@ -5,6 +5,7 @@ export type Action =
   | 'user:read'
   | 'user:update'
   | 'user:deactivate'
+  | 'user:reactivate'
   | 'user:resetPassword'
   | 'user:changeRole'
   | 'settings:read'
@@ -24,6 +25,7 @@ export function can(user: AuthUser, action: Action): boolean {
   switch (action) {
     case 'user:create':
     case 'user:deactivate':
+    case 'user:reactivate':
     case 'user:resetPassword':
     case 'user:changeRole':
     case 'settings:read':

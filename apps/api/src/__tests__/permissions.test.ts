@@ -16,6 +16,7 @@ describe('Permissions - can() policy matrix', () => {
     'user:read',
     'user:update',
     'user:deactivate',
+    'user:reactivate',
     'user:resetPassword',
     'user:changeRole',
     'settings:read',
@@ -31,6 +32,10 @@ describe('Permissions - can() policy matrix', () => {
         expect(can(admin, action), `system_admin should be permitted action: ${action}`).toBe(true);
       }
     });
+
+    it('can reactivate users (user:reactivate)', () => {
+      expect(can(admin, 'user:reactivate')).toBe(true);
+    });
   });
 
   describe('hr_admin role', () => {
@@ -41,9 +46,10 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(hr, 'user:update')).toBe(true);
     });
 
-    it('CANNOT create, deactivate, reset password, or change user role', () => {
+    it('CANNOT create, deactivate, reactivate, reset password, or change user role', () => {
       expect(can(hr, 'user:create')).toBe(false);
       expect(can(hr, 'user:deactivate')).toBe(false);
+      expect(can(hr, 'user:reactivate')).toBe(false);
       expect(can(hr, 'user:resetPassword')).toBe(false);
       expect(can(hr, 'user:changeRole')).toBe(false);
     });
@@ -66,6 +72,7 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(pm, 'user:read')).toBe(false);
       expect(can(pm, 'user:update')).toBe(false);
       expect(can(pm, 'user:deactivate')).toBe(false);
+      expect(can(pm, 'user:reactivate')).toBe(false);
       expect(can(pm, 'user:resetPassword')).toBe(false);
       expect(can(pm, 'user:changeRole')).toBe(false);
     });

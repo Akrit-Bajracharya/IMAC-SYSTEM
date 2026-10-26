@@ -227,6 +227,47 @@ adminUsersRouter.patch(
   }),
 );
 
+// ── 4b. Reactivate User ───────────────────────────────────────────────────────
+adminUsersRouter.patch(
+  '/:id/reactivate',
+  requirePermission('user:reactivate'),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const targetId = req.params['id'];
+
+    const targetUser = await db.user.findUnique({
+      where: { id: targetId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        error: 'not_found',
+        message: 'User not found',
+      });
+    }
+
+    await db.user.update({
+      where: { id: targetId },
+      data: {
+        isActive: true,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      },
+    });
+
+    await createAuditEntry({
+      actorUserId: req.user?.id,
+      action: 'user.reactivated',
+      entityType: 'User',
+      entityId: targetId,
+      ipAddress: req.ip,
+      beforeSnapshot: { isActive: targetUser.isActive },
+      afterSnapshot: { isActive: true },
+    });
+
+    return res.status(200).json({ ok: true });
+  }),
+);
+
 // ── 5. Reset User Password ────────────────────────────────────────────────────
 adminUsersRouter.post(
   '/:id/reset-password',

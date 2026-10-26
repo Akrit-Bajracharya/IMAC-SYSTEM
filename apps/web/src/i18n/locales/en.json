@@ -43,6 +43,8 @@
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",
+    "workRoles": "Work Roles",
+    "directory": "Directory",
     "settings": "Settings",
     "auditLog": "Audit Log",
     "workLog": "Work Log",
@@ -57,7 +59,20 @@
     "notFound": "Page not found.",
     "back": "Go Back",
     "backToHome": "Return to Dashboard",
-    "close": "Close"
+    "close": "Close",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "processing": "Processing...",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes",
+    "create": "Create",
+    "creating": "Creating...",
+    "remove": "Remove",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "required": "Required",
+    "you": "You"
   },
   "roles": {
     "system_admin": "System Admin",
@@ -65,6 +80,13 @@
     "project_manager": "Project Manager",
     "employee": "Employee",
     "viewer": "Viewer"
+  },
+  "availability": {
+    "available": "Available",
+    "busyInMeeting": "In Meeting",
+    "outOfOffice": "Out of Office",
+    "onLeave": "On Leave",
+    "workingRemotely": "Remote"
   },
   "dashboard": {
     "admin": {
@@ -76,6 +98,223 @@
       "title": "Employee Dashboard",
       "welcome": "Welcome, {{name}}!",
       "note": "Full dashboard coming in Phase 7."
+    }
+  },
+  "admin": {
+    "users": {
+      "pageTitle": "User & Employee Administration",
+      "pageSubtitle": "Manage staff accounts, employee profiles, access roles, and credentials.",
+      "actions": {
+        "createUser": "Create User",
+        "editProfile": "Edit Profile & Role",
+        "assignWorkRoles": "Assign Work Roles",
+        "resetPassword": "Reset Password",
+        "deactivate": "Deactivate Account",
+        "reactivate": "Reactivate Account"
+      },
+      "tooltips": {
+        "cannotResetSelf": "You cannot reset your own password via admin actions.",
+        "cannotDeactivateSelf": "You cannot deactivate your own account."
+      },
+      "filters": {
+        "searchPlaceholder": "Search by name, username, code, department...",
+        "allRoles": "All System Roles",
+        "allStatuses": "All Statuses",
+        "active": "Active Accounts",
+        "inactive": "Inactive Accounts"
+      },
+      "table": {
+        "user": "Staff Member",
+        "role": "System Role",
+        "employeeCode": "Employee Code",
+        "department": "Department & Title",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "states": {
+        "loading": "Loading staff accounts...",
+        "emptyTitle": "No staff accounts found",
+        "emptyDescription": "No user accounts have been created yet. Click 'Create User' to add the first staff member.",
+        "noMatches": "No users matched your current search or filter criteria."
+      },
+      "notifications": {
+        "created": "User account created successfully.",
+        "profileUpdated": "Employee profile updated successfully.",
+        "deactivated": "User account deactivated and active sessions ended.",
+        "reactivated": "User account reactivated successfully.",
+        "passwordReset": "Password reset successfully. A temporary password was generated."
+      },
+      "errors": {
+        "reactivateFailed": "Failed to reactivate user account."
+      },
+      "fields": {
+        "username": "Username",
+        "displayName": "Display Name",
+        "systemRole": "System Role",
+        "employeeCode": "Employee Code",
+        "department": "Department",
+        "jobTitle": "Job Title",
+        "startDate": "Employment Start Date",
+        "standardShiftHours": "Standard Shift Hours",
+        "workingDaysPerWeek": "Working Days Per Week",
+        "managerUserId": "Manager User ID"
+      },
+      "createModal": {
+        "title": "Create New Staff Account",
+        "description": "Creates a user account and initial employee profile. A temporary password will be generated upon creation.",
+        "usernameError": "Username must be at least 3 characters and contain only letters, numbers, hyphens, periods, or underscores.",
+        "submit": "Create Account",
+        "errorGeneric": "Failed to create user account."
+      },
+      "profileModal": {
+        "title": "Edit Employee Profile & Role",
+        "description": "Update operational parameters and system permissions for {{name}} (@{{username}}).",
+        "selfRoleNote": "You cannot change your own system role.",
+        "hrRoleNote": "Only System Administrators may change system roles.",
+        "errorGeneric": "Failed to update employee profile."
+      },
+      "confirmDeactivate": {
+        "title": "Deactivate Account",
+        "description": "Are you sure you want to deactivate {{name}} (@{{username}})? All active user sessions will be immediately terminated and the user will not be able to log in. Historical records and work logs will be preserved.",
+        "confirmButton": "Deactivate Account"
+      },
+      "confirmReactivate": {
+        "title": "Reactivate Account",
+        "description": "Are you sure you want to reactivate {{name}} (@{{username}})? The account will be active again and any login lockout will be cleared.",
+        "confirmButton": "Reactivate Account"
+      },
+      "reactivateNotice": {
+        "title": "Reactivate Account",
+        "description": "Account reactivation for {{name}} is not currently supported by the backend API (PATCH /api/admin/users/:id/reactivate is logged as a backend gap in docs/PROGRESS.md in compliance with Rule 2)."
+      },
+      "confirmReset": {
+        "title": "Reset User Password",
+        "description": "Are you sure you want to reset the password for {{name}}? All active sessions for this user will be immediately invalidated and a one-time temporary password will be generated. The user must change it upon their next login.",
+        "confirmButton": "Reset Password"
+      },
+      "tempPassword": {
+        "title": "One-Time Temporary Password",
+        "subtitle": "A temporary password was generated for {{username}}.",
+        "warningTitle": "Important: Security Notice",
+        "warningDesc": "This temporary password will NOT be displayed again and is not stored in plain text. Please copy and securely deliver it to the employee now. They will be required to change it immediately upon login.",
+        "label": "Temporary Password",
+        "doneButton": "I have copied this password"
+      }
+    },
+    "workRoles": {
+      "pageTitle": "Work-Role Catalogue",
+      "pageSubtitle": "Manage job functions and activity categories available for Daily Work Logs.",
+      "actions": {
+        "createRole": "Add Work Role",
+        "editRole": "Edit Role",
+        "deactivate": "Deactivate Role",
+        "reactivate": "Reactivate Role"
+      },
+      "filters": {
+        "searchPlaceholder": "Search work roles by name or description...",
+        "allStatuses": "All Statuses",
+        "active": "Active Roles",
+        "inactive": "Inactive Roles"
+      },
+      "table": {
+        "name": "Role Name",
+        "description": "Scope & Description",
+        "status": "Status",
+        "created": "Created Date",
+        "actions": "Actions"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Deactivated"
+      },
+      "states": {
+        "loading": "Loading work roles...",
+        "emptyTitle": "No work roles found",
+        "emptyDescription": "No work roles have been defined yet. Click 'Add Work Role' to create the first work category.",
+        "noMatches": "No work roles matched your current search criteria."
+      },
+      "notifications": {
+        "created": "Work role added to catalogue.",
+        "updated": "Work role updated successfully.",
+        "deactivated": "Work role deactivated. Existing logs remain intact.",
+        "reactivated": "Work role reactivated."
+      },
+      "errors": {
+        "createFailed": "Failed to create work role.",
+        "updateFailed": "Failed to update work role."
+      },
+      "fields": {
+        "name": "Role Name",
+        "description": "Description / Scope",
+        "status": "Active Status"
+      },
+      "createModal": {
+        "title": "Add New Work Role",
+        "description": "Define a work category or job function (e.g. Frontend Engineer, Designer, Coordinator, Meetings)."
+      },
+      "editModal": {
+        "title": "Edit Work Role",
+        "description": "Update details or status for {{name}}."
+      },
+      "confirmDeactivate": {
+        "title": "Deactivate Work Role",
+        "description": "Are you sure you want to deactivate '{{name}}'? Deactivated roles cannot be assigned to new employees or selected in future work logs. Historical logs referencing this role remain unchanged."
+      },
+      "confirmReactivate": {
+        "title": "Reactivate Work Role",
+        "description": "Reactivate '{{name}}' so it can be assigned to employees and selected in Daily Work Logs?"
+      }
+    },
+    "employeeWorkRoles": {
+      "backToUsers": "Back to Users",
+      "shiftHours": "Shift Hours",
+      "workingDays": "Working Days",
+      "assignTitle": "Assign Work Role",
+      "assignSubtitle": "Grant this employee permission to record hours under specific work categories in their Daily Work Log.",
+      "selectRolePlaceholder": "Choose a work role to assign...",
+      "noRolesAvailable": "All active roles are already assigned",
+      "currentRolesTitle": "Assigned Work Roles",
+      "actions": {
+        "assign": "Assign Role",
+        "remove": "Remove Role"
+      },
+      "states": {
+        "emptyTitle": "No work roles assigned yet",
+        "emptyDescription": "This employee cannot fill in Daily Work Logs until at least one active work role is assigned."
+      },
+      "notifications": {
+        "assigned": "Work role assigned to employee.",
+        "removed": "Work role assignment removed."
+      },
+      "errors": {
+        "loadFailed": "Failed to load employee work roles.",
+        "assignFailed": "Failed to assign work role.",
+        "removeFailed": "Failed to remove work role."
+      },
+      "confirmRemove": {
+        "title": "Remove Work Role Assignment",
+        "description": "Are you sure you want to remove '{{roleName}}' from {{employeeName}}? The employee will no longer be able to select this work role in upcoming Daily Work Logs."
+      }
+    }
+  },
+  "directory": {
+    "pageTitle": "Employee Directory",
+    "pageSubtitle": "Internal directory of staff members and current availability.",
+    "privilegedViewActive": "Administrative View Active",
+    "noTitle": "No Title Specified",
+    "unassignedDept": "General / Unassigned",
+    "filters": {
+      "searchPlaceholder": "Search directory by name, title, department...",
+      "allDepartments": "All Departments"
+    },
+    "states": {
+      "loading": "Loading employee directory...",
+      "emptyTitle": "No employees found",
+      "emptyDescription": "No directory entries matched your search criteria."
     }
   }
 }
