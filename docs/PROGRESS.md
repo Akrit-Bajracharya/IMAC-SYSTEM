@@ -137,3 +137,46 @@ Across all APIs in the IMAC Operations System:
   - `npm run build --workspace=apps/web` compiled with Vite into `dist/` with 0 errors.
 - **Integration & Unit Tests**:
   - Vitest test suite (`apps/api`): 5 test suites, **134 passing tests (0 failures)**.
+
+
+---
+
+## Current Milestone: Step 8a — Daily Work Log Data Layer (Phase 2) — COMPLETED
+
+### 1. What Was Built
+- **Database Schema Models & Migration (`apps/api/prisma/schema.prisma`)**:
+  - `WorkLogStatus` enum (`draft`, `submitted`, `approved`, `rejected`).
+  - `WorkLogDay` model:
+    - Primary key: `id` (UUID).
+    - Relation to `EmployeeProfile`: `employeeProfileId` (cascade delete).
+    - `date`: `DateTime` using `@db.Date` (calendar date).
+    - Status: `WorkLogStatus` defaulting to `draft`.
+    - Approval fields: `submittedAt`, `approvedAt`, `approvedByUserId` (nullable string), `rejectionReason` (nullable string).
+    - Timestamps: `createdAt`, `updatedAt`.
+    - Unique composite constraint: `@@unique([employeeProfileId, date])`.
+  - `WorkLogEntry` model:
+    - Primary key: `id` (UUID).
+    - Relation to `WorkLogDay`: `workLogDayId` (cascade delete).
+    - Relation to `WorkRole`: `workRoleId`.
+    - `hours`: `Float` (positive decimal hours).
+    - `description`: `String?` (optional).
+    - `projectId`: `String?` (nullable string link for Phase 3).
+    - `taskId`: `String?` (nullable string link for Phase 3).
+    - Timestamps: `createdAt`, `updatedAt`.
+  - Relations updated on `EmployeeProfile` (`workLogDays WorkLogDay[]`) and `WorkRole` (`workLogEntries WorkLogEntry[]`).
+  - Migration created and deployed to database: `apps/api/prisma/migrations/20261026140000_work_log_models/migration.sql`.
+  - Prisma Client regenerated.
+- **System Settings Seed (`apps/api/prisma/seed.ts`)**:
+  - Preserved existing worklog policy settings without duplication (`worklog.requiresApproval`, `worklog.mismatchHandling`, `worklog.editWindowHours`).
+  - Updated `worklog.mismatchHandling` description to explicitly reflect all three valid modes: `(allow, warn, or block)`.
+- **Policy Documentation (`docs/open-policy-questions.md`)**:
+  - Documented work log approval requirement (`worklog.requiresApproval`).
+  - Documented hour mismatch handling (`worklog.mismatchHandling` allow/warn/block).
+  - Documented modification window length (`worklog.editWindowHours`).
+  - Documented cross-employee log visibility and read authorization rules (who may read other employees' logs).
+
+### 2. What Is Untested
+- API routes, shared validation schemas, Excel export, and frontend screens are deferred to subsequent sub-steps (8b+) as instructed.
+
+### 3. Assumptions & Next Steps
+- **Next Step (8b)**: Shared schemas in `@imac/shared`, backend API endpoints under `/api/work-logs` (`my-logs`, day retrieval, save draft/submit, admin lookup, export), permission matrix updates, and integration tests.

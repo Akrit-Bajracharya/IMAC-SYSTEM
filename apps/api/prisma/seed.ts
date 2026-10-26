@@ -55,7 +55,7 @@ const DEFAULT_SETTINGS = [
   {
     key: 'worklog.mismatchHandling',
     value: 'warn',
-    description: 'Handling mode for work log mismatch warnings (warn or block)',
+    description: 'Handling mode for work log mismatch warnings (allow, warn, or block)',
   },
   {
     key: 'worklog.editWindowHours',

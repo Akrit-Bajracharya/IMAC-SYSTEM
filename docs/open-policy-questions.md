@@ -63,34 +63,45 @@ This document tracks unresolved policy, organizational, and operational decision
 ## 3. Operations & Work Log Policies (Subsequent Phases)
 
 1. **Work Log Approval Workflow**
-   - **Question**: Do daily employee work logs require explicit project manager or HR approval before recording?
-   - **Current Implementation**: `worklog.requiresApproval = "false"` in `SystemSetting`.
+   - **Question**: Do daily employee work logs require explicit managerial or HR approval before hours are recognized as official?
+   - **Current Implementation**: Configurable via `SystemSetting`: `worklog.requiresApproval = "false"` (default: neutral/unapproved mode where submitted logs are official). When enabled (`"true"`), submitted logs require approval, transitioning to `approved` or `rejected` with `approvedAt`, `approvedByUserId`, and optional `rejectionReason`.
 
-2. **Work Log Discrepancies**
-   - **Question**: How should discrepancies between recorded shift hours and task hours be addressed?
-   - **Current Implementation**: `worklog.mismatchHandling = "warn"` (warn rather than block submissions).
+2. **Work Log Discrepancies & Hour Mismatch**
+   - **Question**: What happens when the total hours entered in a day's work log differ from the employee's expected standard shift hours (e.g. 8 hours)?
+   - **Current Implementation**: Configurable via `SystemSetting`: `worklog.mismatchHandling = "warn"` (choices: `"allow"`, `"warn"`, or `"block"`).
+     - `"allow"`: Permits any total hours without restriction.
+     - `"warn"` (default): Notifies and warns the employee of the discrepancy while still allowing submission.
+     - `"block"`: Strictly rejects submission until total hours match the configured shift length.
 
-3. **Work Log Modification Window**
-   - **Question**: How long after submission is an employee allowed to edit or correct a work log?
-   - **Current Implementation**: 24 hours (`worklog.editWindowHours = "24"`).
+3. **Work Log Modification Window Length**
+   - **Question**: How long after initial submission is an employee permitted to edit or correct a daily work log?
+   - **Current Implementation**: Configurable via `SystemSetting`: `worklog.editWindowHours = "24"` (default: 24 hours). Edits past this window are blocked for regular employees; edits to submitted logs within the window trigger audit log entries.
 
-4. **Standard Working Hours & Days**
+4. **Work Log Visibility & Cross-Employee Access**
+   - **Question**: Who is authorized to inspect other employees' daily work logs and summaries?
+   - **Current Implementation**:
+     - Regular employees (`employee`, `viewer`) can only view their own work logs (`/api/work-logs/my-logs`).
+     - Project managers will have access scoped to members of their assigned projects.
+     - System administrators (`system_admin`) and HR administrators (`hr_admin`) have organization-wide access to view and export all staff work logs.
+     - Access to other employees' work logs is denied by default to prevent IDOR vulnerabilities.
+
+5. **Standard Working Hours & Days**
    - **Question**: What are standard shift hours and work days per week for regular staff profiles?
    - **Current Implementation**: 8 hours per shift, 5 days per week (`employee.defaultShiftHours = "8"`, `employee.defaultWorkingDays = "5"`).
 
-5. **Overtime Approval**
+6. **Overtime Approval**
    - **Question**: Does overtime require advance or post-hoc managerial approval?
    - **Current Implementation**: `overtime.requiresApproval = "true"`.
 
-6. **Leave Availability Synchronization**
+7. **Leave Availability Synchronization**
    - **Question**: Should approved leaves automatically adjust employee availability status across active assignments?
    - **Current Implementation**: `leave.autoSetAvailability = "true"`.
 
-7. **Work Role Customization & Assignment Authority**
+8. **Work Role Customization & Assignment Authority**
    - **Question**: Who may create work roles and customize an employee's assigned work roles (system admin only, or also HR or project managers)? (Master Brief Part C, item 6)
    - **Current Implementation**: Restricted exclusively to `system_admin` in `apps/api/src/lib/permissions.ts`. All admin work role creation, editing, deactivation, and assignment endpoints enforce `requireRole('system_admin')` / `can(user, 'workrole:*')`.
 
-8. **Employee Profile Contract Parameter Editing Authority**
+9. **Employee Profile Contract Parameter Editing Authority**
    - **Question**: Should HR administrators be permitted to alter contract parameters like standard shift hours and working days per week, or should those parameters be restricted exclusively to system administrators?
    - **Current Implementation**: In `apps/api/src/lib/permissions.ts`, `user:update` is granted to both `system_admin` and `hr_admin`, allowing HR administrators to update department, job title, start date, standard shift hours, and working days on employee profiles. System role changes (`user:changeRole`) remain strictly restricted to `system_admin`.
 

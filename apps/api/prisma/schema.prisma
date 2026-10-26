@@ -49,6 +49,7 @@ model EmployeeProfile {
   updatedAt           DateTime  @updatedAt
 
   workRoles           EmployeeWorkRole[]
+  workLogDays         WorkLogDay[]
 }
 
 model WorkRole {
@@ -60,6 +61,7 @@ model WorkRole {
   updatedAt          DateTime           @updatedAt
 
   employeeWorkRoles  EmployeeWorkRole[]
+  workLogEntries     WorkLogEntry[]
 }
 
 model EmployeeWorkRole {
@@ -122,5 +124,44 @@ model AvailabilityStatus {
   expiresAt DateTime?
   source    String       @default("manual")
   updatedAt DateTime     @updatedAt
+}
+
+enum WorkLogStatus {
+  draft
+  submitted
+  approved
+  rejected
+}
+
+model WorkLogDay {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  date              DateTime        @db.Date
+  status            WorkLogStatus   @default(draft)
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  approvedByUserId  String?
+  rejectionReason   String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  entries           WorkLogEntry[]
+
+  @@unique([employeeProfileId, date])
+}
+
+model WorkLogEntry {
+  id           String      @id @default(uuid())
+  workLogDayId String
+  workLogDay   WorkLogDay  @relation(fields: [workLogDayId], references: [id], onDelete: Cascade)
+  workRoleId   String
+  workRole     WorkRole    @relation(fields: [workRoleId], references: [id])
+  hours        Float
+  description  String?
+  projectId    String?
+  taskId       String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
