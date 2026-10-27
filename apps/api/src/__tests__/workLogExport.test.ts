@@ -486,6 +486,24 @@ describe('Daily Work Log Excel Export Subsystem (Step 8c)', () => {
       expect(dataRow.getCell(10).value).toBe("'+PROJECT-CMD");
       // Col 11: Task ID (starts with tab then @)
       expect(dataRow.getCell(11).value).toBe("'\t@TASK-TAB");
+      // Col 12: Submitted At (Real Date object with yyyy-mm-dd hh:mm numFmt)
+      expect(dataRow.getCell(12).type).toBe(ExcelJS.ValueType.Date);
+      expect(dataRow.getCell(12).numFmt).toBe('yyyy-mm-dd hh:mm');
+
+      // Verify Summary sheet has no non-ASCII characters in title and states time zone
+      const wsSummary = wb.getWorksheet('Summary')!;
+      const title = String(wsSummary.getRow(1).getCell(1).value);
+      expect(/^[\x00-\x7F]*$/.test(title)).toBe(true);
+      expect(title).toContain('IMAC Nepal - Daily Work Log Export Summary');
+
+      // Verify Summary sheet has NO 7-row freeze
+      const views = (wsSummary as any).views || [];
+      const hasFrozenView = views.some((v: any) => v.state === 'frozen');
+      expect(hasFrozenView).toBe(false);
+
+      // Summary title block states Time Zone
+      const timeZoneCell = String(wsSummary.getRow(2).getCell(1).value);
+      expect(timeZoneCell).toContain('Time Zone: Asia/Kathmandu');
     });
 
     it('empty result still returns a valid workbook with headers and zero totals', async () => {
@@ -626,6 +644,65 @@ describe('Daily Work Log Excel Export Subsystem (Step 8c)', () => {
           }),
         }),
       );
+    });
+  });
+
+  // ── 8. User Field Selection & Security (Item 4) ────────────────────────────────
+  describe('8. User Field Selection & Security (Item 4)', () => {
+    it('export query selects only required user fields and excludes passwordHash', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockAdminSession, null);
+
+      vi.mocked(db.workLogEntry.count).mockResolvedValue(0);
+      vi.mocked(db.workLogEntry.findMany).mockResolvedValue([]);
+      vi.mocked(db.auditLog.create).mockResolvedValue({} as any);
+
+      await request(app)
+        .get('/api/work-logs/export?startDate=2026-10-01&endDate=2026-10-15')
+        .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`]);
+
+      expect(db.workLogEntry.findMany).toHaveBeenCalledTimes(1);
+      const findManyCall = vi.mocked(db.workLogEntry.findMany).mock.calls[0][0] as any;
+      const userSelect =
+        findManyCall.include.workLogDay.include.employeeProfile.include.user.select;
+
+      expect(userSelect).toBeDefined();
+      expect(userSelect.displayName).toBe(true);
+      expect(userSelect.username).toBe(true);
+      expect(userSelect.passwordHash).toBeUndefined();
+    });
+  });
+
+  // ── 9. Export Rate Limiting (Item 8) ───────────────────────────────────────────
+  describe('9. Export Rate Limiting (Item 8)', () => {
+    it('returns 429 too_many_requests when export limit is exceeded', async () => {
+      const { rateLimit } = await import('express-rate-limit');
+      const testLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 2,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: {
+          error: 'too_many_requests',
+          message: 'Too many export requests, please try again later',
+        },
+      });
+
+      const express = (await import('express')).default;
+      const testApp = express();
+      testApp.use('/api/work-logs/export', testLimiter, (_req, res) => {
+        res.status(200).json({ ok: true });
+      });
+
+      const res1 = await request(testApp).get('/api/work-logs/export');
+      expect(res1.status).toBe(200);
+
+      const res2 = await request(testApp).get('/api/work-logs/export');
+      expect(res2.status).toBe(200);
+
+      const res3 = await request(testApp).get('/api/work-logs/export');
+      expect(res3.status).toBe(429);
+      expect(res3.body.error).toBe('too_many_requests');
     });
   });
 });

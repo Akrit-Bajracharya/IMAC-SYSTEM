@@ -423,3 +423,62 @@ Documented in `docs/open-policy-questions.md`:
   - **After Step 8c**: 205 tests passing (7 test suites, +25 new tests: 20 export tests + 5 permission matrix tests).
 - **Unverified Items**:
   - Integration tests run against Vitest mocked database. Full streaming behavior under multi-gigabyte production workloads and live OS socket throughput remain to be tested in live environment.
+
+---
+
+## Step 8d: Review Fixes for Steps 8b and 8c
+
+### Task 8d-01: Implementation of Review Fixes & Tests
+- **Date**: 2026-10-27
+- **Day of week**: Tuesday
+- **Start time**: 14:31
+- **End time**: 15:03
+- **Step**: Step 8d (Review Fixes for Steps 8b and 8c)
+- **Task performed**:
+  - Item 1: Applied `worklog.mismatchHandling` on PATCH /api/work-logs/:id for submitted logs (block -> 422 hour_mismatch with nothing saved and no audit log; warn -> 200 with warnings entry; allow -> 200). Drafts unaffected, admin override exempt. Added 5 tests.
+  - Item 2: Added optimistic lock to submit route requiring `updatedAt` equal to value read (0 rows -> 409 conflict_retry, keeping 400 already_submitted for non-drafts); in POST /api/work-logs, conditional update on `status = 'draft'` (0 rows -> 409 status_conflict). Added 3 tests.
+  - Item 3: Replaced `isQuarterHourIncrement` precision with `Math.abs(val*4 - Math.round(val*4)) < 1e-9`. Added unit tests (0.25, 1.5, 24 accepted; 0.254, 1.251, 0.3, 2.1 rejected) and API validation test.
+  - Item 4: Replaced `user: true` in export query with explicit field selection (`id`, `displayName`, `username`), never loading `passwordHash`. Added assertion test.
+  - Item 5: Restored deleted explanatory comments in `apps/api/src/app.ts` (SEC-01 notes, CSRF login rationale, CSRF endpoint exemption).
+  - Item 6: Replaced non-ASCII / garbled characters in `apps/api/src/services/workLogExport.ts` with plain ASCII. Added test verifying Summary title is pure ASCII.
+  - Item 7: Wrote "Submitted At" as real Date cell with numFmt `yyyy-mm-dd hh:mm`, stated timezone in Summary title block, removed 7-row freeze on Summary sheet. Added tests for cell types and sheet views.
+  - Item 8: Added rate limiter to GET /api/work-logs/export (15 requests per 15 min per IP), following existing limiter pattern. Documented limits in `PROGRESS.md`. Added rate limiter test.
+  - Item 9: Documented in `docs/PROGRESS.md`: rejected-log handling is incomplete until approvals exist, edit audit snapshots contain descriptions, and stated what mock-based tests cannot prove.
+- **Files created or changed**:
+  - `packages/shared/src/schemas/workLog.ts`
+  - `apps/api/src/routes/workLogs.ts`
+  - `apps/api/src/services/workLogExport.ts`
+  - `apps/api/src/app.ts`
+  - `apps/api/src/__tests__/workLogs.test.ts`
+  - `apps/api/src/__tests__/workLogExport.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `npm run typecheck`: Passed (0 errors across `@imac/api`, `@imac/web`, `@imac/shared`).
+  - `npm run lint`: Passed (0 errors).
+  - `npm test`: 7 test files passed, 217 tests passed (0 failures; 205 prior + 12 new Step 8d tests).
+- **Status**: done
+- **Decisions or problems**: Identified admin override test route is `/api/admin/work-logs/:id/override`; updated test accordingly.
+
+---
+
+## Step 8d Summary & Verification
+- **Status**: Completed
+- **Tasks Executed**:
+  1. Task 8d-01: Implementation and Verification of all 9 review fixes for steps 8b and 8c.
+- **Files Created / Modified**:
+  - `packages/shared/src/schemas/workLog.ts`
+  - `apps/api/src/routes/workLogs.ts`
+  - `apps/api/src/services/workLogExport.ts`
+  - `apps/api/src/app.ts`
+  - `apps/api/src/__tests__/workLogs.test.ts`
+  - `apps/api/src/__tests__/workLogExport.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Test Suite Results**:
+  - **Before Step 8d**: 205 tests passing (7 test suites).
+  - **After Step 8d**: 217 tests passing (7 test suites, +12 new tests: 10 in `workLogs.test.ts` + 2 in `workLogExport.test.ts`).
+- **Mock Limitations & What Tests Cannot Prove**:
+  - Integration tests run against an in-memory mocked database (`setup.ts`).
+  - Mocks verify business logic, branching, schema parsing, ExcelJS cell formatting, formula neutralization, and error handling.
+  - Mocks CANNOT prove real PostgreSQL transaction isolation behavior (e.g. concurrent serialization conflicts), OS thread lock contention, or live Redis/memory rate limiting under multi-instance reverse proxies.

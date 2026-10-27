@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
+import { isQuarterHourIncrement } from '@imac/shared';
 import { createApp } from '../app.js';
 import { db } from '../db.js';
 
@@ -686,6 +687,191 @@ describe('Daily Work Log Subsystem (Step 8b)', () => {
       expect(res.status).toBe(200);
       expect(res.body.warnings.length).toBe(1);
     });
+
+    it('PATCH on submitted log in block mode rejects when total != shift hours (422 hour_mismatch)', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.systemSetting.findUnique as any).mockImplementation(async ({ where }: any) => {
+        if (where.key === 'worklog.mismatchHandling') return { key: 'worklog.mismatchHandling', value: 'block' } as any;
+        return null;
+      });
+
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      const submittedTwoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'sub-mismatch-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'submitted',
+        submittedAt: submittedTwoHoursAgo,
+        entries: [{ id: 'e1', workRoleId: mockRoleDev.id, hours: 8 }],
+      } as any);
+
+      const res = await request(app)
+        .patch('/api/work-logs/sub-mismatch-id')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`])
+        .send({
+          entries: [{ workRoleId: mockRoleDev.id, hours: 6 }], // 6 != 8
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('hour_mismatch');
+      expect(res.body.totalHours).toBe(6);
+      expect(res.body.standardShiftHours).toBe(8);
+      // Verify nothing saved and no audit entry
+      expect(db.workLogEntry.deleteMany).not.toHaveBeenCalled();
+      expect(db.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('PATCH on submitted log in warn mode succeeds with warnings entry (200 OK)', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.systemSetting.findUnique as any).mockImplementation(async ({ where }: any) => {
+        if (where.key === 'worklog.mismatchHandling') return { key: 'worklog.mismatchHandling', value: 'warn' } as any;
+        return null;
+      });
+
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      const submittedTwoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'sub-warn-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'submitted',
+        submittedAt: submittedTwoHoursAgo,
+        entries: [{ id: 'e1', workRoleId: mockRoleDev.id, hours: 8 }],
+      } as any);
+      vi.mocked(db.workLogDay.update).mockResolvedValue({
+        id: 'sub-warn-id',
+        status: 'submitted',
+        entries: [{ id: 'e2', workRoleId: mockRoleDev.id, hours: 6 }],
+      } as any);
+
+      const res = await request(app)
+        .patch('/api/work-logs/sub-warn-id')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`])
+        .send({
+          entries: [{ workRoleId: mockRoleDev.id, hours: 6 }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.warnings.length).toBeGreaterThan(0);
+      expect(db.auditLog.create).toHaveBeenCalled();
+    });
+
+    it('PATCH on submitted log in allow mode succeeds with warnings: [] (200 OK)', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.systemSetting.findUnique as any).mockImplementation(async ({ where }: any) => {
+        if (where.key === 'worklog.mismatchHandling') return { key: 'worklog.mismatchHandling', value: 'allow' } as any;
+        return null;
+      });
+
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      const submittedTwoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'sub-allow-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'submitted',
+        submittedAt: submittedTwoHoursAgo,
+        entries: [{ id: 'e1', workRoleId: mockRoleDev.id, hours: 8 }],
+      } as any);
+      vi.mocked(db.workLogDay.update).mockResolvedValue({
+        id: 'sub-allow-id',
+        status: 'submitted',
+        entries: [{ id: 'e2', workRoleId: mockRoleDev.id, hours: 6 }],
+      } as any);
+
+      const res = await request(app)
+        .patch('/api/work-logs/sub-allow-id')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`])
+        .send({
+          entries: [{ workRoleId: mockRoleDev.id, hours: 6 }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.warnings).toEqual([]);
+    });
+
+    it('PATCH on draft log is unaffected by block mismatchHandling (200 OK)', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.systemSetting.findUnique as any).mockImplementation(async ({ where }: any) => {
+        if (where.key === 'worklog.mismatchHandling') return { key: 'worklog.mismatchHandling', value: 'block' } as any;
+        return null;
+      });
+
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'draft-block-edit-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'draft',
+        entries: [{ id: 'e1', workRoleId: mockRoleDev.id, hours: 8 }],
+      } as any);
+      vi.mocked(db.workLogDay.update).mockResolvedValue({
+        id: 'draft-block-edit-id',
+        status: 'draft',
+        entries: [{ id: 'e2', workRoleId: mockRoleDev.id, hours: 5 }], // 5 != 8
+      } as any);
+
+      const res = await request(app)
+        .patch('/api/work-logs/draft-block-edit-id')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`])
+        .send({
+          entries: [{ workRoleId: mockRoleDev.id, hours: 5 }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.warnings).toEqual([]);
+    });
+
+    it('admin override PATCH stays exempt from mismatchHandling block', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockAdminSession, null);
+
+      vi.mocked(db.systemSetting.findUnique as any).mockImplementation(async ({ where }: any) => {
+        if (where.key === 'worklog.mismatchHandling') return { key: 'worklog.mismatchHandling', value: 'block' } as any;
+        return null;
+      });
+
+      vi.mocked(db.workRole.findMany).mockResolvedValue([mockRoleDev as any]);
+      vi.mocked(db.workLogDay.findUnique).mockResolvedValue({
+        id: 'admin-override-mismatch-id',
+        employeeProfileId: 'target-profile-id',
+        status: 'submitted',
+        entries: [{ id: 'e1', workRoleId: mockRoleDev.id, hours: 8 }],
+        employeeProfile: { standardShiftHours: 8 },
+      } as any);
+      vi.mocked(db.workLogDay.update).mockResolvedValue({
+        id: 'admin-override-mismatch-id',
+        status: 'submitted',
+        entries: [{ id: 'e2', workRoleId: mockRoleDev.id, hours: 4 }], // 4 != 8, admin override allowed!
+      } as any);
+
+      const res = await request(app)
+        .patch('/api/admin/work-logs/admin-override-mismatch-id/override')
+        .set('Cookie', [`IMAC_SESSION=${mockAdminSession.id}`])
+        .send({
+          reason: 'Correcting system error on shift hours',
+          entries: [{ workRoleId: mockRoleDev.id, hours: 4 }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+    });
   });
 
   // ── 6. Edit Window, Approved Logs & Admin Override ─────────────────────────────
@@ -1056,6 +1242,129 @@ describe('Daily Work Log Subsystem (Step 8b)', () => {
         expect(res.status).toBe(404);
         expect(res.body.error).toBe('not_found');
       }
+    });
+  });
+
+  // ── 10. Optimistic Locking & Status Concurrency ────────────────────────────────
+  describe('10. Optimistic Locking & Status Concurrency', () => {
+    it('submit fails with 409 conflict_retry when draft was modified concurrently (updatedAt mismatch)', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      const oldUpdatedAt = new Date('2026-10-27T10:00:00.000Z');
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'optimistic-lock-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'draft',
+        updatedAt: oldUpdatedAt,
+        entries: [{ workRoleId: mockRoleDev.id, hours: 8 }],
+      } as any);
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      // updateMany fails to match updatedAt because concurrent edit changed it
+      vi.mocked(db.workLogDay.updateMany).mockResolvedValue({ count: 0 });
+      // findUnique shows the log is still draft
+      vi.mocked(db.workLogDay.findUnique).mockResolvedValue({
+        id: 'optimistic-lock-id',
+        status: 'draft',
+        updatedAt: new Date('2026-10-27T10:05:00.000Z'),
+      } as any);
+
+      const res = await request(app)
+        .post('/api/work-logs/optimistic-lock-id/submit')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`]);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('conflict_retry');
+    });
+
+    it('submit fails with 400 already_submitted when log is no longer draft', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'already-sub-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'draft',
+        updatedAt: new Date(),
+        entries: [{ workRoleId: mockRoleDev.id, hours: 8 }],
+      } as any);
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      vi.mocked(db.workLogDay.updateMany).mockResolvedValue({ count: 0 });
+      // findUnique shows another request already submitted it
+      vi.mocked(db.workLogDay.findUnique).mockResolvedValue({
+        id: 'already-sub-id',
+        status: 'submitted',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/work-logs/already-sub-id/submit')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`]);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('already_submitted');
+    });
+
+    it('POST /api/work-logs in-transaction update fails with 409 status_conflict when draft status changed', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.employeeWorkRole.findMany).mockResolvedValue([
+        { workRoleId: mockRoleDev.id } as any,
+      ]);
+      // First read saw draft
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue({
+        id: 'draft-concurrent-id',
+        employeeProfileId: mockEmployeeProfile.id,
+        status: 'draft',
+        date: new Date('2026-10-27T00:00:00.000Z'),
+      } as any);
+      // In-transaction updateMany on status: 'draft' returns count: 0 (e.g. submitted concurrently)
+      vi.mocked(db.workLogDay.updateMany).mockResolvedValue({ count: 0 });
+
+      const res = await request(app)
+        .post('/api/work-logs')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`])
+        .send({
+          date: '2026-10-27',
+          entries: [{ workRoleId: mockRoleDev.id, hours: 8 }],
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('status_conflict');
+    });
+  });
+
+  // ── 11. Quarter-Hour Precision Validation (Item 3) ─────────────────────────────
+  describe('11. Quarter-Hour Precision Validation (Item 3)', () => {
+    it('isQuarterHourIncrement accepts 0.25, 1.5, 24 and rejects 0.254, 1.251, 0.3, 2.1', () => {
+      expect(isQuarterHourIncrement(0.25)).toBe(true);
+      expect(isQuarterHourIncrement(1.5)).toBe(true);
+      expect(isQuarterHourIncrement(24)).toBe(true);
+
+      expect(isQuarterHourIncrement(0.254)).toBe(false);
+      expect(isQuarterHourIncrement(1.251)).toBe(false);
+      expect(isQuarterHourIncrement(0.3)).toBe(false);
+      expect(isQuarterHourIncrement(2.1)).toBe(false);
+    });
+
+    it('API rejects entry hours not matching quarter-hour increments with 400 validation_error', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      const res = await request(app)
+        .post('/api/work-logs')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`])
+        .send({
+          date: '2026-10-27',
+          entries: [{ workRoleId: mockRoleDev.id, hours: 0.254 }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('validation_error');
     });
   });
 });

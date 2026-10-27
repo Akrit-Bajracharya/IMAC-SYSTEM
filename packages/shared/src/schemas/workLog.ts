@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Validates that a numeric hour value is in 15-minute / 0.25-hour increments.
  */
 export function isQuarterHourIncrement(val: number): boolean {
-  return Math.round(val * 100) % 25 === 0;
+  return Math.abs(val * 4 - Math.round(val * 4)) < 1e-9;
 }
 
 /**

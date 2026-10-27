@@ -304,7 +304,13 @@ workLogsRouter.get(
           include: {
             employeeProfile: {
               include: {
-                user: true,
+                user: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    username: true,
+                  },
+                },
               },
             },
           },
@@ -478,12 +484,25 @@ workLogsRouter.post(
         let workLogId = existing?.id;
 
         if (existing) {
-          // Replace draft entries
-          await tx.workLogEntry.deleteMany({ where: { workLogDayId: existing.id } });
-          await tx.workLogDay.update({
-            where: { id: existing.id },
+          // Conditional update on status = 'draft'
+          const updateResult = await tx.workLogDay.updateMany({
+            where: {
+              id: existing.id,
+              status: 'draft',
+            },
             data: { updatedAt: new Date() },
           });
+
+          if (updateResult.count === 0) {
+            return {
+              errorStatus: 409,
+              errorCode: 'status_conflict',
+              errorMessage: 'A work log has already been submitted or is no longer a draft',
+            };
+          }
+
+          // Replace draft entries
+          await tx.workLogEntry.deleteMany({ where: { workLogDayId: existing.id } });
         } else {
           // Create new draft day
           const created = await tx.workLogDay.create({
@@ -517,6 +536,13 @@ workLogsRouter.post(
           },
         });
       });
+
+      if (log && typeof log === 'object' && 'errorStatus' in log && (log as any).errorStatus) {
+        return res.status((log as any).errorStatus).json({
+          error: (log as any).errorCode,
+          message: (log as any).errorMessage,
+        });
+      }
 
       const standardShiftHours = profile.standardShiftHours ?? 8;
       const totalHours = calculateTotalHours(entries);
@@ -595,6 +621,7 @@ workLogsRouter.patch(
       }
 
       let requiresAudit = false;
+      const warnings: string[] = [];
       if (existing.status === 'submitted') {
         if (!existing.submittedAt) {
           return {
@@ -613,6 +640,30 @@ workLogsRouter.patch(
             errorMessage: 'Edit window has expired',
           };
         }
+
+        // Apply mismatchHandling on submitted log
+        const standardShiftHours = profile.standardShiftHours ?? 8;
+        const totalHours = calculateTotalHours(entries);
+        const isMismatch = Math.abs(totalHours - standardShiftHours) > 0.001;
+
+        if (isMismatch) {
+          if (policies.mismatchHandling === 'block') {
+            return {
+              errorStatus: 422,
+              errorCode: 'hour_mismatch',
+              errorMessage: 'Logged hours do not match standard shift length',
+              totalHours,
+              standardShiftHours,
+              warnings: ['Total hours does not match standard shift length'],
+            };
+          }
+          if (policies.mismatchHandling === 'warn') {
+            warnings.push(
+              `Total hours (${totalHours}) does not match standard shift length (${standardShiftHours})`,
+            );
+          }
+        }
+
         requiresAudit = true;
       }
 
@@ -653,13 +704,18 @@ workLogsRouter.patch(
         });
       }
 
-      return { log: updated };
+      return { log: updated, warnings };
     });
 
     if ('errorStatus' in result && result.errorStatus) {
       return res.status(result.errorStatus).json({
         error: result.errorCode,
         message: result.errorMessage,
+        ...(result.totalHours !== undefined && {
+          totalHours: result.totalHours,
+          standardShiftHours: result.standardShiftHours,
+          warnings: result.warnings,
+        }),
       });
     }
 
@@ -671,7 +727,7 @@ workLogsRouter.patch(
       workLog: result.log,
       totalHours,
       standardShiftHours,
-      warnings: [],
+      warnings: result.warnings ?? [],
     });
   }),
 );
@@ -765,12 +821,13 @@ workLogsRouter.post(
       }
     }
 
-    // Atomic conditional update
+    // Atomic conditional update with optimistic lock
     const updateResult = await db.workLogDay.updateMany({
       where: {
         id: logId,
         employeeProfileId: profile.id,
         status: 'draft',
+        updatedAt: existing.updatedAt,
       },
       data: {
         status: 'submitted',
@@ -779,9 +836,18 @@ workLogsRouter.post(
     });
 
     if (updateResult.count === 0) {
-      return res.status(400).json({
-        error: 'already_submitted',
-        message: 'Work log has already been submitted or is not in draft status',
+      const current = await db.workLogDay.findUnique({
+        where: { id: logId },
+      });
+      if (!current || current.status !== 'draft') {
+        return res.status(400).json({
+          error: 'already_submitted',
+          message: 'Work log has already been submitted or is not in draft status',
+        });
+      }
+      return res.status(409).json({
+        error: 'conflict_retry',
+        message: 'Work log was modified by another request. Please reload and retry.',
       });
     }
 

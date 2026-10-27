@@ -119,12 +119,10 @@ export async function buildWorkLogExcelWorkbook(
   wb.creator = 'IMAC Operations System';
   wb.created = new Date();
 
-  // ───────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // SHEET 1: Summary
-  // ───────────────────────────────────────────────────────────────────────────
-  const wsSummary = wb.addWorksheet('Summary', {
-    views: [{ state: 'frozen', ySplit: 7 }],
-  });
+  // ---------------------------------------------------------------------------
+  const wsSummary = wb.addWorksheet('Summary');
 
   wsSummary.columns = [
     { width: 32 },
@@ -134,7 +132,7 @@ export async function buildWorkLogExcelWorkbook(
   ];
 
   // Title Block
-  const titleRow = wsSummary.addRow(['IMAC Nepal — Daily Work Log Export Summary']);
+  const titleRow = wsSummary.addRow(['IMAC Nepal - Daily Work Log Export Summary']);
   titleRow.font = { bold: true, size: 14, color: { argb: 'FF1E293B' } };
 
   wsSummary.addRow(['Time Zone: Asia/Kathmandu (UTC+05:45)']);
@@ -286,9 +284,9 @@ export async function buildWorkLogExcelWorkbook(
   statusTotalRow.font = { bold: true };
   statusTotalRow.getCell(2).numFmt = '#,##0.00';
 
-  // ───────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   // SHEET 2: Entries
-  // ───────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
   const wsEntries = wb.addWorksheet('Entries', {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
@@ -335,6 +333,7 @@ export async function buildWorkLogExcelWorkbook(
       ),
     );
     const weekday = WEEKDAYS[dateObj.getUTCDay()];
+    const submittedAtDate = day.submittedAt ? new Date(day.submittedAt) : '';
 
     const row = wsEntries.addRow([
       sanitizeExcelCellText(user.displayName),
@@ -348,7 +347,7 @@ export async function buildWorkLogExcelWorkbook(
       sanitizeExcelCellText(entry.description || ''),
       sanitizeExcelCellText(entry.projectId || ''),
       sanitizeExcelCellText(entry.taskId || ''),
-      formatKathmanduDateTime(day.submittedAt),
+      submittedAtDate,
     ]);
 
     // Set real Excel date format on Date column (Col 4)
@@ -356,6 +355,11 @@ export async function buildWorkLogExcelWorkbook(
 
     // Set real Excel number format on Hours column (Col 8)
     row.getCell(8).numFmt = '#,##0.00';
+
+    // Set real Excel datetime format on Submitted At column (Col 12)
+    if (submittedAtDate instanceof Date) {
+      row.getCell(12).numFmt = 'yyyy-mm-dd hh:mm';
+    }
   }
 
   return wb;

@@ -213,4 +213,55 @@ Across all APIs in the IMAC Operations System:
 - They do not test live streaming under multi-gigabyte PostgreSQL loads or real OS network socket buffers.
 
 ### 3. Assumptions & Next Steps
-- **Next Step (8d)**: Work Log Approval workflows (bulk approve, reject with reason, manager/admin approval endpoints).
+- **Next Step (8d)**: Review Fixes for Steps 8b and 8c (completed below).
+
+---
+
+## Current Milestone: Step 8d — Review Fixes for Steps 8b and 8c — COMPLETED
+
+### 1. What Was Built & Fixed
+- **Submitted Log PATCH Mismatch Handling (`apps/api/src/routes/workLogs.ts`)**:
+  - `PATCH /api/work-logs/:id` on a `submitted` log now evaluates `worklog.mismatchHandling` on the updated entries within the edit window:
+    - `block`: Returns HTTP 422 `hour_mismatch`. Atomic transaction ensures nothing is deleted, updated, or created, and no audit entry is written.
+    - `warn`: Returns HTTP 200 with warning in `warnings` array.
+    - `allow`: Returns HTTP 200 with empty `warnings: []`.
+  - Draft work logs are unaffected.
+  - The admin override endpoint (`PATCH /api/admin/work-logs/:id`) remains exempt from mismatch blocking.
+- **Optimistic Locking & Status Concurrency Guard (`apps/api/src/routes/workLogs.ts`)**:
+  - `POST /api/work-logs/:id/submit`: The atomic conditional update now verifies `updatedAt: existing.updatedAt` alongside `status: 'draft'`. If zero rows are updated, the handler re-queries the day:
+    - If status changed away from draft, returns HTTP 400 `already_submitted`.
+    - If status is still draft (concurrency collision), returns HTTP 409 `conflict_retry`.
+  - `POST /api/work-logs`: In-transaction draft update requires `status: 'draft'`. If zero rows are updated (e.g. log submitted concurrently), returns HTTP 409 `status_conflict`.
+- **Quarter-Hour Precision Function (`packages/shared/src/schemas/workLog.ts`)**:
+  - Replaced modulo arithmetic in `isQuarterHourIncrement` with floating-point tolerance check: `Math.abs(val * 4 - Math.round(val * 4)) < 1e-9`.
+  - Accurately accepts `0.25`, `1.5`, `24`, and rejects `0.254`, `1.251`, `0.3`, `2.1`.
+- **Sensitive User Field Exclusion in Export Query (`apps/api/src/routes/workLogs.ts`)**:
+  - Replaced `user: true` in `findMany` with explicit field selection: `user: { select: { id: true, displayName: true, username: true } }`.
+  - Sensitive authentication attributes (`passwordHash`, `failedLoginCount`, `lockedUntil`) are never selected or loaded into memory during exports.
+- **Restored Explanatory Comments (`apps/api/src/app.ts`)**:
+  - Restored SEC-01 notes, CSRF login rationale, and `/api/auth/csrf` token bootstrap exemption explanation without modifying behavior.
+- **Export Character Encoding & Layout Cleanup (`apps/api/src/services/workLogExport.ts`)**:
+  - Replaced non-ASCII / box-drawing characters and em-dashes with plain ASCII.
+  - Removed 7-row freeze on Summary sheet (`views: [{ state: 'frozen', ySplit: 7 }]`).
+  - Stated time zone clearly in the Summary title block: `Time Zone: Asia/Kathmandu (UTC+05:45)`.
+  - Formatted "Submitted At" column as a native Excel `Date` cell with `numFmt: 'yyyy-mm-dd hh:mm'`.
+- **Export Rate Limiter (`apps/api/src/app.ts`)**:
+  - Added `exportLimiter` on `/api/work-logs/export`:
+    - **Limit**: 15 requests per 15-minute window per IP.
+    - **Status Code**: 429 `too_many_requests`.
+    - **Rationale**: Prevents CPU and memory exhaustion from high-frequency large spreadsheet generation.
+- **Important System Notes**:
+  - **Rejected-log handling is incomplete until approvals exist** (full rejection workflow with rejection reasons, manager re-submission, and status transition endpoints will be finalized when the approval module is introduced).
+  - **Edit audit snapshots contain descriptions**: `AuditLog.beforeSnapshot` and `afterSnapshot` on post-submission edits capture the full entry payload including employee descriptions to ensure complete audit trail integrity.
+
+### 2. Mock Limitations & What Tests Cannot Prove
+- Integration tests in Vitest use an in-memory mocked database (`setup.ts`).
+- **What mocks prove**: Application business logic, policy branch handling (`block`, `warn`, `allow`), status code returns (422, 409, 400), Zod schema validations, ExcelJS cell formatting, formula neutralization, and security checks.
+- **What mocks CANNOT prove**:
+  - Real database transaction isolation levels (e.g. Read Committed vs Serializable in PostgreSQL).
+  - Physical race conditions under parallel operating system threads simultaneously executing against a PostgreSQL engine.
+  - Real database unique constraints and lock contention under multi-client loads.
+  - Memory and socket streaming under multi-gigabyte production workloads.
+
+### 3. Assumptions & Next Steps
+- **Next Step (8e/9)**: Work Log Approvals module (approval flows, rejection with reason, manager/admin approval endpoints).

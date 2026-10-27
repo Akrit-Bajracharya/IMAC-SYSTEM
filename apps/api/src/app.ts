@@ -96,10 +96,35 @@ export function createApp(options: AppOptions = {}) {
     },
   });
 
+  // Rate limiter for the work-log export endpoint (15 requests per 15 min per IP).
+  // Guards against excessive memory/CPU consumption from heavy spreadsheet generation.
+  const exportLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: () => config.nodeEnv === 'test',
+    message: {
+      error: 'too_many_requests',
+      message: 'Too many export requests, please try again later',
+    },
+  });
+
   // ── CSRF middleware factory ───────────────────────────────────────────────────
   //
   // SEC-01: CSRF protection is applied to EVERY state-changing API route, including
   // /api/admin/*, via the csrfMiddleware factory below.
+  //
+  // Why login is NOT exempt:
+  //   POST /api/auth/login IS CSRF-protected. The frontend first calls
+  //   GET /api/auth/csrf to obtain a token (stored in a SameSite=Strict cookie +
+  //   returned in JSON), then includes it as x-csrf-token on the login request.
+  //   There is therefore no design reason to exempt login.
+  //
+  // Why GET /api/auth/csrf is exempt:
+  //   It is the token-issue endpoint itself; protecting it would create a bootstrap
+  //   deadlock. It is also a GET (read-only), which csrf-csrf already ignores via
+  //   ignoredMethods, but we skip our wrapper too for clarity.
   const csrfMiddleware = (req: Request, res: Response, next: NextFunction) => {
     // Allow tests to opt out globally (csrfDisabled) or opt in (csrfEnabled).
     const isTestBypass = !options.csrfEnabled && (options.csrfDisabled || config.nodeEnv === 'test');
@@ -114,11 +139,12 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api/auth/login', loginLimiter);
   app.use('/api/auth/change-password', changePasswordLimiter);         // SEC-03
   app.use('/api/admin/users', resetPasswordLimiter);                   // SEC-03
+  app.use('/api/work-logs/export', exportLimiter);
 
   // SEC-01: csrfMiddleware is mounted on auth, admin, and mutation routes.
   app.use('/api/auth', csrfMiddleware, authRouter);
-  app.use('/api/admin/users', csrfMiddleware, adminUsersRouter);
-  app.use('/api/admin/settings', csrfMiddleware, adminSettingsRouter);
+  app.use('/api/admin/users', csrfMiddleware, adminUsersRouter);       // SEC-01 (was unprotected)
+  app.use('/api/admin/settings', csrfMiddleware, adminSettingsRouter); // SEC-01 (was unprotected)
   app.use('/api/admin/work-roles', csrfMiddleware, adminWorkRolesRouter);
   app.use('/api/admin/work-logs', csrfMiddleware, adminWorkLogsRouter);
   app.use('/api/work-roles', workRolesRouter);
