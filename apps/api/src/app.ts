@@ -12,7 +12,9 @@ import { authRouter } from './routes/auth.js';
 import { adminUsersRouter } from './routes/admin/users.js';
 import { adminSettingsRouter } from './routes/admin/settings.js';
 import { adminWorkRolesRouter } from './routes/admin/workRoles.js';
+import { adminWorkLogsRouter } from './routes/admin/workLogs.js';
 import { workRolesRouter } from './routes/workRoles.js';
+import { workLogsRouter } from './routes/workLogs.js';
 import { employeesRouter } from './routes/employees.js';
 
 export interface AppOptions {
@@ -98,17 +100,6 @@ export function createApp(options: AppOptions = {}) {
   //
   // SEC-01: CSRF protection is applied to EVERY state-changing API route, including
   // /api/admin/*, via the csrfMiddleware factory below.
-  //
-  // Why login is NOT exempt:
-  //   POST /api/auth/login IS CSRF-protected. The frontend first calls
-  //   GET /api/auth/csrf to obtain a token (stored in a SameSite=Strict cookie +
-  //   returned in JSON), then includes it as x-csrf-token on the login request.
-  //   There is therefore no design reason to exempt login.
-  //
-  // Why GET /api/auth/csrf is exempt:
-  //   It is the token-issue endpoint itself; protecting it would create a bootstrap
-  //   deadlock. It is also a GET (read-only), which csrf-csrf already ignores via
-  //   ignoredMethods, but we skip our wrapper too for clarity.
   const csrfMiddleware = (req: Request, res: Response, next: NextFunction) => {
     // Allow tests to opt out globally (csrfDisabled) or opt in (csrfEnabled).
     const isTestBypass = !options.csrfEnabled && (options.csrfDisabled || config.nodeEnv === 'test');
@@ -124,12 +115,14 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api/auth/change-password', changePasswordLimiter);         // SEC-03
   app.use('/api/admin/users', resetPasswordLimiter);                   // SEC-03
 
-  // SEC-01: csrfMiddleware is mounted on auth AND admin routes.
+  // SEC-01: csrfMiddleware is mounted on auth, admin, and mutation routes.
   app.use('/api/auth', csrfMiddleware, authRouter);
-  app.use('/api/admin/users', csrfMiddleware, adminUsersRouter);       // SEC-01 (was unprotected)
-  app.use('/api/admin/settings', csrfMiddleware, adminSettingsRouter); // SEC-01 (was unprotected)
+  app.use('/api/admin/users', csrfMiddleware, adminUsersRouter);
+  app.use('/api/admin/settings', csrfMiddleware, adminSettingsRouter);
   app.use('/api/admin/work-roles', csrfMiddleware, adminWorkRolesRouter);
+  app.use('/api/admin/work-logs', csrfMiddleware, adminWorkLogsRouter);
   app.use('/api/work-roles', workRolesRouter);
+  app.use('/api/work-logs', csrfMiddleware, workLogsRouter);
   app.use('/api/employees', employeesRouter);
   app.use('/api/directory', employeesRouter);
 

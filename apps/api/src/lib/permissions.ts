@@ -17,12 +17,24 @@ export type Action =
   | 'workrole:deactivate'
   | 'workrole:assign'
   | 'workrole:remove'
-  | 'workrole:readEmployee';
+  | 'workrole:readEmployee'
+  | 'worklog:readOwn'
+  | 'worklog:writeOwn'
+  | 'worklog:adminOverride';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
 
   switch (action) {
+    case 'worklog:readOwn':
+      return ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'].includes(role);
+
+    case 'worklog:writeOwn':
+      return ['system_admin', 'hr_admin', 'project_manager', 'employee'].includes(role);
+
+    case 'worklog:adminOverride':
+      return role === 'system_admin';
+
     case 'user:create':
     case 'user:deactivate':
     case 'user:reactivate':

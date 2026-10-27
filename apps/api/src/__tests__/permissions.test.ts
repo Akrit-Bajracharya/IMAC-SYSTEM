@@ -36,6 +36,12 @@ describe('Permissions - can() policy matrix', () => {
     it('can reactivate users (user:reactivate)', () => {
       expect(can(admin, 'user:reactivate')).toBe(true);
     });
+
+    it('can manage own work logs and perform admin override', () => {
+      expect(can(admin, 'worklog:readOwn')).toBe(true);
+      expect(can(admin, 'worklog:writeOwn')).toBe(true);
+      expect(can(admin, 'worklog:adminOverride')).toBe(true);
+    });
   });
 
   describe('hr_admin role', () => {
@@ -62,6 +68,12 @@ describe('Permissions - can() policy matrix', () => {
     it('CANNOT read audit logs', () => {
       expect(can(hr, 'auditlog:read')).toBe(false);
     });
+
+    it('can read and write own work logs, but CANNOT perform admin override', () => {
+      expect(can(hr, 'worklog:readOwn')).toBe(true);
+      expect(can(hr, 'worklog:writeOwn')).toBe(true);
+      expect(can(hr, 'worklog:adminOverride')).toBe(false);
+    });
   });
 
   describe('project_manager role', () => {
@@ -82,6 +94,12 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(pm, 'settings:update')).toBe(false);
       expect(can(pm, 'auditlog:read')).toBe(false);
     });
+
+    it('can read and write own work logs, but CANNOT perform admin override', () => {
+      expect(can(pm, 'worklog:readOwn')).toBe(true);
+      expect(can(pm, 'worklog:writeOwn')).toBe(true);
+      expect(can(pm, 'worklog:adminOverride')).toBe(false);
+    });
   });
 
   describe('employee role', () => {
@@ -92,6 +110,12 @@ describe('Permissions - can() policy matrix', () => {
         expect(can(employee, action), `employee should be denied action: ${action}`).toBe(false);
       }
     });
+
+    it('can read and write own work logs, but CANNOT perform admin override', () => {
+      expect(can(employee, 'worklog:readOwn')).toBe(true);
+      expect(can(employee, 'worklog:writeOwn')).toBe(true);
+      expect(can(employee, 'worklog:adminOverride')).toBe(false);
+    });
   });
 
   describe('viewer role', () => {
@@ -101,6 +125,12 @@ describe('Permissions - can() policy matrix', () => {
       for (const action of allActions) {
         expect(can(viewer, action), `viewer should be denied action: ${action}`).toBe(false);
       }
+    });
+
+    it('can read own work logs, but CANNOT write own logs and CANNOT override', () => {
+      expect(can(viewer, 'worklog:readOwn')).toBe(true);
+      expect(can(viewer, 'worklog:writeOwn')).toBe(false);
+      expect(can(viewer, 'worklog:adminOverride')).toBe(false);
     });
   });
 

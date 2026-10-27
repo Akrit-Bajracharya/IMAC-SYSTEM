@@ -105,3 +105,7 @@ This document tracks unresolved policy, organizational, and operational decision
    - **Question**: Should HR administrators be permitted to alter contract parameters like standard shift hours and working days per week, or should those parameters be restricted exclusively to system administrators?
    - **Current Implementation**: In `apps/api/src/lib/permissions.ts`, `user:update` is granted to both `system_admin` and `hr_admin`, allowing HR administrators to update department, job title, start date, standard shift hours, and working days on employee profiles. System role changes (`user:changeRole`) remain strictly restricted to `system_admin`.
 
+
+10. **Work Log Date Boundaries & Time Zone Evaluation**
+    - **Question**: What are the permissible past and future limits for logging daily work, and in which time zone should current-date evaluations take place?
+    - **Current Implementation**: Evaluated against the `Asia/Kathmandu` time zone (UTC+05:45). Configured with `MAX_FUTURE_DAYS = 1` (allowing at most +1 day ahead to accommodate local timezone transitions without premature logging) and `MAX_PAST_DAYS = 90` (permitting retro-active daily logging up to 90 calendar days in the past). Submissions outside this window are rejected with HTTP 400 `validation_error`.
