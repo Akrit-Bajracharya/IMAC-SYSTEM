@@ -180,3 +180,37 @@ Across all APIs in the IMAC Operations System:
 
 ### 3. Assumptions & Next Steps
 - **Next Step (8b)**: Shared schemas in `@imac/shared`, backend API endpoints under `/api/work-logs` (`my-logs`, day retrieval, save draft/submit, admin lookup, export), permission matrix updates, and integration tests.
+
+
+---
+
+## Current Milestone: Step 8c — Daily Work Log Excel Export (Phase 1 Backend) — COMPLETED
+
+### 1. What Was Built
+- **ExcelJS Export Engine (`apps/api/src/services/workLogExport.ts`)**:
+  - Two-sheet workbook generation (`Summary` and `Entries`).
+  - **Sheet 1 "Summary"**: Title block specifying `Asia/Kathmandu` timezone, generated timestamp, requesting actor, active filters, frozen header row, and totals tables:
+    - Totals by Employee (name, code, department, total hours).
+    - Totals by Work Role (role name, total hours).
+    - Hours by Status (`draft`, `submitted`, `approved`, `rejected`).
+  - **Sheet 2 "Entries"**: Detailed tabular rows with real Excel dates (`yyyy-mm-dd`), calculated UTC weekday, status, work role, numeric hours (`#,##0.00`), sanitized description, project/task hooks, and Kathmandu-formatted `submittedAt`.
+  - **Formula Injection Defense**: Neutralizes CSV/Excel formula injection on **every text cell** (display names, codes, departments, roles, project/task IDs, descriptions) if the value starts with tab, newline, carriage return, or `= + - @` (including leading whitespace).
+  - **50,000 Row Cap Protection**: Runs a preliminary `count` query; if results exceed 50,000 rows, halts immediately and returns HTTP 400 `row_limit_exceeded` before loading rows into memory.
+- **Shared Validation Schemas (`packages/shared/src/schemas/workLog.ts`)**:
+  - Added `workLogExportQuerySchema` validating `startDate`, `endDate`, date range maximum (366 days), and optional filters (`employee`, `team`, `workRoleId`, `projectId`, `status`).
+- **Export Route (`GET /api/work-logs/export` in `apps/api/src/routes/workLogs.ts`)**:
+  - Declared **before** `GET /api/work-logs/:id` to prevent routing collisions.
+  - Permissions: Evaluates `can(user, 'worklog:exportAll')`. Non-admins are scoped strictly to their own logs (`employeeProfileId`). If an employee filter matching another staff member's ID is passed by a non-admin, the request is rejected with HTTP 403 Forbidden.
+  - Team filter maps directly to `EmployeeProfile.department`.
+  - Status filter behavior: **When no status filter is provided, drafts and rejected entries are included alongside submitted and approved logs**.
+  - Audit Logging: Writes an `AuditLog` entry (`work_log.exported`) recording actor, scope (`own` vs `organisation`), rowCount, and filters before transmitting the file. If audit creation fails, the request fails with 500 without sending data.
+  - HTTP Headers: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `Content-Disposition: attachment; filename="work-logs-export.xlsx"`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`.
+- **Policy Documentation (`docs/open-policy-questions.md`)**:
+  - Documented Question 11: HR Admin export scope (default NO / own-only) and `team` filter mapping to `department`.
+
+### 2. Mock Limitations & What Tests Cannot Prove
+- Integration tests in Vitest use an in-memory mocked database (`setup.ts`). Mocks verify application business logic, authorization scoping, ExcelJS workbook generation, cell formatting, formula neutralization, and error handling.
+- They do not test live streaming under multi-gigabyte PostgreSQL loads or real OS network socket buffers.
+
+### 3. Assumptions & Next Steps
+- **Next Step (8d)**: Work Log Approval workflows (bulk approve, reject with reason, manager/admin approval endpoints).

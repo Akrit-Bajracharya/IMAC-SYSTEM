@@ -315,3 +315,111 @@ Documented in `docs/open-policy-questions.md`:
 - **Step 8c**: Excel Work Log Export engine (generating formatted work log spreadsheets for payroll and operational reporting).
 - **Step 8d**: Manager and Administrator Work Log Approval workflows (bulk approve, reject with reason).
 - **Step 8e**: Frontend Daily Work Log interface (interactive calendar view, entry form, draft autosave, submission alerts, and warning displays).
+
+
+---
+
+## 12. Task Execution Log (Step 8c onwards)
+
+### Task 8c-01: Step 8c Planning & Requirements Inspection
+- **Date**: 2026-10-27
+- **Day of week**: Tuesday
+- **Start time**: 13:48
+- **End time**: 13:51
+- **Step**: Step 8c (Daily Work Log Excel Export with ExcelJS)
+- **Task performed**: Read `docs/PROGRESS.md`, `docs/open-policy-questions.md`, and `imac-antigravity-prompt.md` (Part A Master Brief). Inspected existing route structures, middleware, permission models, and package dependencies. Formulated implementation plan for Excel export, RBAC scoping, ExcelJS integration, formula injection mitigation, and audit tracking.
+- **Files created or changed**: `finalreport.md` (appended task log)
+- **Tests run with pass counts**: Baseline verified at 180 passed across 6 test suites (`permissions`: 16, `auth`: 13, `usersAdmin`: 25, `workRoles`: 40, `workLogs`: 35, `security`: 51)
+- **Status**: done
+- **Decisions or problems**:
+  - Employee, HR Admin, Project Manager access will be strictly scoped to their own logs. If an employee, team, or project filter pointing to another employee is passed by a non-system_admin, it will be refused with **HTTP 403 Forbidden** (`forbidden: 'You are only permitted to export your own work logs'`).
+  - System Admin can export organization-wide with optional filters (`employee`, `team`/department, `workRoleId`, `projectId`, `startDate`, `endDate`, `status`).
+  - Viewer role is refused with **HTTP 403 Forbidden**.
+  - Formula injection mitigation: Any string starting with `=`, `+`, `-`, or `@` will be sanitized/escaped by prepending a single quote (`'`).
+  - Row cap: 50,000 rows max; returns HTTP 400 (`row_limit_exceeded`) if the bounded query finds more than 50,000 entries.
+  - Organization-wide export by `hr_admin` is treated as an open policy question (defaulting to NO/own-only) and will be documented in `docs/open-policy-questions.md`.
+
+### Task 8c-02: Installing ExcelJS Dependency
+- **Date**: 2026-10-27
+- **Day of week**: Tuesday
+- **Start time**: 13:53
+- **End time**: 13:54
+- **Step**: Step 8c (Daily Work Log Excel Export)
+- **Task performed**: Install production dependency `exceljs` in `apps/api` (without `@types/exceljs`).
+- **Files created or changed**: `apps/api/package.json`
+- **Tests run with pass counts**: N/A
+- **Status**: done
+- **Decisions or problems**: Per amendment 2, installed only `exceljs` as it ships with native TypeScript declaration files.
+
+### Task 8c-03: Implementation of Work Log Export Engine & Tests
+- **Date**: 2026-10-27
+- **Day of week**: Tuesday
+- **Start time**: 13:55
+- **End time**: 14:04
+- **Step**: Step 8c (Daily Work Log Excel Export with ExcelJS)
+- **Task performed**:
+  - Implemented `workLogExportQuerySchema` in `packages/shared/src/schemas/workLog.ts` and compiled `@imac/shared`.
+  - Added permissions `worklog:exportOwn` and `worklog:exportAll` to `apps/api/src/lib/permissions.ts`.
+  - Built `apps/api/src/services/workLogExport.ts` featuring ExcelJS workbook creation, Summary and Entries sheets, Asia/Kathmandu title block, `#,#0.00` numeric formatting, real UTC Excel dates, formula injection defense on all text cells, and empty hook for project manager membership.
+  - Implemented `GET /api/work-logs/export` route before `/:id` in `apps/api/src/routes/workLogs.ts`, enforcing count-based 50k row capping, pre-send audit log generation, and security headers (`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`).
+  - Added tests in `apps/api/src/__tests__/permissions.test.ts` and created `apps/api/src/__tests__/workLogExport.test.ts`.
+- **Files created or changed**:
+  - `packages/shared/src/schemas/workLog.ts`
+  - `apps/api/src/lib/permissions.ts`
+  - `apps/api/src/services/workLogExport.ts`
+  - `apps/api/src/routes/workLogs.ts`
+  - `apps/api/src/__tests__/setup.ts`
+  - `apps/api/src/__tests__/permissions.test.ts`
+  - `apps/api/src/__tests__/workLogExport.test.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+- **Tests run with pass counts**: Vitest: 7 test files passed, 205 tests passed (180 previous + 25 new Step 8c tests).
+- **Status**: done
+- **Decisions or problems**: Confirmed `AuditLog.entityId` is nullable in schema, enabling clean null entity logging for export actions.
+
+### Task 8c-04: Code Quality Verification (Lint, Typecheck & Test Suite Re-verification)
+- **Date**: 2026-10-27
+- **Day of week**: Tuesday
+- **Start time**: 14:04
+- **End time**: 14:08
+- **Step**: Step 8c (Daily Work Log Excel Export)
+- **Task performed**:
+  - Ran `npm run typecheck` across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`). Identified TypeScript error TS2322 in `apps/api/src/routes/workLogs.ts` (`beforeSnapshot: null` invalid for Prisma JSON input). Corrected by omitting `beforeSnapshot` when no prior record exists.
+  - Ran `npm run lint` across workspaces (0 errors).
+  - Executed complete test suite via `npm test` to verify all 7 test files and 205 unit/integration tests pass cleanly.
+- **Files created or changed**:
+  - `apps/api/src/routes/workLogs.ts`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `npm run typecheck`: Passed (0 errors across `@imac/api`, `@imac/web`, `@imac/shared`).
+  - `npm run lint`: Passed (0 errors).
+  - `npm test`: 7 test files passed, 205 tests passed (0 failures).
+- **Status**: done
+- **Decisions or problems**: Omitted `beforeSnapshot` in audit log creation for export operations so Prisma cleanly handles it as undefined/null without type casting.
+
+---
+
+## Step 8c Summary & Verification
+- **Status**: Completed
+- **Tasks Executed**:
+  1. Task 8c-01: Research & Planning for Step 8c (ExcelJS Export Subsystem).
+  2. Task 8c-02: Installing ExcelJS Dependency (`exceljs` in `apps/api`).
+  3. Task 8c-03: Implementation of Work Log Export Engine & Tests (shared schemas, permission actions, export service, export route before `/:id`, security headers, 20 export tests).
+  4. Task 8c-04: Code Quality Verification (typecheck fix for Prisma null snapshot, lint, and full test run).
+- **Files Created / Modified**:
+  - `apps/api/package.json`
+  - `packages/shared/src/schemas/workLog.ts`
+  - `apps/api/src/lib/permissions.ts`
+  - `apps/api/src/services/workLogExport.ts`
+  - `apps/api/src/routes/workLogs.ts`
+  - `apps/api/src/__tests__/setup.ts`
+  - `apps/api/src/__tests__/permissions.test.ts`
+  - `apps/api/src/__tests__/workLogExport.test.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Test Suite Results**:
+  - **Before Step 8c**: 180 tests passing (6 test suites).
+  - **After Step 8c**: 205 tests passing (7 test suites, +25 new tests: 20 export tests + 5 permission matrix tests).
+- **Unverified Items**:
+  - Integration tests run against Vitest mocked database. Full streaming behavior under multi-gigabyte production workloads and live OS socket throughput remain to be tested in live environment.

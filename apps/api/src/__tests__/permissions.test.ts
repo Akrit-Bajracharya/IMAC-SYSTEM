@@ -42,6 +42,11 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(admin, 'worklog:writeOwn')).toBe(true);
       expect(can(admin, 'worklog:adminOverride')).toBe(true);
     });
+
+    it('can export own logs and export organisation-wide', () => {
+      expect(can(admin, 'worklog:exportOwn')).toBe(true);
+      expect(can(admin, 'worklog:exportAll')).toBe(true);
+    });
   });
 
   describe('hr_admin role', () => {
@@ -74,6 +79,11 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(hr, 'worklog:writeOwn')).toBe(true);
       expect(can(hr, 'worklog:adminOverride')).toBe(false);
     });
+
+    it('can export own logs, but CANNOT export organisation-wide', () => {
+      expect(can(hr, 'worklog:exportOwn')).toBe(true);
+      expect(can(hr, 'worklog:exportAll')).toBe(false);
+    });
   });
 
   describe('project_manager role', () => {
@@ -100,6 +110,11 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(pm, 'worklog:writeOwn')).toBe(true);
       expect(can(pm, 'worklog:adminOverride')).toBe(false);
     });
+
+    it('can export own logs, but CANNOT export organisation-wide', () => {
+      expect(can(pm, 'worklog:exportOwn')).toBe(true);
+      expect(can(pm, 'worklog:exportAll')).toBe(false);
+    });
   });
 
   describe('employee role', () => {
@@ -116,6 +131,11 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(employee, 'worklog:writeOwn')).toBe(true);
       expect(can(employee, 'worklog:adminOverride')).toBe(false);
     });
+
+    it('can export own logs, but CANNOT export organisation-wide', () => {
+      expect(can(employee, 'worklog:exportOwn')).toBe(true);
+      expect(can(employee, 'worklog:exportAll')).toBe(false);
+    });
   });
 
   describe('viewer role', () => {
@@ -131,6 +151,11 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(viewer, 'worklog:readOwn')).toBe(true);
       expect(can(viewer, 'worklog:writeOwn')).toBe(false);
       expect(can(viewer, 'worklog:adminOverride')).toBe(false);
+    });
+
+    it('CANNOT export own logs and CANNOT export organisation-wide', () => {
+      expect(can(viewer, 'worklog:exportOwn')).toBe(false);
+      expect(can(viewer, 'worklog:exportAll')).toBe(false);
     });
   });
 

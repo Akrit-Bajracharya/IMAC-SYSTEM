@@ -86,3 +86,43 @@ export type AdminWorkLogOverrideInput = z.infer<typeof adminWorkLogOverrideSchem
 export type ByDateQueryInput = z.infer<typeof byDateQuerySchema>;
 export type ByWeekQueryInput = z.infer<typeof byWeekQuerySchema>;
 export type ByMonthQueryInput = z.infer<typeof byMonthQuerySchema>;
+
+export const workLogExportQuerySchema = z
+  .object({
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'startDate must be formatted as YYYY-MM-DD')
+      .refine(isValidCalendarDate, { message: 'Invalid calendar date for startDate' }),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'endDate must be formatted as YYYY-MM-DD')
+      .refine(isValidCalendarDate, { message: 'Invalid calendar date for endDate' }),
+    employee: z.string().trim().min(1).optional(),
+    team: z.string().trim().min(1).optional(),
+    workRoleId: z.string().trim().min(1).optional(),
+    projectId: z.string().trim().min(1).optional(),
+    status: z.enum(['draft', 'submitted', 'approved', 'rejected']).optional(),
+  })
+  .refine(
+    (data) => {
+      const [sy, sm, sd] = data.startDate.split('-').map(Number);
+      const [ey, em, ed] = data.endDate.split('-').map(Number);
+      const startUtc = Date.UTC(sy, sm - 1, sd);
+      const endUtc = Date.UTC(ey, em - 1, ed);
+      return endUtc >= startUtc;
+    },
+    { message: 'endDate must be greater than or equal to startDate', path: ['endDate'] },
+  )
+  .refine(
+    (data) => {
+      const [sy, sm, sd] = data.startDate.split('-').map(Number);
+      const [ey, em, ed] = data.endDate.split('-').map(Number);
+      const startUtc = Date.UTC(sy, sm - 1, sd);
+      const endUtc = Date.UTC(ey, em - 1, ed);
+      const diffDays = Math.round((endUtc - startUtc) / (24 * 60 * 60 * 1000));
+      return diffDays <= 366;
+    },
+    { message: 'Date range cannot exceed 366 days', path: ['endDate'] },
+  );
+
+export type WorkLogExportQueryInput = z.infer<typeof workLogExportQuerySchema>;

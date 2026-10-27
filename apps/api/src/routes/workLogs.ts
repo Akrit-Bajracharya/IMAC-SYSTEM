@@ -14,9 +14,11 @@ import {
   byDateQuerySchema,
   byWeekQuerySchema,
   byMonthQuerySchema,
+  workLogExportQuerySchema,
   type UpsertWorkLogDraftInput,
   type PatchWorkLogInput,
 } from '@imac/shared';
+import { can } from '../lib/permissions.js';
 import {
   getEmployeeProfile,
   validateKathmanduDateRange,
@@ -25,6 +27,10 @@ import {
   calculateTotalHours,
 } from '../services/workLog.js';
 import { getWorkLogPolicies } from '../services/workLogPolicies.js';
+import {
+  buildWorkLogExcelWorkbook,
+  EXPORT_MAX_ROWS,
+} from '../services/workLogExport.js';
 
 export const workLogsRouter = Router();
 
@@ -184,6 +190,185 @@ workLogsRouter.get(
       standardShiftHours,
       warnings: [],
     });
+  }),
+);
+
+/**
+ * 3b. GET /api/work-logs/export
+ * Excel export via ExcelJS.
+ * Declared BEFORE /:id to prevent routing collision.
+ */
+workLogsRouter.get(
+  '/export',
+  requirePermission('worklog:exportOwn'),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const parseResult = workLogExportQuerySchema.safeParse(req.query);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid export query parameters',
+        details: parseResult.error.issues,
+      });
+    }
+
+    const {
+      startDate,
+      endDate,
+      status,
+      employee,
+      team,
+      workRoleId,
+      projectId,
+    } = parseResult.data;
+
+    const canExportAll = can(req.user!, 'worklog:exportAll');
+    let scope: 'own' | 'organisation' = 'own';
+    let callerProfile: any = null;
+
+    if (canExportAll) {
+      scope = 'organisation';
+      // System admin can export even if they have no profile
+      callerProfile = await getEmployeeProfile(req.user!.id);
+    } else {
+      scope = 'own';
+      callerProfile = await getEmployeeProfile(req.user!.id);
+      if (!callerProfile) {
+        return res.status(404).json({
+          error: 'profile_not_found',
+          message: 'Employee profile not found for this user',
+        });
+      }
+
+      // Non-admins: if an employee filter is provided, it MUST match their own profile id
+      if (employee && employee !== callerProfile.id) {
+        return res.status(403).json({
+          error: 'forbidden',
+          message: 'You are only permitted to export your own work logs',
+        });
+      }
+    }
+
+    const startUtc = parseDateOnlyUtc(startDate);
+    const endUtc = parseDateOnlyUtc(endDate);
+
+    const entryWhere: any = {
+      workLogDay: {
+        date: {
+          gte: startUtc,
+          lte: endUtc,
+        },
+      },
+    };
+
+    if (status) {
+      entryWhere.workLogDay.status = status;
+    }
+
+    if (scope === 'own') {
+      entryWhere.workLogDay.employeeProfileId = callerProfile.id;
+      if (team) {
+        entryWhere.workLogDay.employeeProfile = { department: team };
+      }
+    } else {
+      // organisation scope
+      if (employee) {
+        entryWhere.workLogDay.employeeProfileId = employee;
+      }
+      if (team) {
+        entryWhere.workLogDay.employeeProfile = { department: team };
+      }
+    }
+
+    if (workRoleId) {
+      entryWhere.workRoleId = workRoleId;
+    }
+
+    if (projectId) {
+      entryWhere.projectId = projectId;
+    }
+
+    // Run count first; if over EXPORT_MAX_ROWS return 400 row_limit_exceeded before loading rows
+    const count = await db.workLogEntry.count({ where: entryWhere });
+    if (count > EXPORT_MAX_ROWS) {
+      return res.status(400).json({
+        error: 'row_limit_exceeded',
+        message: `Export exceeds the maximum allowed limit of ${EXPORT_MAX_ROWS.toLocaleString()} rows. Please narrow your date range or filters.`,
+      });
+    }
+
+    const entries = await db.workLogEntry.findMany({
+      where: entryWhere,
+      include: {
+        workRole: true,
+        workLogDay: {
+          include: {
+            employeeProfile: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [
+        { workLogDay: { date: 'asc' } },
+        { createdAt: 'asc' },
+      ],
+    });
+
+    // Write audit entry BEFORE sending the file; if it fails, error handler returns 500
+    await db.auditLog.create({
+      data: {
+        actorUserId: req.user!.id,
+        action: 'work_log.exported',
+        entityType: 'WorkLogDay',
+        entityId: null,
+        ipAddress: req.ip,
+        afterSnapshot: {
+          scope,
+          rowCount: count,
+          filters: {
+            startDate,
+            endDate,
+            ...(status && { status }),
+            ...(employee && { employee }),
+            ...(team && { team }),
+            ...(workRoleId && { workRoleId }),
+            ...(projectId && { projectId }),
+          },
+        },
+      },
+    });
+
+    const workbook = await buildWorkLogExcelWorkbook({
+      scope,
+      actorName: req.user!.displayName,
+      filters: {
+        startDate,
+        endDate,
+        status,
+        employee,
+        team,
+        workRoleId,
+        projectId,
+      },
+      entries: entries as any,
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="work-logs-export.xlsx"',
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    return res.status(200).send(Buffer.from(buffer));
   }),
 );
 

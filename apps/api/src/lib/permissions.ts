@@ -20,7 +20,9 @@ export type Action =
   | 'workrole:readEmployee'
   | 'worklog:readOwn'
   | 'worklog:writeOwn'
-  | 'worklog:adminOverride';
+  | 'worklog:adminOverride'
+  | 'worklog:exportOwn'
+  | 'worklog:exportAll';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
@@ -33,6 +35,12 @@ export function can(user: AuthUser, action: Action): boolean {
       return ['system_admin', 'hr_admin', 'project_manager', 'employee'].includes(role);
 
     case 'worklog:adminOverride':
+      return role === 'system_admin';
+
+    case 'worklog:exportOwn':
+      return ['system_admin', 'hr_admin', 'project_manager', 'employee'].includes(role);
+
+    case 'worklog:exportAll':
       return role === 'system_admin';
 
     case 'user:create':
