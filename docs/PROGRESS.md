@@ -321,3 +321,55 @@ Across all APIs in the IMAC Operations System:
 
 ### 3. Next Steps
 - **Next Step (9b)**: Daily work log reminders and notification background jobs.
+
+
+---
+
+## Current Milestone: Step 10a — Projects Data Layer (Models and Migration) — COMPLETED WITH DATABASE RESET ALERT
+
+### 1. What Was Built
+- **Database Schema Models & Enums (`apps/api/prisma/schema.prisma`)**:
+  - `ProjectStatus` enum: `on_track`, `at_risk`, `off_track`, `on_hold`, `complete`.
+  - `ProjectRole` enum: `manager`, `member`, `viewer`.
+  - `TaskStatus` enum: `todo`, `in_progress`, `blocked`, `done`.
+  - `Project`: `id`, `name`, `description?`, `status` (default `on_track`), `startDate?` (`@db.Date`), `targetDate?` (`@db.Date`), `createdByUserId`, `createdAt`, `updatedAt`.
+  - `ProjectMember`: `id`, `projectId`, `userId`, `projectRole`, `addedByUserId`, `createdAt`, with `@@unique([projectId, userId])`.
+  - `ProjectStatusEvent`: `id`, `projectId`, `fromStatus`, `toStatus`, `reason`, `changedByUserId`, `createdAt`, with `@@index([projectId])`.
+  - `Milestone`: `id`, `projectId`, `name`, `dueDate?` (`@db.Date`), `completedAt?`, `createdAt`.
+  - `Task`: `id`, `projectId`, `parentTaskId?` (one-level subtask self-relation), `title`, `description?`, `status` (default `todo`), `assigneeUserId?`, `dueDate?` (`@db.Date`), `estimatedHours?`, `milestoneId?`, `createdByUserId`, `createdAt`, `updatedAt`.
+  - `TaskDependency`: `id`, `taskId`, `dependsOnTaskId`, with `@@unique([taskId, dependsOnTaskId])`.
+  - `Comment`: `id`, `taskId`, `authorUserId`, `body`, `createdAt`, `updatedAt`.
+  - `ProjectMessage`: `id`, `projectId`, `authorUserId`, `body`, `isPinned` (default `false`), `createdAt`.
+  - `TimeLog`: `id`, `taskId?`, `projectId`, `userId`, `workDate` (`@db.Date`), `hours` (Float), `note?`, `createdAt`, with indexes on `(userId, workDate)` and `projectId`.
+- **Cascade Deletes & Referential Integrity**:
+  - Cascading deletes restricted strictly to child entities that cannot exist without their parent:
+    - `Project` -> `Task`, `Comment` (via Task), `ProjectMember`, `ProjectMessage`, `Milestone`, `TaskDependency` (via Task), `TimeLog`, `ProjectStatusEvent`.
+    - `Task` -> `subtasks` (`parentTask`), `Comment`, `TaskDependency`.
+  - User references maintain standard referential integrity without cascade deletes (`Restrict` or `SetNull`).
+  - `WorkLogEntry.projectId` and `WorkLogEntry.taskId` preserved as plain nullable strings without foreign keys.
+  - Foreign keys used in lookups indexed across all new models.
+- **Test Setup Mocks (`apps/api/src/__tests__/setup.ts`)**:
+  - Added complete mock entries for `project`, `projectMember`, `projectStatusEvent`, `milestone`, `task`, `taskDependency`, `comment`, `projectMessage`, and `timeLog`.
+- **Policy Documentation (`docs/open-policy-questions.md`)**:
+  - Documented Questions 12-15 covering project creation authority (`system_admin` and `project_manager`), project visibility scoping (`system_admin` all; `hr_admin` default NO), task time log derivation vs independent work log entries, and task "blocked" status requirements.
+
+### 2. IMPORTANT DATABASE RESET ALERT & FINDING
+- When executing migration checks, Prisma diagnostic detected an existing migration discrepancy in the target PostgreSQL database:
+  - **Diagnostic Output**: `{"action": {"tag": "reset", "reason": "The following migration(s) are applied to the database but missing from the local migrations directory: 20261014065852_drift_check"}}`
+  - In accordance with prompt instructions (*"IMPORTANT: if Prisma ever asks to reset the database or says data will be lost, answer NO, stop, and report it. Never reset"*), **reset was rejected and database was NOT reset**.
+  - All existing database records remain intact and preserved without data loss.
+
+### 3. Verification & Test Results
+- **Prisma Schema Validation**:
+  - `npx prisma validate --schema=apps/api/prisma/schema.prisma` passed cleanly.
+- **Prisma Client Generation**:
+  - `npx prisma generate` generated Prisma Client v5.22.0.
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+- **Automated Test Suite**:
+  - All 217 tests passing across 7 test suites via `npm test`.
+
+### 4. Next Steps
+- Resolve database migration drift (`20261014065852_drift_check`) or apply migration via safe migration deploy/reconciliation before proceeding to project route implementation.

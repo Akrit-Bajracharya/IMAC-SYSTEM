@@ -543,3 +543,65 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run lint`: 0 errors.
   - `npm test`: 217 passing tests (7 test suites).
   - `npm run build --workspace=apps/web`: 0 errors.
+
+
+---
+
+## Step 10a: Projects Data Layer (Models and Migration)
+
+### Task 10a-01: Implementation of Projects Subsystem Models, Mocks, and Policy Questions
+- **Date**: 2026-10-28
+- **Day of week**: Wednesday
+- **Start time**: 10:07:50
+- **End time**: 10:36:34
+- **Step**: Step 10a (Projects data layer. Models and migration ONLY)
+- **Task performed**:
+  - Added new models to `apps/api/prisma/schema.prisma`:
+    - Enums: `ProjectStatus` (`on_track`, `at_risk`, `off_track`, `on_hold`, `complete`), `ProjectRole` (`manager`, `member`, `viewer`), `TaskStatus` (`todo`, `in_progress`, `blocked`, `done`).
+    - `Project`: `id`, `name`, `description?`, `status` (`default(on_track)`), `startDate?` (`@db.Date`), `targetDate?` (`@db.Date`), `createdByUserId`, `createdAt`, `updatedAt`, indexed on `createdByUserId`.
+    - `ProjectMember`: `id`, `projectId`, `userId`, `projectRole`, `addedByUserId`, `createdAt`, `@@unique([projectId, userId])`, indexed on `projectId` and `userId`.
+    - `ProjectStatusEvent`: `id`, `projectId`, `fromStatus`, `toStatus`, `reason`, `changedByUserId`, `createdAt`, indexed on `projectId`.
+    - `Milestone`: `id`, `projectId`, `name`, `dueDate?` (`@db.Date`), `completedAt?`, `createdAt`, indexed on `projectId`.
+    - `Task`: `id`, `projectId`, `parentTaskId?` (one-level subtask relation), `title`, `description?`, `status` (`default(todo)`), `assigneeUserId?`, `dueDate?` (`@db.Date`), `estimatedHours?`, `milestoneId?`, `createdByUserId`, `createdAt`, `updatedAt`, indexed on `projectId`, `parentTaskId`, `assigneeUserId`, `milestoneId`.
+    - `TaskDependency`: `id`, `taskId`, `dependsOnTaskId`, `@@unique([taskId, dependsOnTaskId])`, indexed on `taskId` and `dependsOnTaskId`.
+    - `Comment`: `id`, `taskId`, `authorUserId`, `body`, `createdAt`, `updatedAt`, indexed on `taskId` and `authorUserId`.
+    - `ProjectMessage`: `id`, `projectId`, `authorUserId`, `body`, `isPinned` (`default(false)`), `createdAt`, indexed on `projectId` and `authorUserId`.
+    - `TimeLog`: `id`, `taskId?`, `projectId`, `userId`, `workDate` (`@db.Date`), `hours`, `note?`, `createdAt`, indexed on `(userId, workDate)`, `projectId`, and `taskId`.
+    - Maintained cascade deletes only where a child cannot exist without its parent (`Project` to child entities and `Task` to comments/dependencies/subtasks).
+    - Preserved `WorkLogEntry.projectId` and `taskId` as plain nullable strings without foreign keys.
+  - Executed migration checks using `npx prisma migrate dev --name projects_models`. Prisma devDiagnostic detected that migration `20261014065852_drift_check` exists in `_prisma_migrations` but is missing from local migrations directory, and triggered a database reset check (`action: { tag: 'reset' }`). In strict compliance with prompt instructions (*"IMPORTANT: if Prisma ever asks to reset the database or says data will be lost, answer NO, stop, and report it. Never reset"*), reset was refused, migration execution stopped, and the reset request is reported.
+  - Regenerated Prisma Client (`npx prisma generate`) and validated schema (`npx prisma validate`).
+  - Added complete test mocks for all 9 new tables in `apps/api/src/__tests__/setup.ts` (`project`, `projectMember`, `projectStatusEvent`, `milestone`, `task`, `taskDependency`, `comment`, `projectMessage`, `timeLog`).
+  - Added 4 open policy questions to `docs/open-policy-questions.md`: project creation authority, project visibility scoping (`hr_admin` default NO), task time log derivation vs daily work logs, and task "blocked" status invariants.
+- **Files created or changed**:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/src/__tests__/setup.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `npx prisma validate`: Schema is valid (0 errors).
+  - `npm run typecheck`: Passed (0 errors across `@imac/api`, `@imac/web`, `@imac/shared`).
+  - `npm run lint`: Passed (0 errors).
+  - `npm test`: 7 test files passed, 217 tests passed (0 failures).
+- **Status**: stopped_and_reported (database reset requested by Prisma was rejected in compliance with instructions; all other models, schema validations, mocks, policy questions, and test suites completed)
+- **Decisions or problems**:
+  - Identified database migration discrepancy: `_prisma_migrations` table contains `20261014065852_drift_check` which is missing from the local `migrations` directory. In compliance with the rule "if Prisma ever asks to reset the database or says data will be lost, answer NO, stop, and report it. Never reset", stopped migration and reported findings to user.
+
+---
+
+## Step 10a Summary & Verification
+- **Status**: Completed (Schema, Mocks, Policy Questions, Validations & Tests Verified; Migration Reset Refused & Reported)
+- **Tasks Executed**:
+  1. Task 10a-01: Added Projects data layer models, enums, cascades, and indexes to `schema.prisma`. Updated `setup.ts` mocks. Documented policy questions 12-15 in `open-policy-questions.md`. Refused Prisma database reset and reported missing migration drift. Verified typecheck, lint, schema validation, and test suite.
+- **Files Created / Modified**:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/src/__tests__/setup.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Test Suite Results**:
+  - `npx prisma validate`: Schema is valid.
+  - `npm run typecheck`: 0 errors.
+  - `npm run lint`: 0 errors.
+  - `npm test`: 217 passing tests (7 test suites).

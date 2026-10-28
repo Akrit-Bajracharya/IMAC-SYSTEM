@@ -32,36 +32,47 @@ model User {
   sessions           Session[]
   auditLogsAsActor   AuditLog[]          @relation("AuditActor")
   availabilityStatus AvailabilityStatus?
+
+  // Projects subsystem relations
+  createdProjects     Project[]            @relation("ProjectCreator")
+  projectMemberships  ProjectMember[]      @relation("ProjectMemberUser")
+  addedProjectMembers ProjectMember[]      @relation("ProjectMemberAddedBy")
+  projectStatusEvents ProjectStatusEvent[] @relation("ProjectStatusEventChangedBy")
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  createdTasks        Task[]               @relation("TaskCreatedBy")
+  comments            Comment[]            @relation("CommentAuthor")
+  projectMessages     ProjectMessage[]     @relation("ProjectMessageAuthor")
+  timeLogs            TimeLog[]            @relation("TimeLogUser")
 }
 
 model EmployeeProfile {
-  id                  String    @id @default(uuid())
-  userId              String    @unique
-  user                User      @relation(fields: [userId], references: [id])
-  employeeCode        String    @unique
-  department          String?
-  jobTitle            String?
-  startDate           DateTime?
-  standardShiftHours  Float     @default(8)
-  workingDaysPerWeek  Int       @default(5)
-  managerUserId       String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id])
+  employeeCode       String    @unique
+  department         String?
+  jobTitle           String?
+  startDate          DateTime?
+  standardShiftHours Float     @default(8)
+  workingDaysPerWeek Int       @default(5)
+  managerUserId      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  workRoles           EmployeeWorkRole[]
-  workLogDays         WorkLogDay[]
+  workRoles          EmployeeWorkRole[]
+  workLogDays        WorkLogDay[]
 }
 
 model WorkRole {
-  id                 String             @id @default(uuid())
-  name               String             @unique
-  description        String?
-  isActive           Boolean            @default(true)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                String             @id @default(uuid())
+  name              String             @unique
+  description       String?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
-  employeeWorkRoles  EmployeeWorkRole[]
-  workLogEntries     WorkLogEntry[]
+  employeeWorkRoles EmployeeWorkRole[]
+  workLogEntries    WorkLogEntry[]
 }
 
 model EmployeeWorkRole {
@@ -165,3 +176,183 @@ model WorkLogEntry {
   updatedAt    DateTime    @updatedAt
 }
 
+// ==========================================
+// Projects Subsystem Models (Step 10a)
+// ==========================================
+
+enum ProjectStatus {
+  on_track
+  at_risk
+  off_track
+  on_hold
+  complete
+}
+
+enum ProjectRole {
+  manager
+  member
+  viewer
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  blocked
+  done
+}
+
+model Project {
+  id              String               @id @default(uuid())
+  name            String
+  description     String?
+  status          ProjectStatus        @default(on_track)
+  startDate       DateTime?            @db.Date
+  targetDate      DateTime?            @db.Date
+  createdByUserId String
+  createdByUser   User                 @relation("ProjectCreator", fields: [createdByUserId], references: [id])
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  members         ProjectMember[]
+  statusEvents    ProjectStatusEvent[]
+  milestones      Milestone[]
+  tasks           Task[]
+  messages        ProjectMessage[]
+  timeLogs        TimeLog[]
+
+  @@index([createdByUserId])
+}
+
+model ProjectMember {
+  id            String      @id @default(uuid())
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation("ProjectMemberUser", fields: [userId], references: [id])
+  projectRole   ProjectRole
+  addedByUserId String
+  addedByUser   User        @relation("ProjectMemberAddedBy", fields: [addedByUserId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model ProjectStatusEvent {
+  id              String        @id @default(uuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromStatus      ProjectStatus
+  toStatus        ProjectStatus
+  reason          String
+  changedByUserId String
+  changedByUser   User          @relation("ProjectStatusEventChangedBy", fields: [changedByUserId], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([projectId])
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  dueDate     DateTime? @db.Date
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  tasks       Task[]
+
+  @@index([projectId])
+}
+
+model Task {
+  id              String           @id @default(uuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentTaskId    String?
+  parentTask      Task?            @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks        Task[]           @relation("TaskSubtasks")
+  title           String
+  description     String?
+  status          TaskStatus       @default(todo)
+  assigneeUserId  String?
+  assigneeUser    User?            @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  dueDate         DateTime?        @db.Date
+  estimatedHours  Float?
+  milestoneId     String?
+  milestone       Milestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  createdByUserId String
+  createdByUser   User             @relation("TaskCreatedBy", fields: [createdByUserId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  dependencies    TaskDependency[] @relation("TaskDependencies")
+  dependentOnMe   TaskDependency[] @relation("TaskDependsOn")
+  comments        Comment[]
+  timeLogs        TimeLog[]
+
+  @@index([projectId])
+  @@index([parentTaskId])
+  @@index([assigneeUserId])
+  @@index([milestoneId])
+}
+
+model TaskDependency {
+  id              String   @id @default(uuid())
+  taskId          String
+  task            Task     @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTaskId String
+  dependsOnTask   Task     @relation("TaskDependsOn", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([taskId])
+  @@index([dependsOnTaskId])
+}
+
+model Comment {
+  id           String   @id @default(uuid())
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorUserId String
+  authorUser   User     @relation("CommentAuthor", fields: [authorUserId], references: [id])
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([authorUserId])
+}
+
+model ProjectMessage {
+  id           String   @id @default(uuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorUserId String
+  authorUser   User     @relation("ProjectMessageAuthor", fields: [authorUserId], references: [id])
+  body         String
+  isPinned     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([projectId])
+  @@index([authorUserId])
+}
+
+model TimeLog {
+  id        String    @id @default(uuid())
+  taskId    String?
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation("TimeLogUser", fields: [userId], references: [id])
+  workDate  DateTime  @db.Date
+  hours     Float
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, workDate])
+  @@index([projectId])
+  @@index([taskId])
+}

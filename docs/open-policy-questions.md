@@ -113,3 +113,24 @@ This document tracks unresolved policy, organizational, and operational decision
 11. **HR Administrator Work Log Export Scope & Team Filter Representation**
     - **Question**: Should HR administrators (`hr_admin`) be authorized to perform organization-wide work log Excel exports across all departments, or should export access be restricted to their own personal logs? Additionally, how should team-level export filtering be resolved prior to the creation of a distinct Team entity?
     - **Current Implementation**: Configured by default to NO (`worklog:exportAll` is restricted exclusively to `system_admin`). HR administrators, project managers, and regular employees possess `worklog:exportOwn` only, scoping exports strictly to their own personal log entries. Any attempt by a non-system_admin to pass an employee filter pointing to another staff profile is rejected with HTTP 403 Forbidden. In the absence of a dedicated Team model in Phase 1, the `team` export filter maps directly to `EmployeeProfile.department`.
+
+
+---
+
+## 4. Projects Subsystem (Phase 2 / Step 10)
+
+12. **Project Creation Authority**
+    - **Question**: Who may create new projects in the system?
+    - **Current Implementation**: `system_admin` and `project_manager` roles possess project creation authority (`project:create`). Regular staff (`employee`, `viewer`) and HR administrators (`hr_admin`) are restricted from creating projects by default, maintaining clear operational separation between project governance and personnel administration.
+
+13. **Project Visibility & Organization-Wide Scoping**
+    - **Question**: Who is authorized to view all projects across the organization, and what is the visibility scope for HR administrators?
+    - **Current Implementation**: Organization-wide visibility (`project:readAll`) is granted exclusively to `system_admin`. HR administrators (`hr_admin`) by default do NOT see all projects (`hr_admin` default NO); they, along with regular employees, only see projects where they are explicitly assigned as a `ProjectMember` (`manager`, `member`, or `viewer`).
+
+14. **Time Log Derivation vs. Daily Work Log Dual Entry**
+    - **Question**: Should task time logs (`TimeLog`) derive automatically from daily work log entries (`WorkLogEntry`), or should they exist as an independent project-tracking data stream?
+    - **Current Implementation**: Data layers remain decoupled in Step 10a; `WorkLogEntry.projectId` and `WorkLogEntry.taskId` remain plain nullable strings without foreign keys to `Project` or `Task`. A policy decision is required on whether logging hours against a project task should automatically populate an employee's daily work log draft, or whether task time logs are reconciled against work logs via background jobs or managerial audit.
+
+15. **Task "Blocked" Status Invariants & Requirements**
+    - **Question**: What does transitioning a task to "blocked" require (e.g. mandatory blocking reason, unresolved task dependency link, manager alert)?
+    - **Current Implementation**: In Step 10a, `TaskStatus` includes `blocked` as a core enum value. Future policy must determine whether setting a task to `blocked` requires a mandatory reason text field, an associated `Comment`, or an active uncompleted `TaskDependency`, and whether automated notification alerts must be dispatched to project managers upon entering a blocked state.
