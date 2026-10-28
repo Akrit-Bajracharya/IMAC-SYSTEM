@@ -198,6 +198,8 @@ mockDb.$transaction = vi.fn(async (arg: any) => {
   return arg;
 });
 
+mockDb.$queryRaw = vi.fn().mockResolvedValue([{ id: 'mock-id' }]);
+
 // Mock the db module
 vi.mock('../db.js', () => ({
   db: mockDb,

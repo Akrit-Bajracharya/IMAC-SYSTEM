@@ -22,7 +22,12 @@ export type Action =
   | 'worklog:writeOwn'
   | 'worklog:adminOverride'
   | 'worklog:exportOwn'
-  | 'worklog:exportAll';
+  | 'worklog:exportAll'
+  | 'project:create'
+  | 'project:read'
+  | 'project:update'
+  | 'project:manageMembers'
+  | 'project:changeStatus';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
@@ -42,6 +47,22 @@ export function can(user: AuthUser, action: Action): boolean {
 
     case 'worklog:exportAll':
       return role === 'system_admin';
+
+    case 'project:create':
+      return role === 'system_admin' || role === 'project_manager';
+
+    case 'project:read':
+      return ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'].includes(role);
+
+    // Architectural Note:
+    // 'employee' and 'hr_admin' hold 'project:update', 'project:manageMembers', and 'project:changeStatus'
+    // at the system role level only so that route guards can pass them to the route handler, where the
+    // actual project-level membership manager check (member.projectRole === 'manager') is enforced.
+    // 'viewer' is denied here at the system level. The handler is the real gate for mutating actions.
+    case 'project:update':
+    case 'project:manageMembers':
+    case 'project:changeStatus':
+      return ['system_admin', 'project_manager', 'employee', 'hr_admin'].includes(role);
 
     case 'user:create':
     case 'user:deactivate':

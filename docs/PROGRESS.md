@@ -373,3 +373,75 @@ Across all APIs in the IMAC Operations System:
 
 ### 4. Next Steps
 - Resolve database migration drift (`20261014065852_drift_check`) or apply migration via safe migration deploy/reconciliation before proceeding to project route implementation.
+
+
+---
+
+## Current Milestone: Step 10b — Projects, Members and Status APIs (Backend Only) — COMPLETED
+
+### 1. What Was Built
+- **Shared Validation Schemas & Types (`packages/shared/src/schemas/project.ts` & `index.ts`)**:
+  - `ProjectStatus` enum: `on_track`, `at_risk`, `off_track`, `on_hold`, `complete`.
+  - `ProjectRole` enum: `manager`, `member`, `viewer`.
+  - `createProjectSchema`: validated name (trimmed, 1-100 chars), optional description, optional startDate and targetDate with cross-date refinement (`targetDate >= startDate`).
+  - `patchProjectSchema`: `.strict()` rejection of unknown/forbidden fields (disallowing status or createdByUserId), at least one field required, description nullable (null clears description in DB), cross-date validation.
+  - `addProjectMemberSchema`: UUID validation on userId, projectRole enum.
+  - `changeProjectStatusSchema`: non-empty trimmed reason string, status enum.
+  - `listProjectsQuerySchema`: limit (default 50, max 100, min 1), optional UUID cursor.
+- **Central Permissions Matrix (`apps/api/src/lib/permissions.ts`)**:
+  - Added actions: `project:create`, `project:read`, `project:update`, `project:manageMembers`, `project:changeStatus`.
+  - `project:create` restricted to `system_admin` and `project_manager`.
+  - `project:read` granted to all 5 system roles (`system_admin`, `hr_admin`, `project_manager`, `employee`, `viewer`).
+  - `project:update`, `project:manageMembers`, and `project:changeStatus` held by `system_admin`, `project_manager`, `employee`, and `hr_admin` at the system level with `viewer` strictly denied ("viewer cannot write"). Architectural comments document that the route handler's project-level membership role check (`member.projectRole === 'manager'`) is the real enforcement barrier for non-admins.
+- **Projects Router (`apps/api/src/routes/projects.ts`)**:
+  - Mounted at `/api/projects` in `apps/api/src/app.ts` under `csrfMiddleware`, `requireAuth`, and `requirePasswordChanged`.
+  - Strict 4-step check order on every mutating route:
+    1. System-level `can(user, action)` check (uniform 403 Forbidden).
+    2. UUID format validation on URL parameters `:id` and `:userId` (uniform 404 Not Found, never letting Prisma throw an unhandled 500).
+    3. Project existence and caller membership lookup: non-members receive 404 Not Found (never 403, preventing IDOR / project enumeration). `system_admin` bypasses membership requirement.
+    4. Project role check: non-admins must hold `projectRole: 'manager'` on the target project (uniform 403 Forbidden).
+  - `POST /api/projects`: atomic creation of project, creator as `manager` member, and audit log in one Prisma `$transaction`.
+  - `GET /api/projects`: lists only projects caller is member of (`system_admin` sees all); ordered by `createdAt: 'desc', id: 'desc'`; limit + cursor pagination (`skip: 1`, returning `items`, `nextCursor`, `hasMore`); returns `memberCount`.
+  - `GET /api/projects/:id`: detail with member list. Uses explicit select (`id`, `displayName`, `username`); `systemRole` is selected and returned strictly for `system_admin`; `passwordHash` is never loaded.
+  - `PATCH /api/projects/:id`: edits project details; compares dates against stored values when only one date is sent; null description clears value in DB; audited as `project.updated`.
+  - `POST /api/projects/:id/members`: checks target user exists and `isActive === true` (400 `inactive_user`); enforces viewer restriction rejecting system role `viewer` from being assigned as `manager` or `member` (400 `viewer_cannot_be_member_writer`); catches Prisma P2002 duplicate collisions and returns 409 `member_already_exists`; audited as `project_member.added`.
+  - `DELETE /api/projects/:id/members/:userId`: executes inside a transaction with project row lock (`SELECT "id" FROM "Project" WHERE "id" = $1 FOR UPDATE`); re-reads target member inside transaction (404 if deleted concurrently); counts remaining active managers (`isActive: true`); refuses removing the last active manager with 409 `last_manager_required`; audited as `project_member.removed`.
+  - `POST /api/projects/:id/status`: requires non-empty trimmed reason (400); refuses same-status transitions (400 `same_status`); executes atomic `updateMany` conditional on status read previously, returning 409 `conflict_retry` if 0 rows were updated due to concurrent modifications; writes `ProjectStatusEvent` and `AuditLog` in one transaction.
+- **Automated Integration & Unit Tests (`apps/api/src/__tests__/projects.test.ts` & `permissions.test.ts`)**:
+  - 48 comprehensive integration tests in `projects.test.ts` covering all positive flows and required negative security invariants: 401 unauthenticated, 404 for non-members on read/edit/members/status, 403 for members without manager rights, 403 for viewers, 404 cross-PM isolation, 409 last-manager guard, 400 invalid dates, 400 strict patch rejection, 400 viewer writer guard, 409 duplicate member, 409 status conflict retry, 404 malformed UUIDs.
+  - Documented mock limitations regarding mock-based isolation and PostgreSQL row lock concurrency behavior.
+  - 26 tests in `permissions.test.ts` testing all 5 roles against project actions.
+- **Policy Documentation (`docs/open-policy-questions.md`)**:
+  - Added Questions 16-21 covering: reopening completed projects, project member self-removal invariants, manager removal with active assigned tasks, direct member role modification vs remove/re-add, system role viewer assignment restrictions, and user deactivation impact on project manager coverage.
+
+### 2. Verification & Test Results
+- **Prisma Schema & Migrations**:
+  - `npx prisma migrate status` verified: 5 migrations applied, database schema clean and up to date without resets.
+- **Automated Test Suite**:
+  - Vitest test suite (`apps/api`): 8 test files, **270 passing tests (0 failures)**:
+    - `src/__tests__/projects.test.ts`: 48 tests passed
+    - `src/__tests__/permissions.test.ts`: 26 tests passed
+    - `src/__tests__/auth.test.ts`: 13 tests passed
+    - `src/__tests__/security.test.ts`: 51 tests passed
+    - `src/__tests__/workRoles.test.ts`: 40 tests passed
+    - `src/__tests__/usersAdmin.test.ts`: 25 tests passed
+    - `src/__tests__/workLogs.test.ts`: 45 tests passed
+    - `src/__tests__/workLogExport.test.ts`: 22 tests passed
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+- **Shared Package Build**:
+  - `@imac/shared` compiled cleanly via `tsc`.
+
+### 3. What is Untested & Assumptions
+- **Untested via Vitest (Mock-Based Limitations)**:
+  - Vitest mocks Prisma calls with stubbed `$transaction` and `$queryRaw`; while the SQL lock statement `SELECT "id" FROM "Project" WHERE "id" = $1 FOR UPDATE` is verified to execute, PostgreSQL engine-level row-lock contention, deadlock aborts, and transactional rollbacks cannot be proven by mock unit tests.
+  - Concurrency collision on compound index `@@unique([projectId, userId])` is proven by simulating P2002 error handling, but native database constraint enforcement under simultaneous physical writes is untested.
+- **Assumptions**:
+  - Self-removal by project members is permitted provided the last-active-manager invariant is preserved.
+  - Changing a member's role uses the existing delete + add member sequence.
+  - Reopening projects in `complete` status is permitted if a non-empty reason is provided.
+
+### 4. Next Steps
+- **Step 10c**: Task management, assignments, subtasks, milestone associations, comments, dependencies, and time logs data and APIs.

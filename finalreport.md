@@ -605,3 +605,79 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run typecheck`: 0 errors.
   - `npm run lint`: 0 errors.
   - `npm test`: 217 passing tests (7 test suites).
+
+
+---
+
+## Step 10b: Projects, Members, and Status APIs (Backend Only)
+
+### Task 10b-01: Projects Router, Member Management, Status Lifecycle, Permissions & Integration Tests
+- **Date**: 2026-10-28
+- **Day of week**: Wednesday
+- **Start time**: 13:05:00
+- **End time**: 13:22:50
+- **Step**: Step 10b (Projects, members and status APIs. Backend only)
+- **Task performed**:
+  - Verified precondition 0: ran `npx prisma migrate status` ensuring PostgreSQL schema is clean and all 5 migrations (including `20261028103000_projects_models`) are applied without resets.
+  - Implemented shared Zod validation schemas and types in `packages/shared/src/schemas/project.ts` (`createProjectSchema`, `patchProjectSchema`, `addProjectMemberSchema`, `changeProjectStatusSchema`, `listProjectsQuerySchema`) and exported in `packages/shared/src/index.ts`. Built package cleanly.
+  - Updated permissions in `apps/api/src/lib/permissions.ts` with actions `project:create`, `project:read`, `project:update`, `project:manageMembers`, and `project:changeStatus`, including architectural comments on handler-level scoping for non-admins.
+  - Added `mockDb.$queryRaw` mock to `apps/api/src/__tests__/setup.ts`.
+  - Created `apps/api/src/routes/projects.ts` implementing all 7 endpoints with uniform 4-step check order:
+    1. Permission check via `can(user, action)` (403 for viewers on write actions).
+    2. UUID parameter validation on `:id` and `:userId` (uniform 404, preventing unhandled Prisma 500 errors).
+    3. Project existence and membership lookup: non-members receive 404 (not 403, preventing IDOR project enumeration); `system_admin` bypasses membership.
+    4. Project manager role check: non-admins must hold `projectRole: 'manager'` on the project (403).
+  - Enforced project row locking (`SELECT "id" FROM "Project" WHERE "id" = $1 FOR UPDATE`) and re-reading target member inside transaction on member deletion.
+  - Enforced last-active-manager invariant: counting only managers whose user `isActive === true`, refusing removal of the last active manager with 409 `last_manager_required`.
+  - Enforced viewer assignment guard: rejecting users with system role `viewer` from being assigned as `manager` or `member` with 400 `viewer_cannot_be_member_writer`.
+  - Enforced atomic status transition: using `updateMany` with `{ id, status: fromStatus }` returning 409 `conflict_retry` on 0 rows updated, and writing `ProjectStatusEvent` and `AuditLog` in one atomic transaction.
+  - Enforced cursor pagination on `GET /api/projects`: order by `createdAt: desc, id: desc`, returning `items`, `nextCursor`, and `hasMore`.
+  - Mounted router in `apps/api/src/app.ts` under `csrfMiddleware`.
+  - Documented open policy questions 16-21 in `docs/open-policy-questions.md`.
+  - Updated implementation progress in `docs/PROGRESS.md`.
+  - Authored comprehensive integration test suite with 48 tests in `apps/api/src/__tests__/projects.test.ts` and 5 new unit tests in `apps/api/src/__tests__/permissions.test.ts`.
+- **Files created or changed**:
+  - `packages/shared/src/schemas/project.ts`
+  - `packages/shared/src/index.ts`
+  - `apps/api/src/lib/permissions.ts`
+  - `apps/api/src/__tests__/setup.ts`
+  - `apps/api/src/routes/projects.ts`
+  - `apps/api/src/app.ts`
+  - `apps/api/src/__tests__/permissions.test.ts`
+  - `apps/api/src/__tests__/projects.test.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `npm run typecheck`: Passed (0 errors across `@imac/api`, `@imac/web`, `@imac/shared`).
+  - `npm run lint`: Passed (0 errors across all workspaces).
+  - `npm test`: 8 test files passed, 270 tests passed (0 failures).
+- **Status**: done
+- **Decisions or problems**:
+  - Implemented row-level locking (`SELECT "id" FROM "Project" WHERE "id" = $1 FOR UPDATE`) inside member removal transaction to eliminate race conditions in last-manager check.
+  - Used `updateMany` with `{ id, status: currentStatus }` checking for 0 affected rows to return 409 `conflict_retry` against concurrent status transitions.
+  - Enforced viewer restriction rejecting assignment of users with system role `viewer` as project `manager` or `member` (400 `viewer_cannot_be_member_writer`).
+  - Documented mock limitations in test header: Vitest mocks Prisma calls with stubbed `$transaction` and `$queryRaw`, which cannot prove real PostgreSQL row-level lock concurrency behavior or transactional rollbacks on database crashes.
+
+---
+
+## Step 10b Summary & Verification
+- **Status**: Completed
+- **Tasks Executed**:
+  1. Task 10b-01: Projects router, member management, status lifecycle, permissions, strict check order, row-level locking, cursor pagination, policy questions 16-21, and 48 integration tests.
+- **Files Created / Modified**:
+  - `packages/shared/src/schemas/project.ts`
+  - `packages/shared/src/index.ts`
+  - `apps/api/src/lib/permissions.ts`
+  - `apps/api/src/__tests__/setup.ts`
+  - `apps/api/src/routes/projects.ts`
+  - `apps/api/src/app.ts`
+  - `apps/api/src/__tests__/permissions.test.ts`
+  - `apps/api/src/__tests__/projects.test.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Test Suite Results**:
+  - `npm run typecheck`: 0 errors.
+  - `npm run lint`: 0 errors.
+  - `npm test`: 270 passing tests (8 test suites, 0 failures).

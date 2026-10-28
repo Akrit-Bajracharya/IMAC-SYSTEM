@@ -134,3 +134,28 @@ This document tracks unresolved policy, organizational, and operational decision
 15. **Task "Blocked" Status Invariants & Requirements**
     - **Question**: What does transitioning a task to "blocked" require (e.g. mandatory blocking reason, unresolved task dependency link, manager alert)?
     - **Current Implementation**: In Step 10a, `TaskStatus` includes `blocked` as a core enum value. Future policy must determine whether setting a task to `blocked` requires a mandatory reason text field, an associated `Comment`, or an active uncompleted `TaskDependency`, and whether automated notification alerts must be dispatched to project managers upon entering a blocked state.
+
+
+16. **Reopening Projects in "Complete" Status**
+    - **Question**: Can a project that has transitioned to `complete` status be reopened to active statuses (`on_track`, `at_risk`, `off_track`, `on_hold`), or is `complete` an immutable terminal state?
+    - **Current Implementation**: In Step 10b, `POST /api/projects/:id/status` permits transitions between any distinct `ProjectStatus` enum values provided a non-empty reason is supplied. Reopening a `complete` project to `on_track` or `on_hold` is permitted. A future policy question remains whether reopening completed projects should require system administrator authorization or mutual sign-off.
+
+17. **Project Member Self-Removal and Last-Manager Guard**
+    - **Question**: Can a project member or manager voluntarily remove themselves from a project (`DELETE /api/projects/:id/members/:userId` where `userId === session.userId`), or does removal require action by another manager or administrator?
+    - **Current Implementation**: Self-removal is permitted for both regular members and managers, subject to the strict last-manager invariant: if an active manager attempts self-removal and they are the only remaining active manager on the project, the request is rejected with HTTP 409 `last_manager_required`. Self-removal is allowed only if at least one other active manager remains on the project.
+
+18. **Manager Removal with Active Assigned Tasks**
+    - **Question**: Can a manager or member be removed from a project while actively holding uncompleted assigned tasks, or must assigned tasks be reassigned first?
+    - **Current Implementation**: In Step 10b, member removal (`DELETE /api/projects/:id/members/:userId`) deletes the `ProjectMember` record but does not block on or cascade to `Task.assigneeUserId` (which remains nullable). In Step 10c, policy must establish whether task reassignment is a prerequisite for member removal or whether tasks are automatically transitioned to unassigned (`assigneeUserId = null`).
+
+19. **Direct Project Member Role Modification vs. Remove/Re-add Workaround**
+    - **Question**: Should the system provide a dedicated endpoint to update a member's role (e.g. promoting a `member` to `manager` or demoting a `manager` to `viewer`), or should role modification follow the current workflow of removing the member and re-adding them with the updated role?
+    - **Current Implementation**: In Step 10b, no direct `PATCH /api/projects/:id/members/:userId` endpoint exists. Changing a member's project role is achieved via the workaround of deleting the existing membership and re-adding the user with the new `projectRole`. A future phase may introduce direct role updates with manager retention validation.
+
+20. **System Role "Viewer" Assignment Restrictions**
+    - **Question**: Can a user whose system role is `viewer` be assigned as a project `manager` or `member`, or must their project role be restricted strictly to `viewer`?
+    - **Current Implementation**: Users with `systemRole === 'viewer'` cannot be assigned as `projectRole: 'manager'` or `member`. Any attempt to assign a viewer to a writer role is rejected with HTTP 400 `viewer_cannot_be_member_writer`. Viewers can only be added to projects with `projectRole: 'viewer'`, preserving the core invariant that system-level read-only users cannot write project data.
+
+21. **User Deactivation Impact on Project Manager Coverage**
+    - **Question**: When a system administrator deactivates a user account (`PATCH /api/admin/users/:id/deactivate`), could deactivating that user leave a project without any active managers?
+    - **Current Implementation**: In Step 10b, the last-manager check on member deletion counts only managers whose associated user has `isActive === true`. However, administrative user deactivation in the user administration subsystem does not currently check whether the deactivated user is the sole manager of active projects. As a result, deactivating a user can leave a project without an active manager (in which case a `system_admin` must assign a new active manager). Future policy should determine whether user deactivation should warn administrators if the target user is the sole manager of any active projects.

@@ -11,7 +11,7 @@ describe('Permissions - can() policy matrix', () => {
     mustChangePassword: false,
   });
 
-  const allActions: Action[] = [
+  const allAdminActions: Action[] = [
     'user:create',
     'user:read',
     'user:update',
@@ -27,8 +27,8 @@ describe('Permissions - can() policy matrix', () => {
   describe('system_admin role', () => {
     const admin = createUserWithRole('system_admin');
 
-    it('can perform all actions', () => {
-      for (const action of allActions) {
+    it('can perform all administrative actions', () => {
+      for (const action of allAdminActions) {
         expect(can(admin, action), `system_admin should be permitted action: ${action}`).toBe(true);
       }
     });
@@ -46,6 +46,14 @@ describe('Permissions - can() policy matrix', () => {
     it('can export own logs and export organisation-wide', () => {
       expect(can(admin, 'worklog:exportOwn')).toBe(true);
       expect(can(admin, 'worklog:exportAll')).toBe(true);
+    });
+
+    it('can perform all project actions', () => {
+      expect(can(admin, 'project:create')).toBe(true);
+      expect(can(admin, 'project:read')).toBe(true);
+      expect(can(admin, 'project:update')).toBe(true);
+      expect(can(admin, 'project:manageMembers')).toBe(true);
+      expect(can(admin, 'project:changeStatus')).toBe(true);
     });
   });
 
@@ -84,6 +92,14 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(hr, 'worklog:exportOwn')).toBe(true);
       expect(can(hr, 'worklog:exportAll')).toBe(false);
     });
+
+    it('can read projects and pass route guards for project mutations (handler is manager gate), but CANNOT create projects', () => {
+      expect(can(hr, 'project:create')).toBe(false);
+      expect(can(hr, 'project:read')).toBe(true);
+      expect(can(hr, 'project:update')).toBe(true);
+      expect(can(hr, 'project:manageMembers')).toBe(true);
+      expect(can(hr, 'project:changeStatus')).toBe(true);
+    });
   });
 
   describe('project_manager role', () => {
@@ -115,13 +131,21 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(pm, 'worklog:exportOwn')).toBe(true);
       expect(can(pm, 'worklog:exportAll')).toBe(false);
     });
+
+    it('can create projects and perform all project management actions', () => {
+      expect(can(pm, 'project:create')).toBe(true);
+      expect(can(pm, 'project:read')).toBe(true);
+      expect(can(pm, 'project:update')).toBe(true);
+      expect(can(pm, 'project:manageMembers')).toBe(true);
+      expect(can(pm, 'project:changeStatus')).toBe(true);
+    });
   });
 
   describe('employee role', () => {
     const employee = createUserWithRole('employee');
 
     it('CANNOT perform any administrative actions', () => {
-      for (const action of allActions) {
+      for (const action of allAdminActions) {
         expect(can(employee, action), `employee should be denied action: ${action}`).toBe(false);
       }
     });
@@ -136,13 +160,21 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(employee, 'worklog:exportOwn')).toBe(true);
       expect(can(employee, 'worklog:exportAll')).toBe(false);
     });
+
+    it('CANNOT create projects, but holds project mutating actions so handler can enforce projectRole', () => {
+      expect(can(employee, 'project:create')).toBe(false);
+      expect(can(employee, 'project:read')).toBe(true);
+      expect(can(employee, 'project:update')).toBe(true);
+      expect(can(employee, 'project:manageMembers')).toBe(true);
+      expect(can(employee, 'project:changeStatus')).toBe(true);
+    });
   });
 
   describe('viewer role', () => {
     const viewer = createUserWithRole('viewer');
 
     it('CANNOT perform any administrative actions', () => {
-      for (const action of allActions) {
+      for (const action of allAdminActions) {
         expect(can(viewer, action), `viewer should be denied action: ${action}`).toBe(false);
       }
     });
@@ -156,6 +188,14 @@ describe('Permissions - can() policy matrix', () => {
     it('CANNOT export own logs and CANNOT export organisation-wide', () => {
       expect(can(viewer, 'worklog:exportOwn')).toBe(false);
       expect(can(viewer, 'worklog:exportAll')).toBe(false);
+    });
+
+    it('can read projects, but CANNOT create, update, manage members or change status (viewer cannot write)', () => {
+      expect(can(viewer, 'project:read')).toBe(true);
+      expect(can(viewer, 'project:create')).toBe(false);
+      expect(can(viewer, 'project:update')).toBe(false);
+      expect(can(viewer, 'project:manageMembers')).toBe(false);
+      expect(can(viewer, 'project:changeStatus')).toBe(false);
     });
   });
 
