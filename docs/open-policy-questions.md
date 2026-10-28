@@ -159,3 +159,31 @@ This document tracks unresolved policy, organizational, and operational decision
 21. **User Deactivation Impact on Project Manager Coverage**
     - **Question**: When a system administrator deactivates a user account (`PATCH /api/admin/users/:id/deactivate`), could deactivating that user leave a project without any active managers?
     - **Current Implementation**: In Step 10b, the last-manager check on member deletion counts only managers whose associated user has `isActive === true`. However, administrative user deactivation in the user administration subsystem does not currently check whether the deactivated user is the sole manager of active projects. As a result, deactivating a user can leave a project without an active manager (in which case a `system_admin` must assign a new active manager). Future policy should determine whether user deactivation should warn administrators if the target user is the sole manager of any active projects.
+
+22. **Task Creation, Modification, and Status Modification Permissions for Project Members**
+    - **Question**: Can regular project members (`projectRole === 'member'`) create tasks, modify task details, and update statuses, or is task modification restricted exclusively to project managers?
+    - **Current Implementation**: Implemented via a swappable policy function `canEditTask(projectRole, isSystemAdmin, action, isAssignee, isCreator)`. By default:
+      - Project managers and system administrators have full authority to create, edit, change status, and manage dependencies for all tasks.
+      - Regular members can create new tasks.
+      - For existing tasks, regular members can edit task details (title, description, priority, dueDate, assignee, milestone), change status, and manage dependencies if they are the task's current assignee or creator. Members cannot modify tasks assigned to or created by other members.
+      - Viewers cannot create, edit, change status, or manage dependencies.
+
+23. **Preserving Departed Assignees on Project Tasks**
+    - **Question**: When an assigned user leaves or is removed from a project, what should happen to their assigned tasks? Should the system auto-unassign the tasks, or retain the historical assignee reference with an indicator?
+    - **Current Implementation**: The system retains `assigneeUserId` on the task so historical assignments and accountability are not lost. The task response serializes an augmented boolean flag `assigneeIsProjectMember: false` to alert project managers that the assignee is no longer on the project team. Furthermore, when updating other task fields (e.g. `title` or `description`), an unchanged assignee who has left the project is not rejected, preventing workflow deadlocks.
+
+24. **Completing Tasks with Open Blocker Dependencies or Open Subtasks**
+    - **Question**: Can a task be moved to `done` status if it has unresolved blocker dependencies (`TaskDependency.dependsOnTaskId` in non-`done` status) or incomplete subtasks? Should this be a hard block or a soft warning?
+    - **Current Implementation**: A neutral soft-warning default is adopted. Transitioning a task to `done` succeeds, but the API response includes a `warnings` array containing `'open_dependency'` (if any prerequisite task on which this task depends is not `done`) and/or `'open_subtasks'` (if any child subtask is not `done`). This enables managers and teams to close parent milestones or parent issues flexibly when agreed out-of-band while maintaining audit transparency.
+
+25. **Absence of Task Deletion Endpoint**
+    - **Question**: Should tasks be deletable, or should project auditability mandate that tasks are canceled or marked obsolete via status/archival rather than hard-deleted?
+    - **Current Implementation**: In Step 10c, no `DELETE /api/projects/:id/tasks/:taskId` endpoint is provided. Historical records, time logs, and audit logs rely on immutable task entities. Inactive or abandoned tasks may be transitioned to `canceled` status. A future policy decision will evaluate whether hard deletion or soft deletion (`archivedAt`) should be supported for project managers or system administrators.
+
+26. **Task Assignee Membership and Role Restrictions**
+    - **Question**: Who is eligible to be assigned to a project task? Can viewers be assigned to tasks?
+    - **Current Implementation**: Only active project members with `projectRole: 'manager'` or `projectRole: 'member'` may be assigned to a task (`assigneeUserId`). Viewers (`projectRole: 'viewer'`) and users who are not members of the project cannot be assigned tasks (rejected with HTTP 400 `assignee_not_a_member_or_is_viewer`).
+
+27. **Reopening Completed ("Done") Tasks**
+    - **Question**: Can a task that has reached `done` status be reopened to active statuses (`todo`, `in_progress`, `blocked`, `in_review`), and who is authorized to do so?
+    - **Current Implementation**: Reopening a `done` task is permitted by default. It follows the standard `canEditTask(..., 'changeStatus')` rules: project managers, system administrators, and the task's assignee or creator may reopen the task to any valid `TaskStatus`.

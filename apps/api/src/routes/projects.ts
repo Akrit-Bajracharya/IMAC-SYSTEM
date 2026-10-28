@@ -16,6 +16,9 @@ import {
 } from '@imac/shared';
 import { parseDateOnlyUtc } from '../services/workLog.js';
 import { createAuditEntry } from '../services/auditLog.js';
+import { isValidUuid } from '../services/projectAccess.js';
+import { tasksRouter } from './tasks.js';
+import { milestonesRouter } from './milestones.js';
 
 export const projectsRouter = Router();
 
@@ -23,11 +26,9 @@ export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
 projectsRouter.use(requirePasswordChanged);
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+projectsRouter.use('/:id/tasks', tasksRouter);
+projectsRouter.use('/:id/milestones', milestonesRouter);
 
-function isValidUuid(id: string): boolean {
-  return UUID_REGEX.test(id);
-}
 
 /**
  * 1. POST /api/projects

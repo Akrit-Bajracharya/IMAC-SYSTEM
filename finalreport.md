@@ -681,3 +681,76 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run typecheck`: 0 errors.
   - `npm run lint`: 0 errors.
   - `npm test`: 270 passing tests (8 test suites, 0 failures).
+
+
+---
+
+## Step 10c: Tasks, Subtasks, Assignment, Milestones, Dependencies and Comments (Backend Only)
+
+### Task 10c-01: Tasks & Milestones Data Layer, Routers, Permissions, Invariants & Comprehensive Tests
+- **Date**: 2026-10-28
+- **Day of week**: Wednesday
+- **Start time**: 13:46:00
+- **End time**: 14:38:00
+- **Step**: Step 10c (Tasks, subtasks, assignment, milestones, dependencies and comments. Backend only)
+- **Task performed**:
+  - Validated Task 0: confirmed existing tests for member list privacy (no passwordHash, no systemRole for non-admins) and invalid cursor rejection (400 validation error) are present and passing in `apps/api/src/__tests__/projects.test.ts`.
+  - Refactored `apps/api/src/routes/projects.ts` to import `isValidUuid` from `services/projectAccess.ts` and removed duplicate local helper. Noted that `projects.ts` inline membership lookup is deferred to future refactoring.
+  - Added shared Zod validation schemas in `packages/shared/src/schemas/task.ts` and exported in `packages/shared/src/index.ts` with strict schema validation.
+  - Added permissions actions `task:read`, `task:write`, `comment:write`, `milestone:manage` to `apps/api/src/lib/permissions.ts` with architectural comments and updated `permissions.test.ts`.
+  - Implemented separate modular routers `apps/api/src/routes/tasks.ts` and `apps/api/src/routes/milestones.ts` with `Router({ mergeParams: true })` and mounted them under `/api/projects/:id`.
+  - Enforced all invariants and exact error codes:
+    - Self-dependency rejected with 400 `self_dependency`.
+    - Dependency cycles and depth >= 50 rejected with 400 `dependency_cycle` (using project row locking `FOR UPDATE` and visited set).
+    - Duplicate dependency rejected with 409 `duplicate_dependency`.
+    - Milestone double completion rejected with 409 `already_completed`.
+    - Milestone double reopen rejected with 409 `already_open`.
+    - One-level subtask nesting rule enforced.
+    - Departed assignee preserved on PATCH with `assigneeIsProjectMember: false`.
+    - Invalid status values `in_review` and `canceled` rejected with 400 on status route and list query filter.
+    - Viewers (both project viewer and system viewer) rejected with 403 on all mutating operations including comment edit.
+    - Comment editing strictly author-only; audit log records `comment.edited` without comment body.
+    - All audit snapshots omit task descriptions and comment bodies.
+  - Updated `docs/open-policy-questions.md` with Questions 22-27.
+  - Updated `docs/PROGRESS.md` with Step 10c deliverables, test results, mock limitations, and next steps.
+  - Expanded comprehensive integration test suite in `apps/api/src/__tests__/tasks.test.ts` from 31 to 73 tests covering all negative security boundaries.
+- **Files created or changed**:
+  - `packages/shared/src/schemas/task.ts` (created)
+  - `packages/shared/src/schemas/index.ts` (modified)
+  - `packages/shared/src/index.ts` (modified)
+  - `apps/api/src/services/projectAccess.ts` (created)
+  - `apps/api/src/routes/projects.ts` (modified)
+  - `apps/api/src/routes/tasks.ts` (created)
+  - `apps/api/src/routes/milestones.ts` (created)
+  - `apps/api/src/lib/permissions.ts` (modified)
+  - `apps/api/src/__tests__/permissions.test.ts` (modified)
+  - `apps/api/src/__tests__/tasks.test.ts` (created)
+  - `docs/open-policy-questions.md` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 9 test suites passed, 343 total tests passed (0 failures):
+    - `src/__tests__/tasks.test.ts` (73 tests passed)
+    - `src/__tests__/projects.test.ts` (48 tests passed)
+    - `src/__tests__/permissions.test.ts` (26 tests passed)
+    - `src/__tests__/auth.test.ts` (13 tests passed)
+    - `src/__tests__/security.test.ts` (51 tests passed)
+    - `src/__tests__/workRoles.test.ts` (40 tests passed)
+    - `src/__tests__/usersAdmin.test.ts` (25 tests passed)
+    - `src/__tests__/workLogs.test.ts` (45 tests passed)
+    - `src/__tests__/workLogExport.test.ts` (22 tests passed)
+  - `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`, 0 errors).
+  - `npm run lint`: clean across all workspaces (0 errors).
+- **Status**: done
+- **Decisions or problems**:
+  - Resolved TypeScript error in `tasks.test.ts` by asserting mock parameter typing on `db.projectMember.findUnique as any`, `db.task.findUnique as any`, `db.task.update as any`, and `db.taskDependency.findMany as any`.
+  - Synchronized fake timers with session generation in overdue task test to avoid session token expiration.
+  - Implemented explicit viewer guard on comment editing (`PATCH /:taskId/comments/:commentId`) to prevent project viewers and system viewers from modifying comments.
+  - Standardized exact error codes: `self_dependency`, `dependency_cycle` (for cycles & depth limit), `duplicate_dependency`, `already_completed`, and `already_open`.
+  - Departed assignee retention: tasks preserve `assigneeUserId` with serialized `assigneeIsProjectMember: false`, and unchanged assignee during title/description PATCH does not trigger 400.
+
+## Step 10c Summary & Verification
+- **Milestone**: Step 10c — Tasks, subtasks, assignment, milestones, dependencies and comments (Backend only).
+- **Schema & Migrations**: Zero schema alterations; no migrations executed.
+- **Verification**: 343 passing tests across 9 test suites, clean typecheck, clean linting across entire monorepo.
+- **Git Commit**: Not executed (per instruction). Ready for user commit.

@@ -27,7 +27,11 @@ export type Action =
   | 'project:read'
   | 'project:update'
   | 'project:manageMembers'
-  | 'project:changeStatus';
+  | 'project:changeStatus'
+  | 'task:read'
+  | 'task:write'
+  | 'comment:write'
+  | 'milestone:manage';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
@@ -52,16 +56,21 @@ export function can(user: AuthUser, action: Action): boolean {
       return role === 'system_admin' || role === 'project_manager';
 
     case 'project:read':
+    case 'task:read':
       return ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'].includes(role);
 
     // Architectural Note:
-    // 'employee' and 'hr_admin' hold 'project:update', 'project:manageMembers', and 'project:changeStatus'
-    // at the system role level only so that route guards can pass them to the route handler, where the
-    // actual project-level membership manager check (member.projectRole === 'manager') is enforced.
+    // 'employee', 'hr_admin', and 'project_manager' hold 'project:update', 'project:manageMembers',
+    // 'project:changeStatus', 'task:write', 'comment:write', and 'milestone:manage' at the system role
+    // level only so that route guards can pass them to the route handlers, where the actual project-level
+    // membership and role checks (isManager, canEditTask, comment author checks) are enforced.
     // 'viewer' is denied here at the system level. The handler is the real gate for mutating actions.
     case 'project:update':
     case 'project:manageMembers':
     case 'project:changeStatus':
+    case 'task:write':
+    case 'comment:write':
+    case 'milestone:manage':
       return ['system_admin', 'project_manager', 'employee', 'hr_admin'].includes(role);
 
     case 'user:create':

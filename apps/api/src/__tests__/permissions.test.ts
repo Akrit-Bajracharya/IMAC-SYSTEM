@@ -48,12 +48,16 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(admin, 'worklog:exportAll')).toBe(true);
     });
 
-    it('can perform all project actions', () => {
+    it('can perform all project and task actions', () => {
       expect(can(admin, 'project:create')).toBe(true);
       expect(can(admin, 'project:read')).toBe(true);
       expect(can(admin, 'project:update')).toBe(true);
       expect(can(admin, 'project:manageMembers')).toBe(true);
       expect(can(admin, 'project:changeStatus')).toBe(true);
+      expect(can(admin, 'task:read')).toBe(true);
+      expect(can(admin, 'task:write')).toBe(true);
+      expect(can(admin, 'comment:write')).toBe(true);
+      expect(can(admin, 'milestone:manage')).toBe(true);
     });
   });
 
@@ -93,12 +97,16 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(hr, 'worklog:exportAll')).toBe(false);
     });
 
-    it('can read projects and pass route guards for project mutations (handler is manager gate), but CANNOT create projects', () => {
+    it('can read projects/tasks and pass route guards for project/task mutations (handler is manager gate), but CANNOT create projects', () => {
       expect(can(hr, 'project:create')).toBe(false);
       expect(can(hr, 'project:read')).toBe(true);
       expect(can(hr, 'project:update')).toBe(true);
       expect(can(hr, 'project:manageMembers')).toBe(true);
       expect(can(hr, 'project:changeStatus')).toBe(true);
+      expect(can(hr, 'task:read')).toBe(true);
+      expect(can(hr, 'task:write')).toBe(true);
+      expect(can(hr, 'comment:write')).toBe(true);
+      expect(can(hr, 'milestone:manage')).toBe(true);
     });
   });
 
@@ -132,12 +140,16 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(pm, 'worklog:exportAll')).toBe(false);
     });
 
-    it('can create projects and perform all project management actions', () => {
+    it('can create projects and perform all project management & task actions', () => {
       expect(can(pm, 'project:create')).toBe(true);
       expect(can(pm, 'project:read')).toBe(true);
       expect(can(pm, 'project:update')).toBe(true);
       expect(can(pm, 'project:manageMembers')).toBe(true);
       expect(can(pm, 'project:changeStatus')).toBe(true);
+      expect(can(pm, 'task:read')).toBe(true);
+      expect(can(pm, 'task:write')).toBe(true);
+      expect(can(pm, 'comment:write')).toBe(true);
+      expect(can(pm, 'milestone:manage')).toBe(true);
     });
   });
 
@@ -161,12 +173,16 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(employee, 'worklog:exportAll')).toBe(false);
     });
 
-    it('CANNOT create projects, but holds project mutating actions so handler can enforce projectRole', () => {
+    it('CANNOT create projects, but holds project & task mutating actions so handler can enforce projectRole', () => {
       expect(can(employee, 'project:create')).toBe(false);
       expect(can(employee, 'project:read')).toBe(true);
       expect(can(employee, 'project:update')).toBe(true);
       expect(can(employee, 'project:manageMembers')).toBe(true);
       expect(can(employee, 'project:changeStatus')).toBe(true);
+      expect(can(employee, 'task:read')).toBe(true);
+      expect(can(employee, 'task:write')).toBe(true);
+      expect(can(employee, 'comment:write')).toBe(true);
+      expect(can(employee, 'milestone:manage')).toBe(true);
     });
   });
 
@@ -190,12 +206,16 @@ describe('Permissions - can() policy matrix', () => {
       expect(can(viewer, 'worklog:exportAll')).toBe(false);
     });
 
-    it('can read projects, but CANNOT create, update, manage members or change status (viewer cannot write)', () => {
+    it('can read projects & tasks, but CANNOT create, update, manage members, write tasks, comment, or manage milestones (viewer cannot write)', () => {
       expect(can(viewer, 'project:read')).toBe(true);
       expect(can(viewer, 'project:create')).toBe(false);
       expect(can(viewer, 'project:update')).toBe(false);
       expect(can(viewer, 'project:manageMembers')).toBe(false);
       expect(can(viewer, 'project:changeStatus')).toBe(false);
+      expect(can(viewer, 'task:read')).toBe(true);
+      expect(can(viewer, 'task:write')).toBe(false);
+      expect(can(viewer, 'comment:write')).toBe(false);
+      expect(can(viewer, 'milestone:manage')).toBe(false);
     });
   });
 

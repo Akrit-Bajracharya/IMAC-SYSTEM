@@ -444,4 +444,100 @@ Across all APIs in the IMAC Operations System:
   - Reopening projects in `complete` status is permitted if a non-empty reason is provided.
 
 ### 4. Next Steps
-- **Step 10c**: Task management, assignments, subtasks, milestone associations, comments, dependencies, and time logs data and APIs.
+- **Step 10c**: Task management, assignments, subtasks, milestone associations, comments, dependencies, and time logs data and APIs — COMPLETED.
+- **Step 10d**: Time logs, project messages, progress calculation, overdue/blocked reports, and linking `WorkLogEntry.projectId`/`taskId`.
+
+---
+
+## Current Milestone: Step 10c — Tasks, Subtasks, Assignment, Milestones, Dependencies, and Comments APIs (Backend Only) — COMPLETED
+
+### 1. What Was Built
+- **Shared Validation Schemas & Types (`packages/shared/src/schemas/task.ts` & `index.ts`)**:
+  - `TaskStatus` enum: `todo`, `in_progress`, `blocked`, `done` (values `in_review` and `canceled` are invalid and rejected with 400).
+  - `TaskPriority` enum: `low`, `medium`, `high`, `urgent`.
+  - `createTaskSchema`: `.strict()` rejection of forbidden/unknown fields (`status`, `createdByUserId`, `projectId`), validated title (trimmed 1-200 chars), optional description, optional priority, optional ISO dueDate string, optional UUID `assigneeUserId`, optional UUID `milestoneId`, optional UUID `parentTaskId`.
+  - `patchTaskSchema`: `.strict()`, requires at least one field, allows clearing optional fields (`description`, `dueDate`, `assigneeUserId`, `milestoneId`) via `null`, validates UUIDs, trims title.
+  - `changeTaskStatusSchema`: non-empty `status` enum value.
+  - `listTasksQuerySchema`: pagination with limit (default 50, max 100), optional UUID cursor, optional status filter, optional UUID `assigneeUserId`, optional UUID `milestoneId`, optional UUID `parentTaskId`, optional boolean `topLevelOnly`. Mutually exclusive validation: `topLevelOnly` together with `parentTaskId` returns 400.
+  - `createTaskDependencySchema`: UUID `dependsOnTaskId`.
+  - `createMilestoneSchema`: `.strict()`, trimmed title (1-200 chars), optional description, optional ISO dueDate string.
+  - `patchMilestoneSchema`: `.strict()`, at least one field required, nullable description and dueDate.
+  - `createCommentSchema`: `.strict()`, non-empty trimmed body (1-5000 chars).
+  - `patchCommentSchema`: `.strict()`, non-empty trimmed body (1-5000 chars).
+  - `listCommentsQuerySchema`: limit (default 50, max 100) and optional UUID cursor.
+- **Central Permissions Matrix (`apps/api/src/lib/permissions.ts`)**:
+  - Added actions: `task:read`, `task:write`, `comment:write`, `milestone:manage`.
+  - `task:read` granted to all 5 system roles (`system_admin`, `hr_admin`, `project_manager`, `employee`, `viewer`).
+  - `task:write`, `comment:write`, `milestone:manage` held by `system_admin`, `project_manager`, `employee`, and `hr_admin` at the system level (`viewer` strictly denied). Architectural comment clarifies that the handler-level project membership and project-role check (`canEditTask` and `isManager`) is the actual security enforcement gate.
+- **Project Access Resolution & Swappable Policy Service (`apps/api/src/services/projectAccess.ts`)**:
+  - Note for Review: `apps/api/src/routes/projects.ts` now imports `isValidUuid` from `services/projectAccess.ts` (local copy removed). `projects.ts` currently retains its inline membership lookup and should be migrated to `resolveProjectAccess` in a future refactoring step.
+  - `isValidUuid`: regex check preventing malformed UUIDs from reaching Prisma and triggering 500 errors (returning uniform 404).
+  - `resolveProjectAccess`: resolves project existence and caller membership. Non-members receive 404 Not Found (never 403, preventing IDOR / enumeration). `system_admin` bypasses membership with virtual manager rights.
+  - `canEditTask`: swappable policy function supporting actions `create`, `edit`, `changeStatus`, and `manageDependencies`. Managers and system administrators have full authority. Regular members can create tasks, and can edit, change status, or manage dependencies on tasks where they are the current assignee or creator. Viewers are strictly denied.
+- **Milestones Router (`apps/api/src/routes/milestones.ts`)**:
+  - Mounted at `/api/projects/:id/milestones` with `Router({ mergeParams: true })`.
+  - Non-members get 404. Viewer/member without manager role gets 403 on mutating routes.
+  - `POST /`: creates milestone with `isCompleted: false`, logs audit entry `milestone.created`.
+  - `GET /`: lists project milestones ordered by `dueDate: 'asc', id: 'asc'`.
+  - `PATCH /:milestoneId`: updates title, description, dueDate; audited as `milestone.updated`.
+  - `POST /:milestoneId/complete` & `POST /:milestoneId/reopen`: atomic conditional `updateMany` checking current `isCompleted` state. Completing an already-completed milestone or reopening an already-open milestone returns 409 `already_completed` / `already_open`. Emits single audit entry (`milestone.completed` or `milestone.reopened`).
+- **Tasks Router (`apps/api/src/routes/tasks.ts`)**:
+  - Mounted at `/api/projects/:id/tasks` with `Router({ mergeParams: true })`.
+  - `POST /`: verifies assignee is active member with role `manager` or `member` (viewers rejected); verifies milestone belongs to project; enforces 1-level subtask nesting (parent task must belong to current project [404 if not], and parent task cannot itself be a subtask [400 `subtask_nesting_not_allowed`]); logs audit `task.created`.
+  - `GET /`: cursor-based pagination ordered by `createdAt: 'desc', id: 'desc'`; supports filters for status, assignee, milestone, subtasks, and `topLevelOnly`; computes `assigneeIsProjectMember` boolean flag and `isOverdue` boolean flag using `Asia/Kathmandu` midnight calendar date boundary.
+  - `GET /:taskId`: retrieves task with subtasks, dependencies, milestone, comments, and computed flags.
+  - `PATCH /:taskId`: enforces `canEditTask(..., 'edit')`. Preserves departed assignees: validates `assigneeUserId` only when present in request and changed from stored value (permits updating title when assignee has left project). Audited as `task.updated`.
+  - `POST /:taskId/status`: enforces `canEditTask(..., 'changeStatus')`; prevents redundant same-status transition (400); optimistic concurrency guard via `updateMany` conditional on status read previously (returns 409 `conflict_retry` on 0 rows updated); writes `TaskStatusEvent` and `AuditLog`; returns soft warnings: `'open_dependency'` if any prerequisite task is not `done`, `'open_subtasks'` if any subtask is not `done`.
+  - `POST /:taskId/dependencies`: takes project row lock (`SELECT "id" FROM "Project" WHERE "id" = $1 FOR UPDATE`) before cycle check; verifies target task belongs to same project (404); prevents self-dependency (400 `self_dependency`); traverses existing dependency graph up to depth limit 50 using a visited set to detect cycles (400 `dependency_cycle`, also used for depth limit); catches Prisma P2002 duplicate collision and returns 409 `duplicate_dependency`; audited as `task_dependency.added`.
+  - `DELETE /:taskId/dependencies/:dependsOnTaskId`: deletes dependency link; audited as `task_dependency.removed`.
+  - `POST /:taskId/comments`: creates comment with explicit author select (`id`, `displayName`, `username`); audited as `comment.created`.
+  - `GET /:taskId/comments`: lists comments ordered by `createdAt: 'asc', id: 'asc'` with cursor pagination.
+  - `PATCH /:taskId/comments/:commentId`: restricts edits strictly to comment author (`system_admin` or regular user cannot edit another user's comment, 403); records audit event `comment.edited` without exposing comment body text in audit log metadata.
+- **Automated Integration Tests (`apps/api/src/__tests__/tasks.test.ts`)**:
+  - 73 comprehensive integration tests covering all positive paths and security requirements:
+    - 401 unauthenticated requests.
+    - 404 for non-members on task, milestone, and comment routes.
+    - 404 on malformed UUIDs.
+    - 403 for members without edit rights on other members' tasks.
+    - 403 for viewers across all mutating routes.
+    - Subtask under another project's parent returns 404.
+    - Subtask of subtask returns 400.
+    - Departed assignee title patch succeeds without 400.
+    - Overdue boundary test with fake timers at 18:30 UTC verifying `Asia/Kathmandu` midnight rollover.
+    - Milestone double-complete returns 409.
+    - Dependency cycle detection returns 400.
+    - Duplicate dependency returns 409.
+    - Comment editing by non-author returns 403.
+    - Comment edit audit event logged as `comment.edited` without body text.
+
+### 2. Verification & Test Results
+- **Automated Test Suite**:
+  - Vitest test suite (`apps/api`): 9 test files, **343 passing tests (0 failures)**:
+    - `src/__tests__/tasks.test.ts`: 73 tests passed
+    - `src/__tests__/projects.test.ts`: 48 tests passed
+    - `src/__tests__/permissions.test.ts`: 26 tests passed
+    - `src/__tests__/auth.test.ts`: 13 tests passed
+    - `src/__tests__/security.test.ts`: 51 tests passed
+    - `src/__tests__/workRoles.test.ts`: 40 tests passed
+    - `src/__tests__/usersAdmin.test.ts`: 25 tests passed
+    - `src/__tests__/workLogs.test.ts`: 45 tests passed
+    - `src/__tests__/workLogExport.test.ts`: 22 tests passed
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+- **Shared Package Build**:
+  - `@imac/shared` compiled cleanly via `tsc`.
+
+### 3. What is Untested & Assumptions
+- **Untested via Vitest (Mock-Based Limitations)**:
+  - Mocked `$transaction` and `$queryRaw` cannot simulate physical PostgreSQL row-level lock serialization or multi-threaded race conditions when two clients add mutual dependencies simultaneously.
+  - Database-level foreign key and unique constraint enforcement under high physical concurrency is simulated via Prisma error mappings (e.g. P2002) rather than live database stress testing.
+- **Assumptions**:
+  - Neutral soft warnings (`open_dependency`, `open_subtasks`) are returned when completing tasks with unresolved prerequisites or subtasks.
+  - Retaining departed assignees on tasks with `assigneeIsProjectMember: false` is preferred over destructive auto-unassignment.
+  - Reopening completed tasks is permitted by default under standard `canEditTask(..., 'changeStatus')` rules.
+  - Task entities are immutable with respect to deletion (no `DELETE` endpoint; canceled status used for discarded tasks).
+
+### 4. Next Steps
+- **Step 10d**: Time logs, project messages, progress calculation, overdue/blocked reports, and linking `WorkLogEntry.projectId`/`taskId`.
