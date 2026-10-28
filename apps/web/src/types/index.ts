@@ -85,3 +85,85 @@ export interface ApiError {
   message: string;
   details?: unknown[];
 }
+
+export type WorkLogStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+
+export interface WorkLogEntry {
+  id: string;
+  workLogDayId: string;
+  workRoleId: string;
+  hours: number;
+  description: string | null;
+  projectId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  workRole?: WorkRole;
+}
+
+export interface WorkLogDay {
+  id: string;
+  employeeProfileId: string;
+  date: string;
+  status: WorkLogStatus;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  approvedByUserId: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  entries: WorkLogEntry[];
+}
+
+export interface WorkLogDayResponse {
+  ok?: boolean;
+  workLog: WorkLogDay | null;
+  totalHours: number;
+  standardShiftHours: number;
+  warnings: string[];
+}
+
+export interface WorkLogsListResponse {
+  workLogs: WorkLogDay[];
+  standardShiftHours: number;
+  warnings: string[];
+}
+
+export interface UpsertWorkLogDraftPayload {
+  date: string;
+  entries: {
+    workRoleId: string;
+    hours: number;
+    description?: string | null;
+    projectId?: string | null;
+    taskId?: string | null;
+  }[];
+}
+
+export interface PatchWorkLogPayload {
+  entries: {
+    workRoleId: string;
+    hours: number;
+    description?: string | null;
+    projectId?: string | null;
+    taskId?: string | null;
+  }[];
+}
+
+export interface WorkLogExportParams {
+  startDate: string;
+  endDate: string;
+  status?: string;
+  employee?: string;
+  team?: string;
+  workRoleId?: string;
+  projectId?: string;
+}
+
+export interface SystemSettingItem {
+  key: string;
+  value: string;
+  description: string | null;
+  updatedAt: string;
+  updatedBy: string;
+}

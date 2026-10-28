@@ -48,6 +48,9 @@
     "settings": "Settings",
     "auditLog": "Audit Log",
     "workLog": "Work Log",
+    "workLogDaily": "Daily Log",
+    "workLogHistory": "Work Log History",
+    "workLogExport": "Export Logs",
     "leave": "Leave",
     "overtime": "Overtime",
     "projects": "Projects"
@@ -298,6 +301,168 @@
       "confirmRemove": {
         "title": "Remove Work Role Assignment",
         "description": "Are you sure you want to remove '{{roleName}}' from {{employeeName}}? The employee will no longer be able to select this work role in upcoming Daily Work Logs."
+      }
+    },
+    "settings": {
+      "pageTitle": "System Settings — Work Log Policies",
+      "pageSubtitle": "Configure organizational shift validation, approval workflows, and employee edit windows.",
+      "requiresApprovalTitle": "Require Manager Approval (worklog.requiresApproval)",
+      "requiresApprovalDesc": "When enabled, employee submitted logs must be approved by a designated manager.",
+      "enabled": "Enabled (Approval Required)",
+      "disabled": "Disabled (Direct Acceptance)",
+      "mismatchHandlingTitle": "Hour Mismatch Handling Mode (worklog.mismatchHandling)",
+      "mismatchHandlingDesc": "Determines system behavior when logged daily hours differ from the employee standard shift length.",
+      "mismatchModes": {
+        "block": "Block (422) — Prevent submission when hours differ from shift length",
+        "warn": "Warn — Allow submission but display an alert warning to staff",
+        "allow": "Allow — Accept submission quietly without mismatch warnings"
+      },
+      "editWindowTitle": "Employee Edit Window in Hours (worklog.editWindowHours)",
+      "editWindowDesc": "The number of hours after submission during which an employee may still update or edit entries.",
+      "editWindowPlaceholder": "e.g. 24",
+      "saveSettings": "Save Policy Settings",
+      "savingSettings": "Saving Settings...",
+      "notifications": {
+        "saved": "Work log policy settings updated successfully."
+      },
+      "errors": {
+        "invalidEditWindow": "Edit window must be a positive whole number greater than 0.",
+        "saveFailed": "Failed to save settings. Please try again."
+      }
+    }
+  },
+  "workLog": {
+    "daily": {
+      "pageTitle": "Daily Work Log",
+      "pageSubtitle": "Record and manage your daily operational hours across assigned work categories.",
+      "readOnlyNotice": "Read-Only Mode: Your user role has view-only access to work logs.",
+      "dateLabel": "Log Date",
+      "selectDate": "Select calendar date (Asia/Kathmandu)",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "statusLabel": "Status",
+      "status": {
+        "draft": "Draft",
+        "submitted": "Submitted",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "notCreated": "Not Created"
+      },
+      "entriesTitle": "Work Log Entries",
+      "entriesSubtitle": "Allocate your shift hours across active assigned work roles in 15-minute increments (0.25).",
+      "addEntry": "Add Entry Row",
+      "roleColumn": "Work Role",
+      "hoursColumn": "Hours (0.25 step)",
+      "descriptionColumn": "Description (Optional)",
+      "projectColumn": "Project ID (Reserved)",
+      "taskColumn": "Task ID (Reserved)",
+      "actionsColumn": "Actions",
+      "removeRow": "Remove",
+      "rolePlaceholder": "Select assigned work role...",
+      "hoursPlaceholder": "e.g. 2.50",
+      "descriptionPlaceholder": "Summary of activities performed...",
+      "projectPlaceholder": "Reserved (Phase 3)",
+      "taskPlaceholder": "Reserved (Phase 3)",
+      "totalsTitle": "Shift Summary",
+      "totalHours": "Total Hours",
+      "expectedHours": "Standard Shift",
+      "difference": "Shift Balance",
+      "saveDraft": "Save Draft",
+      "savingDraft": "Saving Draft...",
+      "saveChanges": "Save Changes",
+      "savingChanges": "Saving Changes...",
+      "submit": "Submit Log",
+      "submitting": "Submitting...",
+      "submittedNotice": "This log has been submitted. You may update entries within the operational modification window.",
+      "windowExpiredNotice": "The modification window for this submitted log has closed. Further edits are disabled.",
+      "approvedNotice": "This work log has been approved by management and is locked for editing.",
+      "noProfile": {
+        "title": "No Employee Profile Found",
+        "description": "Your staff account does not currently have an active employee profile linked. Daily work logs are only available to staff members with an assigned profile."
+      },
+      "noRoles": {
+        "title": "No Work Roles Assigned",
+        "description": "You do not have any active work roles assigned to your profile. Please contact an administrator or HR to assign work roles before logging hours."
+      },
+      "notifications": {
+        "draftSaved": "Work log draft saved successfully.",
+        "changesSaved": "Work log changes saved successfully.",
+        "submitted": "Work log submitted successfully."
+      },
+      "warningsTitle": "Submission Warnings",
+      "errors": {
+        "generic": "An error occurred while saving the work log.",
+        "validation_error": "Validation failed: please check that all entries have valid roles, hours are in 0.25 steps, and total hours do not exceed 24.",
+        "unassigned_work_role": "One or more selected work roles are not assigned to you or have been deactivated.",
+        "hour_mismatch": "Hour Mismatch: Logged hours do not match your standard shift length.",
+        "status_conflict": "Concurrency Conflict: This work log was modified or submitted in another session. Please refresh the page.",
+        "conflict_retry": "Concurrent Update Collision: Please try submitting again.",
+        "already_submitted": "This work log has already been submitted and cannot be submitted again as a draft.",
+        "edit_window_expired": "The edit window for this submitted work log has closed. Changes can no longer be saved.",
+        "log_already_approved": "This work log has already been approved and cannot be modified.",
+        "profile_not_found": "Employee profile not found for this user account.",
+        "row_limit_exceeded": "Maximum row limit exceeded.",
+        "forbidden": "You do not have permission to modify this work log.",
+        "atLeastOneEntry": "At least one entry row is required.",
+        "hoursPositive": "Hours must be greater than 0 and in 0.25 increments."
+      }
+    },
+    "history": {
+      "pageTitle": "Work Log History & Summaries",
+      "pageSubtitle": "Review past daily logs, status tracking, and aggregate weekly and monthly totals.",
+      "calendarView": "Calendar View",
+      "listView": "List View",
+      "prevMonth": "Previous Month",
+      "nextMonth": "Next Month",
+      "monthLabel": "Month",
+      "yearLabel": "Year",
+      "noLogsInMonth": "No work logs recorded in this month.",
+      "openDay": "Open Log",
+      "weekSummaryTitle": "Weekly Summary",
+      "weekSummarySubtitle": "Totals per day and per work role for the selected 7-day period.",
+      "selectWeekStart": "Week Starting Date",
+      "monthSummaryTitle": "Monthly Summary",
+      "monthSummarySubtitle": "Aggregated totals and work-role distribution across the entire month.",
+      "totalsByRole": "Hours by Work Role",
+      "totalsByDay": "Daily Totals",
+      "dayColumn": "Day",
+      "dateColumn": "Date",
+      "roleColumn": "Work Role",
+      "hoursColumn": "Total Hours",
+      "statusColumn": "Status",
+      "entriesCountColumn": "Entries",
+      "overallTotal": "Overall Total Hours",
+      "expectedTotal": "Expected Shift Hours",
+      "balance": "Net Difference"
+    },
+    "export": {
+      "pageTitle": "Export Work Logs",
+      "pageSubtitle": "Generate and download official Excel (.xlsx) work log reports.",
+      "filtersTitle": "Export Criteria & Filters",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "status": "Work Log Status",
+      "allStatuses": "All Statuses (including drafts)",
+      "workRole": "Work Role",
+      "allWorkRoles": "All Work Roles",
+      "adminOnlySection": "Administrative Filters (System Admin Only)",
+      "employeeId": "Employee Profile ID",
+      "employeeIdPlaceholder": "Optional employee profile ID filter",
+      "team": "Team / Department",
+      "teamPlaceholder": "e.g. Engineering, Operations",
+      "downloadButton": "Download Spreadsheet (.xlsx)",
+      "downloading": "Generating Export...",
+      "notifications": {
+        "downloadStarted": "Export file generated and downloaded."
+      },
+      "errors": {
+        "dateRequired": "Both Start Date and End Date are required.",
+        "dateOrder": "End Date must be on or after Start Date.",
+        "dateRangeMax": "Date range cannot exceed 366 days.",
+        "forbidden": "You are only permitted to export your own work logs.",
+        "row_limit_exceeded": "The requested export exceeds the maximum allowed limit of 50,000 rows. Please narrow your date range or filters.",
+        "too_many_requests": "Export rate limit reached (maximum 15 exports per 15 minutes). Please wait before trying again.",
+        "generic": "Failed to export work logs."
       }
     }
   },

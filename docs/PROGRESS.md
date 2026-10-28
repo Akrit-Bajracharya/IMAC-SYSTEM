@@ -265,3 +265,59 @@ Across all APIs in the IMAC Operations System:
 
 ### 3. Assumptions & Next Steps
 - **Next Step (8e/9)**: Work Log Approvals module (approval flows, rejection with reason, manager/admin approval endpoints).
+
+
+---
+
+## Current Milestone: Step 9a — Daily Work Log Screens (apps/web) — COMPLETED
+
+### 1. What Was Built
+- **Zero Backend Changes / Zero Schema Changes**:
+  - Implemented strictly in `apps/web` utilizing only the real REST endpoints from Step 8 (`/api/work-roles/my-roles`, `/api/work-logs/by-date`, `/by-week`, `/by-month`, `/:id`, `POST /api/work-logs`, `PATCH /api/work-logs/:id`, `POST /api/work-logs/:id/submit`, `GET /api/work-logs/export`, and `GET`/`PATCH /api/admin/settings`).
+  - No API was missing any required fields or functionalities.
+- **Frontend Architecture & Conventions**:
+  - Full adherence to `react-i18next` with complete translation keys across `en.json` (no raw user-facing hardcoded text).
+  - Integrated with `@tanstack/react-query` for query caching, loading states, and optimistic mutation invalidation.
+  - Automatic double-submit cookie CSRF handling through the shared Axios client.
+  - Responsive layouts supporting phone width down to mobile viewport sizes.
+- **Daily Work Log Page (`apps/web/src/pages/workLogs/DailyWorkLogPage.tsx`)**:
+  - Calendar date selector defaulting to current date in `Asia/Kathmandu` (`YYYY-MM-DD` string format, never timestamps) with quick Today/Yesterday navigation.
+  - Role-based write authorization: permits `employee`, `hr_admin`, `project_manager`, and `system_admin` with profile; displays a clear read-only banner for `viewer`.
+  - Profile guard: staff accounts without an employee profile see a friendly informative card (`noProfile`) rather than an error or raw JSON.
+  - Interactive entry rows: work role selector populated strictly with the user's assigned active roles (`GET /api/work-roles/my-roles`), 0.25-hour increment inputs, optional activity description, and reserved project/task inputs.
+  - Real-time running total computation evaluated against `standardShiftHours` with color-coded balance indicator (Balanced, Surplus/Overtime, Deficit).
+  - Save Draft and Submit actions with button-level request in-flight disabling to prevent double-submission races.
+  - Post-submission edit support via `PATCH /api/work-logs/:id`; automatically detects `edit_window_expired` responses and locks the form with an operational notice.
+  - Display of server-generated `warnings` array upon save or submit.
+  - Explicit error handling for all domain codes: `validation_error`, `unassigned_work_role`, `hour_mismatch` (422), `status_conflict` (409), `conflict_retry` (409), `already_submitted`, `edit_window_expired`, `log_already_approved`, `profile_not_found`, `row_limit_exceeded`. Raw error JSON is never displayed.
+- **Work Log History & Summaries Page (`apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`)**:
+  - Dual view modes: Interactive Month Calendar View with color-coded daily status dots/hours and structured List View.
+  - Click-through navigation: selecting any past day opens the Daily Log screen for that specific date.
+  - Aggregated monthly totals: overall hours, expected shift hours baseline, net variance, and work role time allocation breakdown.
+  - 7-day weekly summaries: date-range selector, daily breakdown table, and work-role hours distribution from `/api/work-logs/by-week`.
+- **Work Log Export Screen (`apps/web/src/pages/workLogs/WorkLogExportPage.tsx`)**:
+  - Filter form: required start and end dates with client-side 366-day range validation, status filter, and work role filter.
+  - Administrative filters (employee ID and team/department) displayed strictly for `system_admin` users.
+  - Direct binary Excel (.xlsx) download from `/api/work-logs/export`.
+  - Blob error parsing with friendly user notifications for HTTP 403 Forbidden, 400 row limit, and 429 rate limit errors.
+- **Admin Settings Screen (`apps/web/src/pages/admin/WorkLogSettingsPage.tsx`)**:
+  - Restricted strictly to `system_admin` (direct URL access by non-admins renders the friendly 403 Unauthorized page).
+  - Form controls for `worklog.requiresApproval` (radio group), `worklog.mismatchHandling` ('block' | 'warn' | 'allow'), and `worklog.editWindowHours` (positive integer validation).
+  - Success and error alerts with automatic cache invalidation.
+- **Navigation & Layouts (`apps/web/src/components/layout/` & `router/`)**:
+  - Added Daily Log, History, and Export links to both `AdminLayout` and `EmployeeLayout` sidebars.
+  - Filtered Settings link in `AdminLayout` to be visible only to `system_admin`.
+  - Added protected routing in `apps/web/src/router/index.tsx` ensuring role-based access control.
+
+### 2. Verification & Test Results
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+- **Frontend Build**:
+  - Built cleanly in 19.78s via `npm run build --workspace=apps/web` generating production bundle in `apps/web/dist/`.
+- **Automated Test Suite**:
+  - All 217 unit and integration tests passing in `apps/api` (7 test files, 0 failures).
+
+### 3. Next Steps
+- **Next Step (9b)**: Daily work log reminders and notification background jobs.

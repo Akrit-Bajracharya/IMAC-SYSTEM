@@ -13,7 +13,11 @@ import { EmployeeDashboardPage } from '../pages/dashboard/EmployeeDashboardPage.
 import { UsersListPage } from '../pages/admin/UsersListPage.js';
 import { WorkRolesPage } from '../pages/admin/WorkRolesPage.js';
 import { EmployeeWorkRolesPage } from '../pages/admin/EmployeeWorkRolesPage.js';
+import { WorkLogSettingsPage } from '../pages/admin/WorkLogSettingsPage.js';
 import { DirectoryPage } from '../pages/directory/DirectoryPage.js';
+import { DailyWorkLogPage } from '../pages/workLogs/DailyWorkLogPage.js';
+import { WorkLogHistoryPage } from '../pages/workLogs/WorkLogHistoryPage.js';
+import { WorkLogExportPage } from '../pages/workLogs/WorkLogExportPage.js';
 import { NotFoundPage } from '../pages/errors/NotFoundPage.js';
 
 function RootRedirect() {
@@ -34,6 +38,17 @@ function RoleBasedDashboard() {
     return <AdminDashboardPage />;
   }
   return <EmployeeDashboardPage />;
+}
+
+function WorkLogRedirect({ subpath = '' }: { subpath?: string }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <Spinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  const base = ['system_admin', 'hr_admin'].includes(user.systemRole)
+    ? '/admin/work-log'
+    : '/employee/work-log';
+  const target = subpath ? `${base}/${subpath}` : base;
+  return <Navigate to={target} replace />;
 }
 
 export const router = createBrowserRouter([
@@ -61,6 +76,18 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: <RoleBasedDashboard />,
+      },
+      {
+        path: 'work-log',
+        element: <WorkLogRedirect />,
+      },
+      {
+        path: 'work-log/history',
+        element: <WorkLogRedirect subpath="history" />,
+      },
+      {
+        path: 'work-log/export',
+        element: <WorkLogRedirect subpath="export" />,
       },
       {
         path: 'admin',
@@ -96,6 +123,28 @@ export const router = createBrowserRouter([
                 element: <DirectoryPage />,
               },
               {
+                path: 'work-log',
+                element: <DailyWorkLogPage />,
+              },
+              {
+                path: 'work-log/history',
+                element: <WorkLogHistoryPage />,
+              },
+              {
+                path: 'work-log/export',
+                element: <WorkLogExportPage />,
+              },
+              {
+                path: 'settings',
+                element: <ProtectedRoute allowedRoles={['system_admin']} />,
+                children: [
+                  {
+                    index: true,
+                    element: <WorkLogSettingsPage />,
+                  },
+                ],
+              },
+              {
                 path: '*',
                 element: <NotFoundPage />,
               },
@@ -121,6 +170,18 @@ export const router = createBrowserRouter([
               {
                 path: 'directory',
                 element: <DirectoryPage />,
+              },
+              {
+                path: 'work-log',
+                element: <DailyWorkLogPage />,
+              },
+              {
+                path: 'work-log/history',
+                element: <WorkLogHistoryPage />,
+              },
+              {
+                path: 'work-log/export',
+                element: <WorkLogExportPage />,
               },
               {
                 path: '*',

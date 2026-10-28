@@ -482,3 +482,64 @@ Documented in `docs/open-policy-questions.md`:
   - Integration tests run against an in-memory mocked database (`setup.ts`).
   - Mocks verify business logic, branching, schema parsing, ExcelJS cell formatting, formula neutralization, and error handling.
   - Mocks CANNOT prove real PostgreSQL transaction isolation behavior (e.g. concurrent serialization conflicts), OS thread lock contention, or live Redis/memory rate limiting under multi-instance reverse proxies.
+
+
+---
+
+## Step 9a: Daily Work Log Screens in apps/web
+
+### Task 9a-01: Implementation of Work Log Screens, Navigation & Settings
+- **Date**: 2026-10-28
+- **Day of week**: Wednesday
+- **Start time**: 08:31:00
+- **End time**: 08:48:12
+- **Step**: Step 9a (Daily Work Log SCREENS in apps/web)
+- **Task performed**:
+  - Implemented Daily Log screen (`DailyWorkLogPage.tsx`) for logged-in users with date picker (Asia/Kathmandu today default, YYYY-MM-DD strings), entry rows with active assigned roles from `/api/work-roles/my-roles`, hours (0.25 steps), optional description and reserved project/task fields, live running total vs standard shift hours with difference display, in-flight disabled buttons for save draft and submit, server warnings array display, friendly error code handling (validation_error, unassigned_work_role, hour_mismatch 422, status_conflict 409, conflict_retry 409, already_submitted, edit_window_expired, log_already_approved, profile_not_found, row_limit_exceeded, never showing raw JSON), status badges (draft, submitted, approved, rejected), submitted log edit via PATCH with edit_window_expired notice, friendly "no employee profile" card, and viewer read-only mode.
+  - Implemented History & Summaries screen (`WorkLogHistoryPage.tsx`) with Month Calendar View and List View of past days using `/api/work-logs/by-month`, click-to-open day navigation to Daily Log, monthly totals per role/day/overall, and 7-day weekly summaries from `/api/work-logs/by-week`.
+  - Implemented Export screen (`WorkLogExportPage.tsx`) with required start/end date filters (366-day limit check), status, work role, system_admin-only employee and team filters, direct .xlsx binary download from `/api/work-logs/export`, and friendly handling for 403, 400 row limit, and 429 rate limit.
+  - Implemented Admin Settings screen (`WorkLogSettingsPage.tsx`) restricted to system_admin for `worklog.requiresApproval`, `worklog.mismatchHandling` (block/warn/allow), and `worklog.editWindowHours` (positive integer validation) via `/api/admin/settings` with success/error alerts.
+  - Updated navigation layouts (`AdminLayout.tsx`, `EmployeeLayout.tsx`) adding Daily Log, History, and Export sidebar links for permitted roles; hid Settings from non-admins in sidebar; protected `/admin/settings` route with `allowedRoles={['system_admin']}` showing UnauthorizedPage (403) on direct access.
+  - Maintained zero backend changes and zero schema changes.
+- **Files created or changed**:
+  - `apps/web/src/pages/workLogs/DailyWorkLogPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogExportPage.tsx`
+  - `apps/web/src/pages/admin/WorkLogSettingsPage.tsx`
+  - `apps/web/src/components/common/WorkLogStatusBadge.tsx`
+  - `apps/web/src/components/layout/AdminLayout.tsx`
+  - `apps/web/src/components/layout/EmployeeLayout.tsx`
+  - `apps/web/src/router/index.tsx`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `npm run typecheck`: Passed (0 errors across `@imac/api`, `@imac/web`, `@imac/shared`).
+  - `npm run lint`: Passed (0 errors).
+  - `npm run build --workspace=apps/web`: Passed (Vite production build completed in 19.78s).
+  - `npm test`: 7 test files passed, 217 tests passed (0 failures).
+- **Status**: done
+- **Decisions or problems**:
+  - Identified that Axios responseType blob wraps JSON error payloads in a Blob object on HTTP error status; implemented async `blob.text()` parsing in `WorkLogExportPage` to accurately detect `row_limit_exceeded` and `too_many_requests` error codes.
+
+---
+
+## Step 9a Summary & Verification
+- **Status**: Completed
+- **Tasks Executed**:
+  1. Task 9a-01: Implementation and verification of all Daily Work Log frontend screens, calendar history, summary metrics, export dialog, admin policy settings, and role-based layout navigation.
+- **Files Created / Modified**:
+  - `apps/web/src/pages/workLogs/DailyWorkLogPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogExportPage.tsx`
+  - `apps/web/src/pages/admin/WorkLogSettingsPage.tsx`
+  - `apps/web/src/components/common/WorkLogStatusBadge.tsx`
+  - `apps/web/src/components/layout/AdminLayout.tsx`
+  - `apps/web/src/components/layout/EmployeeLayout.tsx`
+  - `apps/web/src/router/index.tsx`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Test Suite Results**:
+  - `npm run typecheck`: 0 errors.
+  - `npm run lint`: 0 errors.
+  - `npm test`: 217 passing tests (7 test suites).
+  - `npm run build --workspace=apps/web`: 0 errors.

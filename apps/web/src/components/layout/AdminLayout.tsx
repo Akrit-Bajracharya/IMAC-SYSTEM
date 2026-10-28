@@ -8,6 +8,9 @@ import {
   Settings,
   FileText,
   LogOut,
+  ClipboardList,
+  Calendar,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { Badge } from '../ui/badge.js';
@@ -19,44 +22,73 @@ export function AdminLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
 
+  const isSystemAdmin = user?.systemRole === 'system_admin';
+
   const navItems = [
     {
       to: '/admin',
       label: t('nav.dashboard'),
       icon: LayoutDashboard,
       end: true,
+      visible: true,
     },
     {
       to: '/admin/users',
       label: t('nav.users'),
       icon: Users,
       end: false,
+      visible: true,
     },
     {
       to: '/admin/work-roles',
       label: t('nav.workRoles'),
       icon: Briefcase,
       end: false,
+      visible: true,
     },
     {
       to: '/admin/directory',
       label: t('nav.directory'),
       icon: BookUser,
       end: false,
+      visible: true,
+    },
+    {
+      to: '/admin/work-log',
+      label: t('nav.workLogDaily'),
+      icon: ClipboardList,
+      end: true,
+      visible: true,
+    },
+    {
+      to: '/admin/work-log/history',
+      label: t('nav.workLogHistory'),
+      icon: Calendar,
+      end: false,
+      visible: true,
+    },
+    {
+      to: '/admin/work-log/export',
+      label: t('nav.workLogExport'),
+      icon: FileSpreadsheet,
+      end: false,
+      visible: true,
     },
     {
       to: '/admin/settings',
       label: t('nav.settings'),
       icon: Settings,
       end: false,
+      visible: isSystemAdmin,
     },
     {
       to: '/admin/audit-log',
       label: t('nav.auditLog'),
       icon: FileText,
       end: false,
+      visible: isSystemAdmin,
     },
-  ];
+  ].filter((item) => item.visible);
 
   // Derive current page title
   const currentNav = navItems.find((item) =>

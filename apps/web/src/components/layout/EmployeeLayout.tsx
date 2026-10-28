@@ -5,8 +5,10 @@ import {
   BookUser,
   ClipboardList,
   Calendar,
+  FileSpreadsheet,
   Clock,
   LogOut,
+  CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { Badge } from '../ui/badge.js';
@@ -33,14 +35,26 @@ export function EmployeeLayout() {
     },
     {
       to: '/employee/work-log',
-      label: t('nav.workLog'),
+      label: t('nav.workLogDaily'),
       icon: ClipboardList,
+      end: true,
+    },
+    {
+      to: '/employee/work-log/history',
+      label: t('nav.workLogHistory'),
+      icon: Calendar,
+      end: false,
+    },
+    {
+      to: '/employee/work-log/export',
+      label: t('nav.workLogExport'),
+      icon: FileSpreadsheet,
       end: false,
     },
     {
       to: '/employee/leave',
       label: t('nav.leave'),
-      icon: Calendar,
+      icon: CalendarDays,
       end: false,
     },
     {
