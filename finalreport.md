@@ -754,3 +754,77 @@ Documented in `docs/open-policy-questions.md`:
 - **Schema & Migrations**: Zero schema alterations; no migrations executed.
 - **Verification**: 343 passing tests across 9 test suites, clean typecheck, clean linting across entire monorepo.
 - **Git Commit**: Not executed (per instruction). Ready for user commit.
+
+
+---
+
+## 13. Step 10d: Time Logs, Project Progress, Workload Queries & Access Hardening (Backend Only)
+
+### Task 10d-01: Time Logs API, Progress Calculation, Workload/Summary Queries, Access Hardening & Route Inventory
+- **Date**: 2026-10-28
+- **Day of week**: Wednesday
+- **Start time**: 15:51:00
+- **End time**: 16:50:00
+- **Step**: Step 10d (Time logs, progress, workload queries and access fixes. Backend only)
+- **Task performed**:
+  - Access Hardening: Strongly typed `ProjectAccessResult` using Prisma models (`Project` and `ProjectMember | null`); enforced fail-closed logic in `canEditTask` (failing closed when `userId` is missing or whitespace-only, when `task` is missing on member branches, and preventing `undefined === undefined` coercion).
+  - Central Permissions: Added `timeLog:read` and `timeLog:write` actions with architectural notes clarifying handler-level membership requirements.
+  - Shared Validation: Built `createTimeLogSchema`, `patchTimeLogSchema`, and `listTimeLogsQuerySchema` in `@imac/shared`.
+  - Pure Progress Service: Built `calculateProjectProgress(tasks)` leaf-task ratio formula and swappable strategy map `projectProgressStrategies` in `apps/api/src/services/projectProgress.ts`; documented formula in `docs/project-progress.md`.
+  - Time Logs Router: Implemented `timeLogsRouter` mounted at `/api/projects/:id/time-logs` with `Router({ mergeParams: true })`. Enforced physical membership check (no bypass for `system_admin`), task project belonging (404), [-90 days, +1 day] `Asia/Kathmandu` date boundary, transaction-level PostgreSQL advisory xact lock (`SELECT pg_advisory_xact_lock(hashtext(...))`), 24h daily cap per user-day, role-scoped GET visibility, author-only PATCH/DELETE, and confidential note omission in audit logs.
+  - Project Queries: Mounted `/overdue` and `/blocked` before `/:taskId` in `tasks.ts`; implemented `GET /api/projects/:id/summary` and `GET /api/projects/:id/workload` in `projects.ts` with masked non-manager logged hours, unassigned tasks bucket, and departed members bucket.
+  - Route Inventory: Created exhaustive route inventory test covering all 30 routes under `/api/projects`, asserting 401 unauthenticated and 404 non-member check order with empty body `{}`.
+  - Policy Updates: Documented Questions 28-30 in `docs/open-policy-questions.md` and corrected Question 25 to remove canceled task status reference.
+- **Files created or changed**:
+  - `apps/api/src/services/projectAccess.ts` (modified)
+  - `apps/api/src/lib/permissions.ts` (modified)
+  - `packages/shared/src/schemas/timeLog.ts` (created)
+  - `packages/shared/src/schemas/index.ts` (modified)
+  - `packages/shared/src/index.ts` (modified)
+  - `apps/api/src/services/projectProgress.ts` (created)
+  - `docs/project-progress.md` (created)
+  - `apps/api/src/routes/timeLogs.ts` (created)
+  - `apps/api/src/routes/projects.ts` (modified)
+  - `apps/api/src/routes/tasks.ts` (modified)
+  - `apps/api/src/__tests__/setup.ts` (modified)
+  - `apps/api/src/__tests__/projectAccess.test.ts` (created)
+  - `apps/api/src/__tests__/permissions.test.ts` (modified)
+  - `apps/api/src/__tests__/projectProgress.test.ts` (created)
+  - `apps/api/src/__tests__/timeLogs.test.ts` (created)
+  - `apps/api/src/__tests__/projectQueries.test.ts` (created)
+  - `apps/api/src/__tests__/routeInventory.test.ts` (created)
+  - `docs/open-policy-questions.md` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - Vitest test suite (`npm run test`): 14 test suites passed, **442 total tests passed (0 failures)**:
+    - `src/__tests__/routeInventory.test.ts` (59 tests passed)
+    - `src/__tests__/tasks.test.ts` (73 tests passed)
+    - `src/__tests__/security.test.ts` (51 tests passed)
+    - `src/__tests__/projects.test.ts` (48 tests passed)
+    - `src/__tests__/workLogs.test.ts` (45 tests passed)
+    - `src/__tests__/workRoles.test.ts` (40 tests passed)
+    - `src/__tests__/permissions.test.ts` (28 tests passed)
+    - `src/__tests__/usersAdmin.test.ts` (25 tests passed)
+    - `src/__tests__/workLogExport.test.ts` (22 tests passed)
+    - `src/__tests__/timeLogs.test.ts` (16 tests passed)
+    - `src/__tests__/auth.test.ts` (13 tests passed)
+    - `src/__tests__/projectQueries.test.ts` (9 tests passed)
+    - `src/__tests__/projectAccess.test.ts` (7 tests passed)
+    - `src/__tests__/projectProgress.test.ts` (6 tests passed)
+  - TypeScript compiler (`npm run typecheck`): passed with 0 errors across all workspaces.
+  - ESLint (`npm run lint`): passed with 0 errors across all workspaces.
+- **Status**: done
+- **Decisions or problems**:
+  - Time logging permission invariant: Unlike project metadata where system_admin has virtual manager privileges, time logging requires physical project membership; unassigned system_admin returns 404.
+  - Route collisions in Express: Explicit paths `/overdue` and `/blocked` must be registered before parameterized route `/:taskId`.
+  - Advisory xact lock in PostgreSQL: Checked using `SELECT pg_advisory_xact_lock(hashtext(...))` within transaction boundary.
+  - Workload query privacy: Non-managers see only their own logged hours and null for other members.
+  - Task statuses: Tasks strictly have 4 statuses: `todo`, `in_progress`, `blocked`, `done` (no `canceled` status exists).
+
+## Step 10d Summary & Verification
+- **Milestone**: Step 10d — Time Logs, Project Progress Calculation, Workload Queries, Access Hardening, and Route Inventory (Backend Only).
+- **Scope Delivery**: Sections 0 to 3 of Step 10d completed cleanly. Section 4 (work log linking) strictly deferred to Step 10e.
+- **Schema & Migrations**: Zero schema changes; `prisma migrate dev` was not executed.
+- **Verification**: 442 passing tests across 14 test suites, clean typecheck, clean linting.
+- **Git Commit**: Not executed (per instruction). Ready for user review and commit.

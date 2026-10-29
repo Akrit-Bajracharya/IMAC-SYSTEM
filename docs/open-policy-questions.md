@@ -178,7 +178,7 @@ This document tracks unresolved policy, organizational, and operational decision
 
 25. **Absence of Task Deletion Endpoint**
     - **Question**: Should tasks be deletable, or should project auditability mandate that tasks are canceled or marked obsolete via status/archival rather than hard-deleted?
-    - **Current Implementation**: In Step 10c, no `DELETE /api/projects/:id/tasks/:taskId` endpoint is provided. Historical records, time logs, and audit logs rely on immutable task entities. Inactive or abandoned tasks may be transitioned to `canceled` status. A future policy decision will evaluate whether hard deletion or soft deletion (`archivedAt`) should be supported for project managers or system administrators.
+    - **Current Implementation**: In Step 10c, no `DELETE /api/projects/:id/tasks/:taskId` endpoint is provided. Historical records, time logs, and audit logs rely on immutable task entities. Note that tasks do not possess a `canceled` status in the data model (valid statuses are strictly `todo`, `in_progress`, `blocked`, and `done`). Abandoned or halted tasks may be held in `blocked` or closed via `done` with explanatory comments. A future policy decision will evaluate whether hard deletion or soft deletion (`archivedAt`) should be supported for project managers or system administrators.
 
 26. **Task Assignee Membership and Role Restrictions**
     - **Question**: Who is eligible to be assigned to a project task? Can viewers be assigned to tasks?
@@ -187,3 +187,14 @@ This document tracks unresolved policy, organizational, and operational decision
 27. **Reopening Completed ("Done") Tasks**
     - **Question**: Can a task that has reached `done` status be reopened to active statuses (`todo`, `in_progress`, `blocked`, `in_review`), and who is authorized to do so?
     - **Current Implementation**: Reopening a `done` task is permitted by default. It follows the standard `canEditTask(..., 'changeStatus')` rules: project managers, system administrators, and the task's assignee or creator may reopen the task to any valid `TaskStatus`.
+28. **Dual Time Entry (Work Logs vs. Project Time Logs) and Reconciliation**
+    - **Question**: Staff now have two distinct mechanisms for logging time: organizational daily work logs (`WorkLog` under `/api/work-logs`) and project/task time logs (`TimeLog` under `/api/projects/:id/time-logs`). Should these two subsystems remain independent, or should daily work log totals be strictly reconciled against the sum of project time logs for the same day?
+    - **Current Implementation**: In Step 10d, the two subsystems operate independently. Both enforce a separate daily 24-hour total cap per user per calendar day (UTC date string in `Asia/Kathmandu`), and project time logs enforce an additional constraint that logged entries cannot be dated more than 90 days in the past or more than 1 day in the future. Step 10e will explore linking work logs to project tasks. Reconciliation policies (e.g. flagging variances between attendance/work logs and project billable hours) remain an open leadership decision.
+
+29. **Time-Log Modification and Deletion Time Window**
+    - **Question**: What is the allowable time window for employees to edit or delete their logged time entries on project tasks? Should retroactive edits be blocked after a certain duration (e.g. 24 hours, 7 days, or end of payroll period)?
+    - **Current Implementation**: In Step 10d, members may edit or delete their own time logs (`PATCH` or `DELETE /api/projects/:id/time-logs/:timeLogId`) provided the log belongs to the project in the URL and the daily 24-hour cap is not exceeded. There is currently no retroactive cutoff window (other than the general -90 days to +1 day creation constraint). A future administrative setting (e.g. `timelog.editWindowHours`) could lock entries once approved by a project manager or after payroll processing.
+
+30. **Logging Time on Completed or On-Hold Projects**
+    - **Question**: Should team members be permitted to log hours against projects that are currently in `complete` or `on_hold` status, or should logging time be strictly restricted to `in_progress` and `planning` projects?
+    - **Current Implementation**: By default, logging time on `complete` or `on_hold` projects is allowed. Project members can log wrap-up hours, post-launch documentation, or retrospective time on completed projects without requiring managers to reopen project status. If leadership prefers to lock time logging on non-active projects, a configurable setting or status check can enforce this policy.

@@ -185,6 +185,8 @@ const mockDb: any = {
     updateMany: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
+    aggregate: vi.fn(),
+    groupBy: vi.fn(),
   },
 };
 

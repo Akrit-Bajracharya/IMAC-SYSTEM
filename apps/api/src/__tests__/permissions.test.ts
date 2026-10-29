@@ -219,6 +219,24 @@ describe('Permissions - can() policy matrix', () => {
     });
   });
 
+  describe('time log permissions across all 5 system roles (Step 10d)', () => {
+    it('allows timeLog:read for all 5 roles', () => {
+      for (const role of ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'timeLog:read'), `${role} should have timeLog:read`).toBe(true);
+      }
+    });
+
+    it('allows timeLog:write for system_admin, project_manager, hr_admin, employee, but DENIES viewer', () => {
+      for (const role of ['system_admin', 'project_manager', 'hr_admin', 'employee'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'timeLog:write'), `${role} should have timeLog:write`).toBe(true);
+      }
+      const v = createUserWithRole('viewer');
+      expect(can(v, 'timeLog:write'), 'viewer must NOT have timeLog:write').toBe(false);
+    });
+  });
+
   describe('unrecognized action fallback', () => {
     const admin = createUserWithRole('system_admin');
 

@@ -19,6 +19,10 @@ import { createAuditEntry } from '../services/auditLog.js';
 import { isValidUuid } from '../services/projectAccess.js';
 import { tasksRouter } from './tasks.js';
 import { milestonesRouter } from './milestones.js';
+import { timeLogsRouter } from './timeLogs.js';
+import { calculateProjectProgress } from '../services/projectProgress.js';
+import { getKathmanduTodayDateString } from '../services/workLog.js';
+import { resolveProjectAccess } from '../services/projectAccess.js';
 
 export const projectsRouter = Router();
 
@@ -28,6 +32,7 @@ projectsRouter.use(requirePasswordChanged);
 
 projectsRouter.use('/:id/tasks', tasksRouter);
 projectsRouter.use('/:id/milestones', milestonesRouter);
+projectsRouter.use('/:id/time-logs', timeLogsRouter);
 
 
 /**
@@ -785,6 +790,217 @@ projectsRouter.post(
       projectId: req.params.id,
       status: toStatus,
       event: transactionResult.statusEvent,
+    });
+  }),
+);
+
+
+/**
+ * GET /api/projects/:id/summary
+ * Membership-scoped project summary with status, progress, task counts, overdue/blocked, hours and upcoming milestones.
+ * system_admin who is not a member can read.
+ */
+projectsRouter.get(
+  '/:id/summary',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'project:read')) {
+      return res.status(403).json({ error: 'forbidden', message: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params['id'] as string;
+    const access = await resolveProjectAccess(projectId, req.user!);
+    if (access.notFound) {
+      return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
+    }
+
+    // Tasks for progress, counts, overdue/blocked, estimated hours
+    const tasks = await db.task.findMany({
+      where: { projectId },
+      select: {
+        id: true,
+        status: true,
+        dueDate: true,
+        estimatedHours: true,
+        parentTaskId: true,
+      },
+    });
+
+    const progress = calculateProjectProgress(tasks as any);
+
+    const todayStr = getKathmanduTodayDateString();
+    const todayUtc = parseDateOnlyUtc(todayStr);
+
+    const taskCounts = {
+      todo: 0,
+      in_progress: 0,
+      blocked: 0,
+      done: 0,
+    };
+
+    let overdueCount = 0;
+    let blockedCount = 0;
+    let totalEstimated = 0;
+
+    for (const t of tasks) {
+      if (t.status in taskCounts) {
+        taskCounts[t.status as keyof typeof taskCounts]++;
+      }
+      if (t.status === 'blocked') {
+        blockedCount++;
+      }
+      if (t.dueDate && t.dueDate < todayUtc && t.status !== 'done') {
+        overdueCount++;
+      }
+      if (t.estimatedHours) {
+        totalEstimated += t.estimatedHours;
+      }
+    }
+
+    const loggedAggregate = await db.timeLog.aggregate({
+      where: { projectId },
+      _sum: {
+        hours: true,
+      },
+    });
+    const totalLogged = loggedAggregate._sum.hours ?? 0;
+
+    const upcomingMilestones = await db.milestone.findMany({
+      where: {
+        projectId,
+        completedAt: null,
+      },
+      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        dueDate: true,
+      },
+    });
+
+    return res.status(200).json({
+      status: access.project!.status,
+      progress,
+      taskCounts,
+      overdueCount,
+      blockedCount,
+      hours: {
+        estimated: Math.round(totalEstimated * 100) / 100,
+        logged: Math.round(totalLogged * 100) / 100,
+      },
+      upcomingMilestones,
+    });
+  }),
+);
+
+/**
+ * GET /api/projects/:id/workload
+ * Membership-scoped project workload query per member and bucket for unassigned/departed assignees.
+ * loggedHours per person only for managers/admin; other members see their own row value and null for others.
+ */
+projectsRouter.get(
+  '/:id/workload',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'project:read')) {
+      return res.status(403).json({ error: 'forbidden', message: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params['id'] as string;
+    const access = await resolveProjectAccess(projectId, req.user!);
+    if (access.notFound) {
+      return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
+    }
+
+    const members = await db.projectMember.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+
+    const openTasks = await db.task.findMany({
+      where: {
+        projectId,
+        status: { not: 'done' },
+      },
+      select: {
+        id: true,
+        assigneeUserId: true,
+        estimatedHours: true,
+      },
+    });
+
+    const timeLogsGroup = await db.timeLog.groupBy({
+      by: ['userId'],
+      where: { projectId },
+      _sum: {
+        hours: true,
+      },
+    });
+
+    const loggedMap = new Map<string, number>();
+    for (const tl of timeLogsGroup) {
+      loggedMap.set(tl.userId, tl._sum.hours ?? 0);
+    }
+
+    const activeMemberUserIds = new Set(members.map((m) => m.userId));
+    const openTasksCountMap = new Map<string, number>();
+    const estimatedHoursMap = new Map<string, number>();
+
+    let unassignedOrDepartedCount = 0;
+    let unassignedOrDepartedEstimated = 0;
+
+    for (const t of openTasks) {
+      if (t.assigneeUserId && activeMemberUserIds.has(t.assigneeUserId)) {
+        openTasksCountMap.set(
+          t.assigneeUserId,
+          (openTasksCountMap.get(t.assigneeUserId) ?? 0) + 1,
+        );
+        estimatedHoursMap.set(
+          t.assigneeUserId,
+          (estimatedHoursMap.get(t.assigneeUserId) ?? 0) + (t.estimatedHours ?? 0),
+        );
+      } else {
+        unassignedOrDepartedCount++;
+        unassignedOrDepartedEstimated += t.estimatedHours ?? 0;
+      }
+    }
+
+    const canSeeAllLogged = access.isManager || access.isSystemAdmin;
+
+    const memberWorkload = members.map((m) => {
+      const logged = loggedMap.get(m.userId) ?? 0;
+      let userLoggedHours: number | null = null;
+      if (canSeeAllLogged) {
+        userLoggedHours = Math.round(logged * 100) / 100;
+      } else if (m.userId === req.user!.id) {
+        userLoggedHours = Math.round(logged * 100) / 100;
+      }
+
+      return {
+        userId: m.userId,
+        displayName: m.user.displayName,
+        username: m.user.username,
+        projectRole: m.projectRole,
+        openTasksCount: openTasksCountMap.get(m.userId) ?? 0,
+        estimatedHours: Math.round((estimatedHoursMap.get(m.userId) ?? 0) * 100) / 100,
+        loggedHours: userLoggedHours,
+      };
+    });
+
+    return res.status(200).json({
+      members: memberWorkload,
+      unassignedOrDeparted: {
+        openTasksCount: unassignedOrDepartedCount,
+        estimatedHours: Math.round(unassignedOrDepartedEstimated * 100) / 100,
+      },
     });
   }),
 );

@@ -1,5 +1,6 @@
 import { db } from '../db.js';
 import type { AuthUser, ProjectRole } from '@imac/shared';
+import type { Project, ProjectMember } from '@prisma/client';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -11,8 +12,8 @@ export function isValidUuid(id: string | undefined | null): boolean {
 export interface ProjectAccessResult {
   notFound?: boolean;
   message?: string;
-  project?: any;
-  member?: any;
+  project?: Project;
+  member?: ProjectMember | null;
   isSystemAdmin?: boolean;
   isManager?: boolean;
   isMember?: boolean;
@@ -63,6 +64,7 @@ export async function resolveProjectAccess(
   });
 
   if (!member) {
+    // Return 404 to avoid leaking project existence to non-members
     return { notFound: true, message: 'Project not found' };
   }
 
@@ -87,6 +89,11 @@ export type TaskAction = 'create' | 'edit' | 'changeStatus' | 'manageDependencie
  *   - change status of tasks assigned to them
  *   - manage dependencies on tasks they could edit (dependent taskId)
  * - Project viewers are strictly read-only.
+ *
+ * Fail-Closed Invariants (Step 10d):
+ * - After system-admin and manager checks, missing or empty userId returns false.
+ * - For member branches other than create, missing task returns false.
+ * - undefined === undefined can never match (explicit boolean coercion on non-empty IDs).
  */
 export function canEditTask(
   projectRole: ProjectRole | undefined,
@@ -101,15 +108,24 @@ export function canEditTask(
   if (!projectRole || projectRole === 'viewer') {
     return false;
   }
+  if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    return false;
+  }
   if (projectRole === 'member') {
     if (action === 'create') {
       return true;
     }
+    if (!task) {
+      return false;
+    }
+    const isCreator = Boolean(task.createdByUserId && task.createdByUserId === userId);
+    const isAssignee = Boolean(task.assigneeUserId && task.assigneeUserId === userId);
+
     if (action === 'edit' || action === 'manageDependencies') {
-      return task?.createdByUserId === userId || task?.assigneeUserId === userId;
+      return isCreator || isAssignee;
     }
     if (action === 'changeStatus') {
-      return task?.assigneeUserId === userId;
+      return isAssignee;
     }
   }
   return false;

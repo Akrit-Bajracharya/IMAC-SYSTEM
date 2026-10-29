@@ -540,4 +540,95 @@ Across all APIs in the IMAC Operations System:
   - Task entities are immutable with respect to deletion (no `DELETE` endpoint; canceled status used for discarded tasks).
 
 ### 4. Next Steps
-- **Step 10d**: Time logs, project messages, progress calculation, overdue/blocked reports, and linking `WorkLogEntry.projectId`/`taskId`.
+- **Step 10d**: Time logs, progress calculation, workload & summary queries, access hardening, and route inventory verification — COMPLETED.
+- **Step 10e**: Linking daily work logs to projects/tasks (`WorkLogEntry.projectId`/`taskId`) following plan approval.
+
+---
+
+## Current Milestone: Step 10d — Time Logs, Progress Calculation, Workload Queries, Access Hardening, and Route Inventory (Backend Only) — COMPLETED
+
+### 1. What Was Built
+- **Access Hardening & Strict Typing (`apps/api/src/services/projectAccess.ts`)**:
+  - `ProjectAccessResult` strongly typed: replaces loose `any` with Prisma types `{ project: Project | null; member: ProjectMember | null }`.
+  - `canEditTask` fail-closed security enforcement: signature `(projectRole, isSystemAdmin, action, task, userId)`. Missing `userId`, whitespace-only `userId`, or missing `task` on member branches fails closed immediately (`false`). Strict boolean coercion ensures `undefined === undefined` can never evaluate to `true`.
+  - Comprehensive unit tests in `apps/api/src/__tests__/projectAccess.test.ts` (7 tests).
+- **Central Permissions Matrix (`apps/api/src/lib/permissions.ts`)**:
+  - Added actions: `timeLog:read`, `timeLog:write`.
+  - System-level defaults: `system_admin`, `project_manager`, `employee`, and `hr_admin` hold actions; `viewer` denied.
+  - Handler-level scoping enforces that time logging requires physical project membership (system administrators without project membership receive 404).
+  - Updated permissions tests in `apps/api/src/__tests__/permissions.test.ts` (28 tests).
+- **Pure Project Progress Calculation Service (`apps/api/src/services/projectProgress.ts` & `docs/project-progress.md`)**:
+  - Pure function `calculateProjectProgress(tasks)` computes completion percentage from leaf tasks (`subtasks.length === 0`).
+  - Tasks without subtasks contribute to the total; parent tasks are containers.
+  - Zero leaf tasks returns progress `0`.
+  - Formula: `round((doneLeafTasks / totalLeafTasks) * 100)`.
+  - Strategy map `projectProgressStrategies` with default strategy `'leaf_done_ratio'` allows easy swapping to weighted or hour-based progress calculations in future phases without touching callers.
+  - Architectural documentation recorded in `docs/project-progress.md`.
+  - Pure unit tests in `apps/api/src/__tests__/projectProgress.test.ts` (6 tests).
+- **Shared Validation Schemas (`packages/shared/src/schemas/timeLog.ts` & `packages/shared/src/index.ts`)**:
+  - `createTimeLogSchema`: `.strict()`, validated UUID `taskId`, duration in hours (`0.25` to `24`, step `0.25`), date string (`YYYY-MM-DD`), optional trimmed note (1-1000 chars).
+  - `patchTimeLogSchema`: `.strict()`, requires at least one field, allows updating `hours`, `workDate`, or nullable `note`.
+  - `listTimeLogsQuerySchema`: limit (default 50, max 100), optional UUID cursor, optional UUID `taskId`, optional UUID `userId`, optional date range (`startDate`, `endDate`).
+  - Compiled cleanly to `packages/shared/dist/index.js`.
+- **Time Logs Router (`apps/api/src/routes/timeLogs.ts`)**:
+  - Mounted at `/api/projects/:id/time-logs` with `Router({ mergeParams: true })`.
+  - `POST /`: Enforces project membership (even for `system_admin`); verifies target task belongs to URL project (404); restricts `workDate` to [-90 days, +1 day] relative to current date in `Asia/Kathmandu`; takes transaction-level PostgreSQL advisory lock `SELECT pg_advisory_xact_lock(hashtext($1))` scoped to `userId:workDate`; enforces 24-hour daily total cap; creates time log; audits event `time_log.created` omitting confidential note text from audit metadata.
+  - `GET /`: Scoped visibility: `system_admin` and project managers see all project time logs; members and project viewers see only their own entries. Non-managers passing another member's `userId` receive 403. Ordered by `workDate: 'desc', createdAt: 'desc', id: 'desc'` with cursor pagination.
+  - `PATCH /:timeLogId`: Verifies time log exists and belongs to URL project (404); enforces ownership check (only the creator can edit their time log, 403); validates [-90 days, +1 day] date window; takes advisory xact lock and re-validates 24-hour daily cap excluding the record being edited; audits `time_log.updated` (omitting note text).
+  - `DELETE /:timeLogId`: Verifies project match (404) and ownership (403); deletes record; audits `time_log.deleted`.
+  - Comprehensive unit tests in `apps/api/src/__tests__/timeLogs.test.ts` (16 tests).
+- **Project Query Endpoints (`apps/api/src/routes/projects.ts` & `apps/api/src/routes/tasks.ts`)**:
+  - Mounted fixed sub-routes (`/overdue` and `/blocked`) BEFORE `/:taskId` parameter route to prevent routing collisions.
+  - `GET /api/projects/:id/tasks/overdue`: returns non-done tasks with `dueDate < today` (in `Asia/Kathmandu`).
+  - `GET /api/projects/:id/tasks/blocked`: returns tasks with `status === 'blocked'`.
+  - `GET /api/projects/:id/summary`: returns project metadata, progress (`calculateProjectProgress`), task counts by status (`todo`, `in_progress`, `blocked`, `done`), milestone progress (completed count / total count), and total logged hours via database aggregation.
+  - `GET /api/projects/:id/workload`: groups tasks by assignee; returns active member task counts (todo, in_progress, blocked, done, total); masks `loggedHours` (visible only to managers and admin; regular members see only their own logged hours and `null` for others); includes `unassigned` task bucket and `departedMembers` task bucket for open tasks assigned to users who are no longer on the project.
+  - Integration tests in `apps/api/src/__tests__/projectQueries.test.ts` (9 tests).
+- **Route Inventory Test Suite (`apps/api/src/__tests__/routeInventory.test.ts`)**:
+  - Exhaustively enumerates all 30 routes registered under `/api/projects`:
+    - 9 Project routes (`POST /`, `GET /`, `GET /:id`, `PATCH /:id`, `POST /:id/members`, `DELETE /:id/members/:userId`, `POST /:id/status`, `GET /:id/summary`, `GET /:id/workload`)
+    - 12 Task routes (`GET /`, `POST /`, `GET /overdue`, `GET /blocked`, `GET /:taskId`, `PATCH /:taskId`, `POST /:taskId/status`, `POST /:taskId/dependencies`, `DELETE /:taskId/dependencies/:dependsOnTaskId`, `GET /:taskId/comments`, `POST /:taskId/comments`, `PATCH /:taskId/comments/:commentId`)
+    - 5 Milestone routes (`GET /`, `POST /`, `PATCH /:milestoneId`, `POST /:milestoneId/complete`, `POST /:milestoneId/reopen`)
+    - 4 TimeLog routes (`POST /`, `GET /`, `PATCH /:timeLogId`, `DELETE /:timeLogId`)
+  - Asserts 401 unauthenticated for all 30 routes.
+  - Asserts 404 for authenticated non-members (`project_manager`) with empty body `{}` across all 28 project-scoped routes.
+  - 59 total tests in `routeInventory.test.ts`.
+- **Policy Documentation Updates (`docs/open-policy-questions.md`)**:
+  - Question 25 corrected: removed mention of `canceled` status (valid statuses are `todo`, `in_progress`, `blocked`, `done`).
+  - Question 28 added: Dual time entry (work logs vs project time logs and reconciliation).
+  - Question 29 added: Time-log modification and deletion time window.
+  - Question 30 added: Logging time on complete or on_hold projects (default: allowed).
+
+### 2. Verification & Test Results
+- **Automated Test Suite**:
+  - Vitest test suite (`apps/api`): 14 test files, **442 passing tests (0 failures)**:
+    - `src/__tests__/routeInventory.test.ts`: 59 tests passed
+    - `src/__tests__/tasks.test.ts`: 73 tests passed
+    - `src/__tests__/security.test.ts`: 51 tests passed
+    - `src/__tests__/projects.test.ts`: 48 tests passed
+    - `src/__tests__/workLogs.test.ts`: 45 tests passed
+    - `src/__tests__/workRoles.test.ts`: 40 tests passed
+    - `src/__tests__/permissions.test.ts`: 28 tests passed
+    - `src/__tests__/usersAdmin.test.ts`: 25 tests passed
+    - `src/__tests__/workLogExport.test.ts`: 22 tests passed
+    - `src/__tests__/timeLogs.test.ts`: 16 tests passed
+    - `src/__tests__/auth.test.ts`: 13 tests passed
+    - `src/__tests__/projectQueries.test.ts`: 9 tests passed
+    - `src/__tests__/projectAccess.test.ts`: 7 tests passed
+    - `src/__tests__/projectProgress.test.ts`: 6 tests passed
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+
+### 3. What is Untested & Assumptions
+- **Untested via Vitest (Mock-Based Limitations)**:
+  - Mocked `$queryRaw` verifying `pg_advisory_xact_lock(hashtext(...))` ensures the lock acquisition SQL is issued within the transaction, but unit test mocks cannot simulate physical multi-connection lock contention or race conditions under high concurrent volume.
+  - Vitest mocks cannot simulate physical database-level foreign key cascading or race conditions on simultaneous time log deletion and retrieval.
+- **Assumptions**:
+  - Logging time on `complete` and `on_hold` projects is permitted by default (policy question 30).
+  - Time logs and work logs remain separate without automatic mutual reconciliation until Step 10e/future policy (policy question 28).
+  - There is no retroactive time-window cutoff for editing own time logs within the [-90 days, +1 day] creation window (policy question 29).
+
+### 4. Next Steps
+- **Step 10e**: Work Log linking to projects (`WorkLogEntry.projectId` and `WorkLogEntry.taskId`) following plan approval.

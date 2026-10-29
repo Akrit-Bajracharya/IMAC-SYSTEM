@@ -325,6 +325,138 @@ tasksRouter.post(
  * 3. GET /api/projects/:id/tasks/:taskId
  * Task detail.
  */
+/**
+ * 2a. GET /api/projects/:id/tasks/overdue
+ * List overdue tasks (dueDate < today in Asia/Kathmandu and status != 'done').
+ * Placed BEFORE /:taskId to prevent path parameter collision.
+ */
+tasksRouter.get(
+  '/overdue',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'task:read')) {
+      return res.status(403).json({ error: 'forbidden', message: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params['id'] as string;
+    const access = await resolveProjectAccess(projectId, req.user!);
+    if (access.notFound) {
+      return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
+    }
+
+    const limitParam = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 50;
+    const limit = Number.isInteger(limitParam) && limitParam >= 1 && limitParam <= 100 ? limitParam : 50;
+    const cursor = req.query['cursor'] as string | undefined;
+
+    if (cursor && !isValidUuid(cursor)) {
+      return res.status(400).json({ error: 'validation_error', message: 'Invalid cursor format' });
+    }
+
+    const todayStr = getKathmanduTodayDateString();
+    const todayUtc = parseDateOnlyUtc(todayStr);
+
+    const where: any = {
+      projectId,
+      status: { not: 'done' },
+      dueDate: { lt: todayUtc },
+    };
+
+    if (cursor) {
+      const cursorTask = await db.task.findFirst({
+        where: { id: cursor, ...where },
+      });
+      if (!cursorTask) {
+        return res.status(400).json({ error: 'invalid_cursor', message: 'Cursor not found in overdue tasks' });
+      }
+    }
+
+    const takeCount = limit + 1;
+    const tasks = await db.task.findMany({
+      where,
+      take: takeCount,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        milestone: { select: { id: true, name: true } },
+        assigneeUser: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+
+    const hasMore = tasks.length > limit;
+    const items = hasMore ? tasks.slice(0, limit) : tasks;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]!.id : null;
+
+    return res.status(200).json({
+      items,
+      nextCursor,
+      hasMore,
+    });
+  }),
+);
+
+/**
+ * 2b. GET /api/projects/:id/tasks/blocked
+ * List blocked tasks (status == 'blocked').
+ * Placed BEFORE /:taskId to prevent path parameter collision.
+ */
+tasksRouter.get(
+  '/blocked',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'task:read')) {
+      return res.status(403).json({ error: 'forbidden', message: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params['id'] as string;
+    const access = await resolveProjectAccess(projectId, req.user!);
+    if (access.notFound) {
+      return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
+    }
+
+    const limitParam = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 50;
+    const limit = Number.isInteger(limitParam) && limitParam >= 1 && limitParam <= 100 ? limitParam : 50;
+    const cursor = req.query['cursor'] as string | undefined;
+
+    if (cursor && !isValidUuid(cursor)) {
+      return res.status(400).json({ error: 'validation_error', message: 'Invalid cursor format' });
+    }
+
+    const where: any = {
+      projectId,
+      status: 'blocked',
+    };
+
+    if (cursor) {
+      const cursorTask = await db.task.findFirst({
+        where: { id: cursor, ...where },
+      });
+      if (!cursorTask) {
+        return res.status(400).json({ error: 'invalid_cursor', message: 'Cursor not found in blocked tasks' });
+      }
+    }
+
+    const takeCount = limit + 1;
+    const tasks = await db.task.findMany({
+      where,
+      take: takeCount,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        milestone: { select: { id: true, name: true } },
+        assigneeUser: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+
+    const hasMore = tasks.length > limit;
+    const items = hasMore ? tasks.slice(0, limit) : tasks;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]!.id : null;
+
+    return res.status(200).json({
+      items,
+      nextCursor,
+      hasMore,
+    });
+  }),
+);
+
 tasksRouter.get(
   '/:taskId',
   asyncHandler(async (req: AuthRequest, res: Response) => {
