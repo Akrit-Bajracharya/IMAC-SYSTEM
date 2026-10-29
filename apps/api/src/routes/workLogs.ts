@@ -25,6 +25,9 @@ import {
   parseDateOnlyUtc,
   validateAssignedWorkRoles,
   calculateTotalHours,
+  validateWorkLogEntriesProjectAndTask,
+  enrichWorkLogsWithProjectAndTask,
+  enrichSingleWorkLogWithProjectAndTask,
 } from '../services/workLog.js';
 import { getWorkLogPolicies } from '../services/workLogPolicies.js';
 import {
@@ -80,8 +83,9 @@ workLogsRouter.get(
     const standardShiftHours = profile.standardShiftHours ?? 8;
     const totalHours = log ? calculateTotalHours(log.entries) : 0;
 
+    const enrichedLog = await enrichSingleWorkLogWithProjectAndTask(log as any, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
-      workLog: log ?? null,
+      workLog: enrichedLog,
       totalHours,
       standardShiftHours,
       warnings: [],
@@ -133,8 +137,9 @@ workLogsRouter.get(
 
     const standardShiftHours = profile.standardShiftHours ?? 8;
 
+    const enrichedLogs = await enrichWorkLogsWithProjectAndTask(logs, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
-      workLogs: logs,
+      workLogs: enrichedLogs,
       standardShiftHours,
       warnings: [],
     });
@@ -185,8 +190,9 @@ workLogsRouter.get(
 
     const standardShiftHours = profile.standardShiftHours ?? 8;
 
+    const enrichedLogs = await enrichWorkLogsWithProjectAndTask(logs, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
-      workLogs: logs,
+      workLogs: enrichedLogs,
       standardShiftHours,
       warnings: [],
     });
@@ -416,8 +422,9 @@ workLogsRouter.get(
     const standardShiftHours = profile.standardShiftHours ?? 8;
     const totalHours = calculateTotalHours(log.entries);
 
+    const enrichedLog = await enrichSingleWorkLogWithProjectAndTask(log as any, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
-      workLog: log,
+      workLog: enrichedLog,
       totalHours,
       standardShiftHours,
       warnings: [],
@@ -459,6 +466,14 @@ workLogsRouter.post(
       return res.status(400).json({
         error: 'unassigned_work_role',
         message: `Work role ${rolesCheck.invalidRoleId} is not assigned to you`,
+      });
+    }
+
+    const projectTaskCheck = await validateWorkLogEntriesProjectAndTask(entries, req.user!.id, false);
+    if (!projectTaskCheck.valid) {
+      return res.status(400).json({
+        error: projectTaskCheck.errorCode,
+        message: projectTaskCheck.errorMessage,
       });
     }
 
@@ -547,9 +562,10 @@ workLogsRouter.post(
       const standardShiftHours = profile.standardShiftHours ?? 8;
       const totalHours = calculateTotalHours(entries);
 
+      const enrichedLog = await enrichSingleWorkLogWithProjectAndTask(log as any, req.user!.id, req.user!.systemRole);
       return res.status(existing ? 200 : 201).json({
         ok: true,
-        workLog: log,
+        workLog: enrichedLog,
         totalHours,
         standardShiftHours,
         warnings: [],
@@ -594,6 +610,14 @@ workLogsRouter.patch(
       return res.status(400).json({
         error: 'unassigned_work_role',
         message: `Work role ${rolesCheck.invalidRoleId} is not assigned to you`,
+      });
+    }
+
+    const projectTaskCheck = await validateWorkLogEntriesProjectAndTask(entries, req.user!.id, false);
+    if (!projectTaskCheck.valid) {
+      return res.status(400).json({
+        error: projectTaskCheck.errorCode,
+        message: projectTaskCheck.errorMessage,
       });
     }
 
@@ -722,9 +746,10 @@ workLogsRouter.patch(
     const standardShiftHours = profile.standardShiftHours ?? 8;
     const totalHours = calculateTotalHours(entries);
 
+    const enrichedLog = await enrichSingleWorkLogWithProjectAndTask((result as any).log, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
       ok: true,
-      workLog: result.log,
+      workLog: enrichedLog,
       totalHours,
       standardShiftHours,
       warnings: result.warnings ?? [],
@@ -860,9 +885,10 @@ workLogsRouter.post(
       },
     });
 
+    const enrichedUpdated = await enrichSingleWorkLogWithProjectAndTask(updatedLog, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
       ok: true,
-      workLog: updatedLog,
+      workLog: enrichedUpdated,
       totalHours,
       standardShiftHours,
       warnings,

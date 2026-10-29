@@ -6,3 +6,4 @@ export * from './schemas/workLog.js';
 export * from './schemas/project.js';
 export * from './schemas/task.js';
 export * from './schemas/timeLog.js';
+export * from './schemas/projectMessage.js';

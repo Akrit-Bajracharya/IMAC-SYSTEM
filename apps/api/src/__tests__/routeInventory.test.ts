@@ -22,9 +22,9 @@ import { db } from '../db.js';
 
 interface RouteDefinition {
   method: 'get' | 'post' | 'patch' | 'delete';
-  subsystem: 'projects' | 'tasks' | 'milestones' | 'timeLogs';
+  subsystem: 'projects' | 'tasks' | 'milestones' | 'timeLogs' | 'messages';
   routePattern: string;
-  buildPath: (projectId: string, extraIds: { taskId: string; userId: string; milestoneId: string; timeLogId: string }) => string;
+  buildPath: (projectId: string, extraIds: { taskId: string; userId: string; milestoneId: string; timeLogId: string; messageId: string }) => string;
   isProjectScoped: boolean;
 }
 
@@ -248,6 +248,43 @@ const PROJECT_ROUTES: RouteDefinition[] = [
     buildPath: (pId, { timeLogId }) => `/api/projects/${pId}/time-logs/${timeLogId}`,
     isProjectScoped: true,
   },
+
+  // ── Project Message Subsystem Endpoints ─────────────────────────────────────
+  {
+    method: 'post',
+    subsystem: 'messages',
+    routePattern: 'POST /api/projects/:id/messages',
+    buildPath: (pId) => `/api/projects/${pId}/messages`,
+    isProjectScoped: true,
+  },
+  {
+    method: 'get',
+    subsystem: 'messages',
+    routePattern: 'GET /api/projects/:id/messages',
+    buildPath: (pId) => `/api/projects/${pId}/messages`,
+    isProjectScoped: true,
+  },
+  {
+    method: 'post',
+    subsystem: 'messages',
+    routePattern: 'POST /api/projects/:id/messages/:messageId/pin',
+    buildPath: (pId, { messageId }) => `/api/projects/${pId}/messages/${messageId}/pin`,
+    isProjectScoped: true,
+  },
+  {
+    method: 'post',
+    subsystem: 'messages',
+    routePattern: 'POST /api/projects/:id/messages/:messageId/unpin',
+    buildPath: (pId, { messageId }) => `/api/projects/${pId}/messages/${messageId}/unpin`,
+    isProjectScoped: true,
+  },
+  {
+    method: 'post',
+    subsystem: 'messages',
+    routePattern: 'POST /api/projects/:id/messages/:messageId/to-task',
+    buildPath: (pId, { messageId }) => `/api/projects/${pId}/messages/${messageId}/to-task`,
+    isProjectScoped: true,
+  },
 ];
 
 describe('Step 10d: Route Inventory Test Suite', () => {
@@ -259,12 +296,14 @@ describe('Step 10d: Route Inventory Test Suite', () => {
   const validTaskId = '10101010-1010-4010-8010-101010101010';
   const validMilestoneId = '30303030-3030-4030-8030-303030303030';
   const validTimeLogId = '90909090-9090-4090-8090-909090909090';
+  const validMessageId = '50505050-5050-4050-8050-505050505050';
 
   const extraIds = {
     taskId: validTaskId,
     userId: targetUserId,
     milestoneId: validMilestoneId,
     timeLogId: validTimeLogId,
+    messageId: validMessageId,
   };
 
   const pmUser = {
@@ -293,8 +332,8 @@ describe('Step 10d: Route Inventory Test Suite', () => {
     vi.clearAllMocks();
   });
 
-  it('verifies that exactly 30 routes are registered under /api/projects', () => {
-    expect(PROJECT_ROUTES.length).toBe(30);
+  it('verifies that exactly 35 routes are registered under /api/projects', () => {
+    expect(PROJECT_ROUTES.length).toBe(35);
 
     // Count breakdown by subsystem
     const counts = PROJECT_ROUTES.reduce(
@@ -310,6 +349,7 @@ describe('Step 10d: Route Inventory Test Suite', () => {
       tasks: 12,
       milestones: 5,
       timeLogs: 4,
+      messages: 5,
     });
   });
 

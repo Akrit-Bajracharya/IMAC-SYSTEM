@@ -237,6 +237,33 @@ describe('Permissions - can() policy matrix', () => {
     });
   });
 
+  describe('project message permissions across all 5 system roles (Step 10e)', () => {
+    it('allows message:read for all 5 roles', () => {
+      for (const role of ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'message:read'), `${role} should have message:read`).toBe(true);
+      }
+    });
+
+    it('allows message:create for system_admin, project_manager, hr_admin, employee, but DENIES viewer', () => {
+      for (const role of ['system_admin', 'project_manager', 'hr_admin', 'employee'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'message:create'), `${role} should have message:create`).toBe(true);
+      }
+      const v = createUserWithRole('viewer');
+      expect(can(v, 'message:create'), 'viewer must NOT have message:create').toBe(false);
+    });
+
+    it('allows message:pin for system_admin, project_manager, hr_admin, employee, but DENIES viewer', () => {
+      for (const role of ['system_admin', 'project_manager', 'hr_admin', 'employee'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'message:pin'), `${role} should have message:pin`).toBe(true);
+      }
+      const v = createUserWithRole('viewer');
+      expect(can(v, 'message:pin'), 'viewer must NOT have message:pin').toBe(false);
+    });
+  });
+
   describe('unrecognized action fallback', () => {
     const admin = createUserWithRole('system_admin');
 

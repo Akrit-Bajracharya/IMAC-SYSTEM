@@ -828,3 +828,85 @@ Documented in `docs/open-policy-questions.md`:
 - **Schema & Migrations**: Zero schema changes; `prisma migrate dev` was not executed.
 - **Verification**: 442 passing tests across 14 test suites, clean typecheck, clean linting.
 - **Git Commit**: Not executed (per instruction). Ready for user review and commit.
+
+
+---
+
+## 14. Step 10e: Linking Daily Work Logs to Projects and Project Messages (Backend Only)
+
+### Task 10e-01: Daily Work Log Project/Task Linking & Project Messages Subsystem
+- **Date**: 2026-10-29
+- **Day of week**: Thursday
+- **Start time**: 08:25:00
+- **End time**: 08:44:00
+- **Step**: Step 10e (Finish two items missed in 10c and 10d. Backend only, no schema changes)
+- **Task performed**:
+  - Part A: Daily Work Log Project/Task Linking:
+    - Designed and implemented shared validation function `validateWorkLogEntriesProjectAndTask` in `apps/api/src/services/workLog.ts`.
+    - Called the validation function from all three write paths: `POST /api/work-logs`, `PATCH /api/work-logs/:id`, and `PATCH /api/admin/work-logs/:id/override`.
+    - Enforced validation rules: non-UUID projectId rejected with 400 `invalid_project`, non-existent project rejected with 400 `invalid_project`, non-member caller rejected with 400 `invalid_project` (admin override only requires project existence), taskId without projectId rejected with 400 `invalid_task`, non-existent or foreign task rejected with 400 `invalid_task`. Preserved backward compatibility for old logs with legacy free-text values on read.
+    - Added bounded resolution functions `enrichWorkLogsWithProjectAndTask` and `enrichSingleWorkLogWithProjectAndTask` to attach `projectName` and `taskTitle` to read and write responses (`GET /by-date`, `GET /by-week`, `GET /by-month`, `GET /:id`, `POST /`, `PATCH /:id`, `PATCH /override`, `POST /:id/submit`). Non-members receive `null` project/task names to prevent leakage.
+    - Implemented unit and integration tests in `apps/api/src/__tests__/workLogProjectLink.test.ts` (13 tests).
+  - Part B: Project Messages Subsystem:
+    - Added `message:read`, `message:create`, and `message:pin` actions to central permissions matrix in `apps/api/src/lib/permissions.ts` and updated `permissions.test.ts` (31 tests).
+    - Created shared schemas `createProjectMessageSchema` and `listProjectMessagesQuerySchema` in `packages/shared/src/schemas/projectMessage.ts`.
+    - Implemented messages router in `apps/api/src/routes/messages.ts` mounted at `/api/projects/:id/messages`:
+      - `POST /`: create message (viewers denied with 403, non-members 404).
+      - `GET /`: list messages (pinned first, then newest, cursor pagination).
+      - `POST /:messageId/pin` & `POST /:messageId/unpin`: pin/unpin message (managers and system_admin only, audited without message body).
+      - `POST /:messageId/to-task`: converts message into exactly ONE Task in a transaction under advisory lock `SELECT pg_advisory_xact_lock(hashtext('to-task:' || messageId))`; title from first line (trimmed to 200 chars), description from full body; caller must have task creation authority; second call returns 409 `already_converted`; audited without message body or description text.
+    - Implemented integration tests in `apps/api/src/__tests__/projectMessages.test.ts` (16 tests).
+  - Route Inventory:
+    - Added the 5 message routes to `apps/api/src/__tests__/routeInventory.test.ts`, expanding registered route inventory from 30 to 35 routes.
+    - Verified 401 unauthenticated across all 35 routes and 404 for non-members across all 33 project-scoped routes (69 tests).
+  - Monorepo Verification:
+    - Executed `npm run test`: 16 test suites passed, 484 total tests passed (0 failures).
+    - Executed `npm run lint`: clean (0 errors).
+    - Executed `npm run typecheck`: clean across all workspaces (0 errors).
+- **Files created or changed**:
+  - `packages/shared/src/schemas/projectMessage.ts` (created)
+  - `packages/shared/src/index.ts` (modified)
+  - `apps/api/src/lib/permissions.ts` (modified)
+  - `apps/api/src/services/workLog.ts` (modified)
+  - `apps/api/src/routes/workLogs.ts` (modified)
+  - `apps/api/src/routes/admin/workLogs.ts` (modified)
+  - `apps/api/src/routes/messages.ts` (created)
+  - `apps/api/src/routes/projects.ts` (modified)
+  - `apps/api/src/__tests__/permissions.test.ts` (modified)
+  - `apps/api/src/__tests__/workLogProjectLink.test.ts` (created)
+  - `apps/api/src/__tests__/projectMessages.test.ts` (created)
+  - `apps/api/src/__tests__/routeInventory.test.ts` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 16 test files passed, **484 total tests passed (0 failures)**:
+    - `src/__tests__/routeInventory.test.ts` (69 tests passed)
+    - `src/__tests__/tasks.test.ts` (73 tests passed)
+    - `src/__tests__/security.test.ts` (51 tests passed)
+    - `src/__tests__/projects.test.ts` (48 tests passed)
+    - `src/__tests__/workLogs.test.ts` (45 tests passed)
+    - `src/__tests__/workRoles.test.ts` (40 tests passed)
+    - `src/__tests__/permissions.test.ts` (31 tests passed)
+    - `src/__tests__/usersAdmin.test.ts` (25 tests passed)
+    - `src/__tests__/workLogExport.test.ts` (22 tests passed)
+    - `src/__tests__/projectMessages.test.ts` (16 tests passed)
+    - `src/__tests__/timeLogs.test.ts` (16 tests passed)
+    - `src/__tests__/workLogProjectLink.test.ts` (13 tests passed)
+    - `src/__tests__/auth.test.ts` (13 tests passed)
+    - `src/__tests__/projectQueries.test.ts` (9 tests passed)
+    - `src/__tests__/projectAccess.test.ts` (7 tests passed)
+    - `src/__tests__/projectProgress.test.ts` (6 tests passed)
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+  - `npm run lint`: clean across all workspaces (0 errors).
+- **Status**: done
+- **Decisions or problems**:
+  - Foreign key decoupling: Maintained `WorkLogEntry.projectId` and `taskId` as plain nullable string columns without schema migration, validating relationships in software.
+  - Leakage prevention on resolution: Caller membership is verified during name resolution; non-members receive null for `projectName` and `taskTitle`.
+  - Concurrency on to-task: Enforced single-task generation from a message using advisory transaction lock and audit trail record check, returning 409 `already_converted` on repeated conversions.
+  - Audit trail privacy: Snapshot omission ensures neither the message body nor task description is serialized to audit metadata.
+
+## Step 10e Summary & Verification
+- **Milestone**: Step 10e — Daily Work Log Project/Task Linking & Project Messages Subsystem (Backend Only).
+- **Scope Delivery**: Both sections A and B completed fully without schema changes.
+- **Verification**: 484 passing tests across 16 test suites, clean typecheck, clean linting.
+- **Git Commit**: Not executed (per instruction). Ready for user review and commit.

@@ -20,6 +20,7 @@ import { isValidUuid } from '../services/projectAccess.js';
 import { tasksRouter } from './tasks.js';
 import { milestonesRouter } from './milestones.js';
 import { timeLogsRouter } from './timeLogs.js';
+import { messagesRouter } from './messages.js';
 import { calculateProjectProgress } from '../services/projectProgress.js';
 import { getKathmanduTodayDateString } from '../services/workLog.js';
 import { resolveProjectAccess } from '../services/projectAccess.js';
@@ -33,6 +34,7 @@ projectsRouter.use(requirePasswordChanged);
 projectsRouter.use('/:id/tasks', tasksRouter);
 projectsRouter.use('/:id/milestones', milestonesRouter);
 projectsRouter.use('/:id/time-logs', timeLogsRouter);
+projectsRouter.use('/:id/messages', messagesRouter);
 
 
 /**

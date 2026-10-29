@@ -33,7 +33,10 @@ export type Action =
   | 'comment:write'
   | 'milestone:manage'
   | 'timeLog:read'
-  | 'timeLog:write';
+  | 'timeLog:write'
+  | 'message:read'
+  | 'message:create'
+  | 'message:pin';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
@@ -60,6 +63,7 @@ export function can(user: AuthUser, action: Action): boolean {
     case 'project:read':
     case 'task:read':
     case 'timeLog:read':
+    case 'message:read':
       return ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'].includes(role);
 
     // Architectural Note:
@@ -76,6 +80,8 @@ export function can(user: AuthUser, action: Action): boolean {
     case 'comment:write':
     case 'milestone:manage':
     case 'timeLog:write':
+    case 'message:create':
+    case 'message:pin':
       return ['system_admin', 'project_manager', 'employee', 'hr_admin'].includes(role);
 
     case 'user:create':

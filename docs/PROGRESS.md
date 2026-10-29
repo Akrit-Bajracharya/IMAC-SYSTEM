@@ -631,4 +631,81 @@ Across all APIs in the IMAC Operations System:
   - There is no retroactive time-window cutoff for editing own time logs within the [-90 days, +1 day] creation window (policy question 29).
 
 ### 4. Next Steps
-- **Step 10e**: Work Log linking to projects (`WorkLogEntry.projectId` and `WorkLogEntry.taskId`) following plan approval.
+- **Step 10e**: Work Log linking to projects (`WorkLogEntry.projectId` and `WorkLogEntry.taskId`) and Project Messages Subsystem — COMPLETED.
+- **Phase 2 / Next Phase**: Scheduled subsequent steps as directed by the Master Brief.
+
+---
+
+## Current Milestone: Step 10e — Daily Work Log Project/Task Linking & Project Messages Subsystem (Backend Only) — COMPLETED
+
+### 1. What Was Built
+- **Part A: Daily Work Log Linking to Real Projects (`WorkLogEntry.projectId` and `taskId`)**:
+  - `WorkLogEntry.projectId` and `taskId` remain plain nullable strings with NO database foreign keys.
+  - Single shared validation function `validateWorkLogEntriesProjectAndTask` in `apps/api/src/services/workLog.ts`, called uniformly across all three write paths:
+    1. `POST /api/work-logs`
+    2. `PATCH /api/work-logs/:id`
+    3. `PATCH /api/admin/work-logs/:id/override`
+  - Exact validation rules and error codes:
+    - `400 invalid_project`: Refuses free-text or non-UUID `projectId` on new writes; refuses non-existent project; refuses project where caller has no `ProjectMember` row (bypassed on admin override, which only requires the project to exist).
+    - `400 invalid_task`: Refuses `taskId` provided without `projectId`; refuses non-UUID `taskId`; refuses non-existent task; refuses task belonging to a different project.
+    - Free-text backward compatibility: Old logs containing historical free-text `projectId` strings load cleanly without errors or schema rejections.
+  - Bounded name resolution (`enrichWorkLogsWithProjectAndTask` & `enrichSingleWorkLogWithProjectAndTask`):
+    - Appends `projectName: string | null` and `taskTitle: string | null` to work log read responses (`GET /by-date`, `GET /by-week`, `GET /by-month`, `GET /:id`) and write responses (`POST /`, `PATCH /:id`, `PATCH /override`, `POST /:id/submit`).
+    - Non-member privacy invariant: If the caller is not a member of the project, `projectName` and `taskTitle` resolve to `null` so project metadata never leaks to non-members.
+    - Uses one bounded lookup per request (at most 3 batch queries total across all entries in the request).
+  - Integration tests in `apps/api/src/__tests__/workLogProjectLink.test.ts` (13 tests).
+- **Part B: Project Messages Subsystem (`/api/projects/:id/messages`)**:
+  - Shared schemas in `packages/shared/src/schemas/projectMessage.ts`:
+    - `createProjectMessageSchema`: body trimmed, 1 to 5000 characters, no empty or whitespace-only bodies.
+    - `listProjectMessagesQuerySchema`: limit (default 50, max 100), optional UUID cursor.
+    - Built and exported in `@imac/shared`.
+  - Permissions matrix updates in `apps/api/src/lib/permissions.ts`:
+    - Added actions: `message:read`, `message:create`, `message:pin`.
+    - Tested across all 5 system roles in `apps/api/src/__tests__/permissions.test.ts` (31 tests).
+  - Messages router (`apps/api/src/routes/messages.ts`) mounted at `/api/projects/:id/messages`:
+    - `POST /`: create message; project members with write rights; project viewers and system viewers refused with 403; non-members get 404.
+    - `GET /`: list messages; members only; ordered pinned first (`isPinned: 'desc'`), then newest (`createdAt: 'desc', id: 'desc'`); limit 50 with cursor pagination.
+    - `POST /:messageId/pin` & `POST /:messageId/unpin`: pin or unpin message; managers and `system_admin` only (members and viewers refused with 403); foreign messageId returns 404; malformed UUID returns 404; audited as `project_message.pinned` / `project_message.unpinned` WITHOUT message body text.
+    - `POST /:messageId/to-task`: converts message into exactly ONE Task in a single transaction; title derived from the first line trimmed to 200 characters; description from the message body; caller must have task creation authority (`canEditTask`); message stays; transactional advisory lock `SELECT pg_advisory_xact_lock(hashtext('to-task:' || messageId))` and audit log conversion check prevent duplication; second conversion attempt returns 409 `already_converted`; audited as `project_message.converted_to_task` and `task.created` WITHOUT message body or description text.
+  - Integration tests in `apps/api/src/__tests__/projectMessages.test.ts` (16 tests).
+- **Expanded Route Inventory Test Suite (`apps/api/src/__tests__/routeInventory.test.ts`)**:
+  - Expanded from 30 to 35 total registered routes under `/api/projects` (adding the 5 new message routes).
+  - 69 total automated tests asserting:
+    - 401 unauthenticated across all 35 routes.
+    - 404 for non-members across all 33 project-scoped routes.
+
+### 2. Verification & Test Results
+- **Automated Test Suite**:
+  - Vitest test suite (`apps/api`): 16 test files, **484 passing tests (0 failures)**:
+    - `src/__tests__/routeInventory.test.ts`: 69 tests passed
+    - `src/__tests__/tasks.test.ts`: 73 tests passed
+    - `src/__tests__/security.test.ts`: 51 tests passed
+    - `src/__tests__/projects.test.ts`: 48 tests passed
+    - `src/__tests__/workLogs.test.ts`: 45 tests passed
+    - `src/__tests__/workRoles.test.ts`: 40 tests passed
+    - `src/__tests__/permissions.test.ts`: 31 tests passed
+    - `src/__tests__/usersAdmin.test.ts`: 25 tests passed
+    - `src/__tests__/workLogExport.test.ts`: 22 tests passed
+    - `src/__tests__/projectMessages.test.ts`: 16 tests passed
+    - `src/__tests__/timeLogs.test.ts`: 16 tests passed
+    - `src/__tests__/workLogProjectLink.test.ts`: 13 tests passed
+    - `src/__tests__/auth.test.ts`: 13 tests passed
+    - `src/__tests__/projectQueries.test.ts`: 9 tests passed
+    - `src/__tests__/projectAccess.test.ts`: 7 tests passed
+    - `src/__tests__/projectProgress.test.ts`: 6 tests passed
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`, 0 errors).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint` (0 errors).
+
+### 3. What is Untested & Assumptions
+- **Untested via Vitest (Mock-Based Limitations)**:
+  - Mocked transaction advisory locks (`SELECT pg_advisory_xact_lock(...)`) verify the SQL statement is executed within the transaction, but unit test mocks cannot simulate physical multi-connection database lock contention or simultaneous racing threads.
+  - Physical foreign-key absence on `WorkLogEntry.projectId` and `taskId` is verified via application validation logic; live database stress testing under intentional foreign-key constraint violations was not run against live Postgres.
+- **Assumptions**:
+  - Pinned messages sort ahead of unpinned messages regardless of creation date; within pinned/unpinned groups, newest messages sort first.
+  - Turning a message into a task produces an independent task record in `todo` status with no assignee or milestone by default; managers can subsequently edit or assign the task.
+  - A message converted to a task cannot be converted again (returns 409 `already_converted`).
+
+### 4. Next Steps
+- Frontend screens and dashboard components for Projects, Tasks, Milestones, Time Logs, and Project Messages.

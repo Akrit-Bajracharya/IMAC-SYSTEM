@@ -15,6 +15,8 @@ import {
 import {
   validateActiveWorkRoles,
   calculateTotalHours,
+  validateWorkLogEntriesProjectAndTask,
+  enrichSingleWorkLogWithProjectAndTask,
 } from '../../services/workLog.js';
 
 export const adminWorkLogsRouter = Router();
@@ -42,6 +44,14 @@ adminWorkLogsRouter.patch(
       return res.status(400).json({
         error: 'invalid_work_role',
         message: `Work role ${rolesCheck.invalidRoleId} does not exist or is inactive`,
+      });
+    }
+
+    const projectTaskCheck = await validateWorkLogEntriesProjectAndTask(entries, req.user!.id, true);
+    if (!projectTaskCheck.valid) {
+      return res.status(400).json({
+        error: projectTaskCheck.errorCode,
+        message: projectTaskCheck.errorMessage,
       });
     }
 
@@ -113,9 +123,10 @@ adminWorkLogsRouter.patch(
 
     const totalHours = calculateTotalHours(entries);
 
+    const enrichedLog = await enrichSingleWorkLogWithProjectAndTask((result as any).log, req.user!.id, req.user!.systemRole);
     return res.status(200).json({
       ok: true,
-      workLog: result.log,
+      workLog: enrichedLog,
       totalHours,
       standardShiftHours: result.standardShiftHours,
       warnings: [],
