@@ -212,3 +212,11 @@ This document tracks unresolved policy, organizational, and operational decision
 33. **User Deactivation Impact on Project Management Continuity**
     - **Question**: When an administrator deactivates a user account (`User.isActive = false`), what happens if that user was the sole manager of one or more projects?
     - **Current Implementation**: User deactivation disables login, but project manager membership rows remain. Consequently, a project can be left without an active manager. System administrators retain universal manager privileges over all projects to remediate such situations, but leadership may consider adding an automated alert or manager reassignment requirement during user deactivation.
+
+34. **Manager or System Admin Modification/Deletion of Another Person's Project Time Log**
+    - **Question**: May a project manager or system_admin edit or delete another person's time log (`PATCH` or `DELETE /api/projects/:id/time-logs/:timeLogId`)?
+    - **Current Implementation**: Author only for everyone, including `system_admin` and project managers (current default: NO / author only). Non-authors receive HTTP 403 `forbidden` (`error: 'forbidden'`, message: 'You can only edit your own time logs' / 'You can only delete your own time logs'). Project viewers receive HTTP 403 `forbidden`. A future policy decision may evaluate whether managers require administrative correction rights over employee logged project hours.
+
+35. **Universal Manager-Level Access for System Administrators Across All Projects**
+    - **Question**: Should system administrators possess manager-level permissions across all projects automatically, even if they have not been added as a project member?
+    - **Current Implementation**: In `apps/api/src/services/projectAccess.ts`, `resolveProjectAccess` grants `system_admin` manager-level access on every project without requiring a `ProjectMember` membership row (`isSystemAdmin: true, isManager: true, isMember: true, projectRole: 'manager'`). All non-members with other roles (`hr_admin`, `project_manager`, `employee`, `viewer`) receive HTTP 404 Not Found to prevent project existence enumeration.

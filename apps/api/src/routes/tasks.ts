@@ -712,6 +712,19 @@ tasksRouter.delete(
     }
 
     await db.$transaction(async (tx) => {
+      // Find subtasks to count them and their cascading comments
+      const subtasks = await tx.task.findMany({
+        where: { parentTaskId: taskId },
+        select: { id: true },
+      });
+      const subtaskIds = subtasks.map((s: { id: string }) => s.id);
+      const allTaskIds = [taskId, ...subtaskIds];
+
+      const subtaskCount = subtasks.length;
+      const commentCount = await tx.comment.count({
+        where: { taskId: { in: allTaskIds } },
+      });
+
       await tx.task.delete({
         where: { id: taskId },
       });
@@ -726,6 +739,8 @@ tasksRouter.delete(
           beforeSnapshot: {
             title: task.title,
             projectId,
+            subtaskCount,
+            commentCount,
           },
         },
       });

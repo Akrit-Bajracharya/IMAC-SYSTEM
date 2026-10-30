@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -33,6 +33,8 @@ import { ProjectRoleBadge } from '../../components/projects/ProjectRoleBadge.js'
 import { EditProjectModal } from '../../components/projects/EditProjectModal.js';
 import { ChangeProjectStatusModal } from '../../components/projects/ChangeProjectStatusModal.js';
 import { AddProjectMemberModal } from '../../components/projects/AddProjectMemberModal.js';
+import { TasksTab } from '../../components/projects/TasksTab.js';
+import { MilestonesTabPlaceholder } from '../../components/projects/MilestonesTabPlaceholder.js';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal.js';
 import type { ProjectDetail, ProjectSummary, ProjectMember } from '../../types/index.js';
 
@@ -42,6 +44,16 @@ export function ProjectDetailPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = (searchParams.get('tab') as 'overview' | 'tasks' | 'milestones') || 'overview';
+
+  const handleTabChange = (newTab: 'overview' | 'tasks' | 'milestones') => {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set('tab', newTab);
+      return p;
+    });
+  };
 
   const basePath = user && ['system_admin', 'hr_admin'].includes(user.systemRole)
     ? '/admin/projects'
@@ -81,13 +93,20 @@ export function ProjectDetailPage() {
     retry: 1,
   });
 
+  // Determine caller project membership role
+  const callerProjectRole = useMemo(() => {
+    if (!user || !project) return undefined;
+    if (user.systemRole === 'system_admin') return 'manager' as const;
+    const myMembership = project.members.find((m) => m.userId === user.id);
+    return myMembership?.projectRole;
+  }, [user, project]);
+
   // Determine if caller is a project manager or system_admin
   const isManagerOrAdmin = useMemo(() => {
     if (!user || !project) return false;
     if (user.systemRole === 'system_admin') return true;
-    const myMembership = project.members.find((m) => m.userId === user.id);
-    return myMembership?.projectRole === 'manager';
-  }, [user, project]);
+    return callerProjectRole === 'manager';
+  }, [user, project, callerProjectRole]);
 
   // Existing member user IDs set
   const existingMemberUserIds = useMemo(() => {
@@ -288,8 +307,53 @@ export function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* Progress & Summary Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="flex space-x-6" aria-label="Tabs">
+          <button
+            type="button"
+            onClick={() => handleTabChange('overview')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+              currentTab === 'overview'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <FolderKanban className="w-4 h-4" />
+            <span>{t('projects.tabs.overview', 'Overview')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('tasks')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+              currentTab === 'tasks'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{t('projects.tabs.tasks', 'Tasks')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('milestones')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+              currentTab === 'milestones'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>{t('projects.tabs.milestones', 'Milestones')}</span>
+          </button>
+        </nav>
+      </div>
+
+      {/* Overview Tab Content */}
+      {currentTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Progress & Summary Dashboard */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Progress Bar Card */}
         <div className="border rounded-xl p-5 bg-card flex flex-col justify-between space-y-4">
           <div>
@@ -472,6 +536,22 @@ export function ProjectDetailPage() {
           </table>
         </div>
       </div>
+        </div>
+      )}
+
+      {/* Tasks Tab Content */}
+      {currentTab === 'tasks' && (
+        <TasksTab
+          project={project}
+          currentUser={user}
+          callerProjectRole={callerProjectRole}
+          isSystemAdmin={user?.systemRole === 'system_admin'}
+        />
+      )}
+
+      {currentTab === 'milestones' && (
+        <MilestonesTabPlaceholder project={project} />
+      )}
 
       {/* Edit Project Modal */}
       <EditProjectModal

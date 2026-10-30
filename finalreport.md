@@ -1130,3 +1130,34 @@ Documented in `docs/open-policy-questions.md`:
 - **Git Commit**: Not executed (per instruction). Ready for user review and commit.
 
 
+
+
+---
+
+## 18. Step 12b-1: Task Screens Part 1 (Backend Audits, Permission Matrix Tests, Tabs, Task List, Board & Create Task)
+
+### Task 12b-01: Backend Audit Count, Route Permission Matrix Test, Tasks Tab, List View, Board View & Create Task Modal
+- **Date**: 2026-10-30
+- **Day of week**: Friday
+- **Start time**: 12:31:00
+- **End time**: in_progress
+- **Step**: Step 12b-1 (Part 0 backend items 0.1-0.3, UI items 1.1-1.4)
+- **Task performed**:
+  - In `apps/api/src/routes/tasks.ts`, update `DELETE /api/projects/:id/tasks/:taskId` to count subtasks and cascade-deleted comments (on the task and its subtasks) within the transaction and include `subtaskCount` and `commentCount` in `task.deleted` audit `beforeSnapshot` without `description`.
+  - Add test in `apps/api/src/__tests__/tasks.test.ts` verifying `subtaskCount` and `commentCount` in the audit log and verifying `beforeSnapshot.description === undefined`.
+  - Create `apps/api/src/__tests__/projectRoutePermissions.test.ts` implementing the full mutating route permission matrix test with bidirectional Express router introspection and assertions for `system_admin`, project `manager`, project `member`, project `viewer`, non-member (`hr_admin` and system `project_manager`), malformed UUID, and unauthenticated callers with CSRF tokens and valid payloads.
+  - Remove unused `createAuditEntry` import in `apps/api/src/routes/projects.ts`.
+  - Update `docs/open-policy-questions.md` with Questions 34 and 35 regarding time-log editing/deletion by managers and system_admin universal project access.
+  - Update `apps/web/src/types/index.ts` and `apps/web/src/api/projects.ts` with task list and creation types/functions and read-only `fetchProjectMilestones`.
+  - Implement tab navigation in `apps/web/src/pages/projects/ProjectDetailPage.tsx` (Overview, Tasks, Milestones placeholder).
+  - Implement Task List view with filters (status, assignee, milestone, top-level only, overdue) and cursor pagination.
+  - Implement Task Board view with 4 status columns, "Move to" status transition control gated by `canEditTask('changeStatus')`, warnings display, and "Showing N tasks, load more" indicator without fabricated column counts.
+  - Implement Create Task modal with required fields, validation, and error handling.
+  - Add all English strings to `apps/web/src/i18n/locales/en.json`.
+- **Files created or changed**:
+  - in_progress
+- **Tests run with pass counts**:
+  - in_progress
+- **Status**: in_progress
+- **Decisions or problems**:
+  - in_progress

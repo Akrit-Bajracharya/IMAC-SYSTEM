@@ -178,6 +178,7 @@ export interface ProjectMemberUser {
   displayName: string;
   username: string;
   systemRole?: SystemRole;
+  isActive?: boolean;
 }
 
 export interface ProjectMember {
@@ -272,6 +273,44 @@ export interface ProjectTask {
   assigneeIsProjectMember?: boolean;
   milestone?: { id: string; name: string } | null;
   assigneeUser?: { id: string; displayName: string; username: string } | null;
+  _count?: {
+    subtasks: number;
+    comments: number;
+  };
+}
+
+export interface ProjectMilestone {
+  id: string;
+  projectId: string;
+  name: string;
+  dueDate: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateTaskPayload {
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  estimatedHours?: number | null;
+  assigneeUserId?: string | null;
+  milestoneId?: string | null;
+  parentTaskId?: string | null;
+}
+
+export interface PatchTaskPayload {
+  title?: string;
+  description?: string | null;
+  dueDate?: string | null;
+  estimatedHours?: number | null;
+  assigneeUserId?: string | null;
+  milestoneId?: string | null;
+}
+
+export interface ChangeTaskStatusResponse {
+  taskId: string;
+  status: TaskStatus;
+  warnings?: string[];
 }
 
 export interface ProjectTaskListResponse {

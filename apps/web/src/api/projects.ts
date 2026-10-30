@@ -6,6 +6,10 @@ import type {
   ProjectSummary,
   ProjectTaskListResponse,
   ProjectTask,
+  TaskStatus,
+  CreateTaskPayload,
+  ChangeTaskStatusResponse,
+  ProjectMilestone,
   CreateProjectPayload,
   PatchProjectPayload,
   ChangeProjectStatusPayload,
@@ -90,8 +94,12 @@ export async function fetchProjectSummary(id: string): Promise<ProjectSummary> {
 export interface ListProjectTasksParams {
   limit?: number;
   cursor?: string;
-  status?: string;
+  status?: TaskStatus;
+  assigneeUserId?: string;
+  milestoneId?: string;
+  parentTaskId?: string;
   topLevelOnly?: boolean;
+  overdue?: boolean;
 }
 
 export async function fetchProjectTasks(
@@ -102,12 +110,43 @@ export async function fetchProjectTasks(
   if (params?.limit) queryParams.set('limit', String(params.limit));
   if (params?.cursor) queryParams.set('cursor', params.cursor);
   if (params?.status) queryParams.set('status', params.status);
+  if (params?.assigneeUserId) queryParams.set('assigneeUserId', params.assigneeUserId);
+  if (params?.milestoneId) queryParams.set('milestoneId', params.milestoneId);
+  if (params?.parentTaskId) queryParams.set('parentTaskId', params.parentTaskId);
   if (params?.topLevelOnly !== undefined) queryParams.set('topLevelOnly', String(params.topLevelOnly));
+  if (params?.overdue !== undefined) queryParams.set('overdue', String(params.overdue));
 
   const url = queryParams.toString()
     ? `/projects/${projectId}/tasks?${queryParams.toString()}`
     : `/projects/${projectId}/tasks`;
   const res = await apiClient.get<ProjectTaskListResponse>(url);
+  return res.data;
+}
+
+export async function createTask(
+  projectId: string,
+  payload: CreateTaskPayload
+): Promise<ProjectTask> {
+  const res = await apiClient.post<ProjectTask>(`/projects/${projectId}/tasks`, payload);
+  return res.data;
+}
+
+export async function changeTaskStatus(
+  projectId: string,
+  taskId: string,
+  status: TaskStatus
+): Promise<ChangeTaskStatusResponse> {
+  const res = await apiClient.post<ChangeTaskStatusResponse>(
+    `/projects/${projectId}/tasks/${taskId}/status`,
+    { status }
+  );
+  return res.data;
+}
+
+export async function fetchProjectMilestones(
+  projectId: string
+): Promise<ProjectMilestone[]> {
+  const res = await apiClient.get<ProjectMilestone[]>(`/projects/${projectId}/milestones`);
   return res.data;
 }
 

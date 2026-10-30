@@ -77,7 +77,8 @@
     "required": "Required",
     "you": "You",
     "retry": "Retry",
-    "actions": "Actions"
+    "actions": "Actions",
+    "reload": "Reload"
   },
   "roles": {
     "system_admin": "System Admin",
@@ -636,6 +637,100 @@
         "viewerCannotWrite": "Users with system role viewer cannot be assigned as project manager or member."
       }
     },
-    "memberCount": "{{count}} members"
+    "memberCount": "{{count}} members",
+    "tabs": {
+      "overview": "Overview",
+      "tasks": "Tasks",
+      "milestones": "Milestones"
+    },
+    "tasks": {
+      "status": {
+        "todo": "To Do",
+        "inProgress": "In Progress",
+        "blocked": "Blocked",
+        "done": "Done"
+      },
+      "showingCount": "Showing {{count}} tasks",
+      "newTask": "New Task",
+      "subtask": "Subtask",
+      "unassigned": "Unassigned",
+      "overdueBadge": "Overdue",
+      "moveTo": "Move to",
+      "loadMore": "Load More Tasks",
+      "showingNote": "Showing {{loaded}} loaded tasks. {{moreNote}}",
+      "moreAvailable": "Additional tasks are available.",
+      "allLoaded": "All tasks loaded.",
+      "loading": "Loading tasks...",
+      "loadError": "Failed to load tasks",
+      "emptyTitle": "No tasks found",
+      "emptyDesc": "There are no tasks matching your selected filters. Create a new task or adjust your filters.",
+      "view": {
+        "list": "List",
+        "board": "Board"
+      },
+      "board": {
+        "emptyColumn": "No tasks"
+      },
+      "filters": {
+        "status": "Status",
+        "allStatuses": "All Statuses",
+        "assignee": "Assignee",
+        "allAssignees": "All Assignees",
+        "milestone": "Milestone",
+        "allMilestones": "All Milestones",
+        "topLevelOnly": "Top-level only",
+        "overdueOnly": "Overdue only"
+      },
+      "statusErrors": {
+        "openDependency": "Cannot mark task done while prerequisite dependencies are open.",
+        "conflictRetry": "Task was modified concurrently by another user. Please reload.",
+        "forbidden": "You do not have permission to change the status of this task.",
+        "notFound": "Task or project not found."
+      },
+      "statusWarnings": {
+        "completedWithNotice": "Task status updated, but please note:",
+        "openDependency": "Prerequisites are still open.",
+        "openSubtasks": "Subtasks are still open."
+      },
+      "create": {
+        "title": "Create New Task",
+        "titleRequired": "Task title is required.",
+        "titleTooLong": "Task title must be 200 characters or less.",
+        "hoursPositive": "Estimated hours must be greater than 0.",
+        "hoursQuarterStep": "Estimated hours must be in 0.25h increments.",
+        "hoursMax": "Estimated hours cannot exceed 1000h.",
+        "unassigned": "Unassigned",
+        "noMilestone": "No Milestone",
+        "noParentTask": "None (Top-level task)",
+        "parentTaskHelp": "Subtasks are limited to one level of nesting.",
+        "submitting": "Creating...",
+        "submit": "Create Task",
+        "fields": {
+          "title": "Title",
+          "description": "Description",
+          "dueDate": "Due Date",
+          "estimatedHours": "Estimated Hours",
+          "assignee": "Assignee",
+          "milestone": "Milestone",
+          "parentTask": "Parent Task (Optional)"
+        },
+        "placeholders": {
+          "title": "e.g. Implement user authentication",
+          "description": "Optional task details or acceptance criteria..."
+        },
+        "errors": {
+          "invalidAssignee": "Selected assignee is not an active member or has a viewer role.",
+          "invalidMilestone": "Selected milestone does not belong to this project.",
+          "invalidNesting": "Subtasks cannot be nested more than one level deep.",
+          "validation": "Validation failed. Please check form values.",
+          "forbidden": "You do not have permission to create tasks in this project.",
+          "generic": "Failed to create task."
+        }
+      }
+    },
+    "milestones": {
+      "placeholderTitle": "Milestone Management",
+      "placeholderNotice": "Milestone management is coming in the next step. Project milestones and their task dependencies will be manageable directly from this tab."
+    }
   }
 }

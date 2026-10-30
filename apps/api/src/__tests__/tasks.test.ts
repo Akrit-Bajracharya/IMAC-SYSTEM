@@ -2595,6 +2595,11 @@ it('returns warnings array with open_dependency and open_subtasks when completed
           description: 'Top secret description that must not be in audit log',
         } as any);
 
+        vi.mocked(db.task.findMany).mockResolvedValue([
+          { id: 'subtask-1' },
+          { id: 'subtask-2' },
+        ] as any);
+        vi.mocked(db.comment.count).mockResolvedValue(5);
         vi.mocked(db.task.delete).mockResolvedValue({ id: validTaskId } as any);
 
         const res = await request(app)
@@ -2606,6 +2611,9 @@ it('returns warnings array with open_dependency and open_subtasks when completed
         expect(res.body.deletedTaskId).toBe(validTaskId);
 
         expect(db.task.delete).toHaveBeenCalledWith({ where: { id: validTaskId } });
+        expect(db.comment.count).toHaveBeenCalledWith({
+          where: { taskId: { in: [validTaskId, 'subtask-1', 'subtask-2'] } },
+        });
         expect(db.auditLog.create).toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({
@@ -2615,13 +2623,17 @@ it('returns warnings array with open_dependency and open_subtasks when completed
               beforeSnapshot: {
                 title: 'Task to be deleted',
                 projectId: validProjectId,
+                subtaskCount: 2,
+                commentCount: 5,
               },
             }),
           }),
         );
-        // Verify description is strictly omitted
+        // Verify description is strictly omitted and counts are present
         const auditCallData = vi.mocked(db.auditLog.create).mock.calls[0]![0].data as any;
         expect(auditCallData.beforeSnapshot?.description).toBeUndefined();
+        expect(auditCallData.beforeSnapshot?.subtaskCount).toBe(2);
+        expect(auditCallData.beforeSnapshot?.commentCount).toBe(5);
       });
 
       it('allows system_admin to delete a task even if not a member', async () => {

@@ -16,7 +16,6 @@ import {
   type TaskStatus,
 } from '@imac/shared';
 import { parseDateOnlyUtc } from '../services/workLog.js';
-import { createAuditEntry } from '../services/auditLog.js';
 import { isValidUuid } from '../services/projectAccess.js';
 import { tasksRouter } from './tasks.js';
 import { milestonesRouter } from './milestones.js';
