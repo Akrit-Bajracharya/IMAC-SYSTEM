@@ -94,15 +94,37 @@
     "workingRemotely": "Remote"
   },
   "dashboard": {
+    "greeting": "Welcome, {{name}}!",
+    "subtitle": "IMAC Nepal Internal Operations Platform",
+    "quickLinks": "Quick Actions",
+    "todayWorkLog": "Today's Work Log",
+    "todayDate": "Today: {{date}}",
+    "hoursLogged": "{{logged}}h / {{expected}}h logged",
+    "notStarted": "Not started yet",
+    "openWorkLog": "Open Today's Log",
+    "noProfileTitle": "Administrative Account",
+    "noProfileDesc": "No employee profile is assigned to this account. Shift hour tracking and work logging apply to active staff profiles.",
+    "myProjects": "My Projects",
+    "viewAllProjects": "View All Projects",
+    "noProjects": "No projects found.",
+    "noProjectsAssigned": "You are not currently assigned to any projects.",
+    "links": {
+      "users": "Staff Accounts",
+      "workRoles": "Work Roles",
+      "projects": "Projects",
+      "directory": "Staff Directory",
+      "workLog": "Daily Work Log",
+      "history": "Work Log History",
+      "export": "Export Logs",
+      "settings": "System Settings"
+    },
     "admin": {
-      "title": "Admin Dashboard",
-      "welcome": "Welcome, {{name}}!",
-      "note": "Full dashboard coming in Phase 7."
+      "title": "Operations Dashboard",
+      "welcome": "Welcome, {{name}}!"
     },
     "employee": {
       "title": "Employee Dashboard",
-      "welcome": "Welcome, {{name}}!",
-      "note": "Full dashboard coming in Phase 7."
+      "welcome": "Welcome, {{name}}!"
     }
   },
   "admin": {
@@ -421,7 +443,9 @@
       "viewerNoTasks": "Tasks not available for project viewers",
       "legacyProject": "Legacy text:",
       "removeProjectLink": "Remove project link",
-      "title": "Daily Work Log"
+      "title": "Daily Work Log",
+      "subtitle": "Record and manage daily shift operations",
+      "statusBadge": "Status"
     },
     "history": {
       "pageTitle": "Work Log History & Summaries",
@@ -449,7 +473,8 @@
       "entriesCountColumn": "Entries",
       "overallTotal": "Overall Total Hours",
       "expectedTotal": "Expected Shift Hours",
-      "balance": "Net Difference"
+      "balance": "Net Difference",
+      "subtitle": "Review historical daily work logs"
     },
     "export": {
       "pageTitle": "Export Work Logs",
@@ -479,7 +504,8 @@
         "row_limit_exceeded": "The requested export exceeds the maximum allowed limit of 50,000 rows. Please narrow your date range or filters.",
         "too_many_requests": "Export rate limit reached (maximum 15 exports per 15 minutes). Please wait before trying again.",
         "generic": "Failed to export work logs."
-      }
+      },
+      "subtitle": "Export monthly or custom timesheet reports"
     }
   },
   "directory": {

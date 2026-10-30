@@ -1061,3 +1061,72 @@ Documented in `docs/open-policy-questions.md`:
 - **Verification**: 509 passing tests across 16 test suites, clean typecheck, clean linting, and successful web workspace production build.
 - **Git Commit**: Not executed (per instruction). Ready for user review and commit.
 
+
+---
+
+## 17. Step 12a-FIX: Projects Sidebar 404 Resolution, Dashboard Polish, Route Protection & Route-Table Test
+
+### Task 12a-02: Route Table Registration, Dashboard Replacement, Role Guarding & Route Table Vitest Suite
+- **Date**: 2026-10-30
+- **Day of week**: Friday
+- **Start time**: 09:18:00
+- **End time**: 09:33:00
+- **Step**: Step 12a-FIX (Projects sidebar 404 fix, dashboard replacement, route-table tests, route guarding)
+- **Task performed**:
+  - Investigated route table mismatch in `apps/web/src/router/index.tsx` causing 404 for `/admin/projects`, `/employee/projects`, and top-level redirects.
+  - Registered `projects` (`ProjectListPage`) and `projects/:id` (`ProjectDetailPage`) under `AdminLayout` child routes.
+  - Registered `projects` (`ProjectListPage`) and `projects/:id` (`ProjectDetailPage`) under `EmployeeLayout` child routes.
+  - Registered top-level `/projects` and `/projects/:id` redirects with role-based routing (`system_admin` -> `/admin/projects`, other roles -> `/employee/projects`).
+  - Added route guard verification test proving non-admin accessing `/admin/projects` or `/admin/*` is blocked by `ProtectedRoute`.
+  - Replaced placeholder dashboards (`AdminDashboardPage.tsx` and `EmployeeDashboardPage.tsx`) with simple start pages: personal greeting, role-appropriate quick links, a "Today" work log card for users with a profile, a "My projects" card showing the first 5 projects with status badges, and friendly empty/no-profile states. Removed all duplicated text and "Phase 7" wording; strictly react-i18next translation keys.
+  - Audited sidebar navigation links across `AdminLayout` and `EmployeeLayout`. Found and resolved broken placeholder links pointing to catch-all 404 routes (`/admin/audit-log`, `/employee/leave`, `/employee/overtime`) by setting `visible: false` until their phases are implemented.
+  - Created router test suite in `apps/web/src/router/__tests__/routes.test.ts` (11 tests) verifying all visible sidebar links across `AdminLayout` and `EmployeeLayout` resolve to valid concrete routes without hitting catch-all `*`, top-level redirects work as expected, and admin routes are protected.
+  - Configured `"test": "vitest run"` in `apps/web/package.json` utilizing hoisted root `vitest@2.1.9` without adding external packages.
+- **Files created or changed**:
+  - `apps/web/src/router/index.tsx` (modified)
+  - `apps/web/src/components/layout/AdminLayout.tsx` (modified)
+  - `apps/web/src/components/layout/EmployeeLayout.tsx` (modified)
+  - `apps/web/src/pages/dashboard/AdminDashboardPage.tsx` (modified)
+  - `apps/web/src/pages/dashboard/EmployeeDashboardPage.tsx` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `apps/web/package.json` (modified)
+  - `apps/web/src/router/__tests__/routes.test.ts` (created)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: **520 total tests passed (0 failures)** across 17 test files:
+    - `apps/api`: 16 test files passed, 509 tests passed (0 failures).
+    - `apps/web`: 1 test file passed, 11 tests passed (0 failures).
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+  - `npm run lint`: clean across all workspaces (0 errors).
+  - `npm run build --workspace=apps/web`: built cleanly for production (0 errors).
+- **Status**: done
+- **Decisions or problems**:
+  - Root Cause of 404: `projects` and `projects/:id` were missing from the children arrays of both `admin` and `employee` layouts in `apps/web/src/router/index.tsx`. Consequently, navigating to `/admin/projects` or `/employee/projects` was captured by the layout catch-all `*` and rendered `NotFoundPage`.
+  - Additional Broken Links Identified (Amendment 4):
+    - `/admin/audit-log` in `AdminLayout`: Audit log screen is not yet implemented, previously fell through to 404.
+    - `/employee/leave` in `EmployeeLayout`: Leave management is Phase 4 scope, previously fell through to 404.
+    - `/employee/overtime` in `EmployeeLayout`: Overtime requests is Phase 5 scope, previously fell through to 404.
+    - Solution: Set `visible: false` on these three nav items so that all visible links point to fully functional, concrete routes.
+  - Zero New Dependencies (Amendment 2): Vitest 2.1.9 is hoisted at the workspace root. Added `"test": "vitest run"` directly to `apps/web/package.json`. No extra dev packages were installed.
+  - DOM vs Node test environment: `createBrowserRouter` requires a DOM environment (`document`). In `apps/web/src/router/index.tsx`, used `typeof document !== 'undefined' ? createBrowserRouter(routes) : createMemoryRouter(routes)` to enable fast, zero-dependency Node execution of router unit tests.
+
+---
+
+## Step 12a-FIX Summary & Verification
+- **Milestone**: Step 12a-FIX — Projects Sidebar 404 Resolution, Dashboard Polish, Route Protection & Route-Table Test
+- **Scope Delivery**:
+  - Sidebar links for Projects now route directly to project list and detail pages for all authorized roles.
+  - Top-level `/projects` and `/projects/:id` redirect dynamically based on user system role (`system_admin` -> `/admin/projects`, other roles -> `/employee/projects`).
+  - Unauthorized access to `/admin/*` routes is strictly blocked by `ProtectedRoute` (`allowedRoles: ['system_admin', 'hr_admin']`).
+  - Placeholder dashboards replaced with clean, role-tailored dashboards featuring personal greeting, quick links, "Today" work log card, and "My projects" card. Duplicated content and "Phase 7" text eliminated; 100% translation keys via `en.json`.
+  - All sidebar links audited; dead links hidden.
+  - Route table test suite (`routes.test.ts`) added to `apps/web`.
+- **Verification**:
+  - `npm run test`: 520 tests passing across 17 test suites (509 in `apps/api`, 11 in `apps/web`).
+  - `npm run typecheck`: 0 errors.
+  - `npm run lint`: 0 errors.
+  - `npm run build --workspace=apps/web`: 0 errors.
+- **Git Commit**: Not executed (per instruction). Ready for user review and commit.
+
+

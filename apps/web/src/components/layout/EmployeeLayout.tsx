@@ -63,16 +63,20 @@ export function EmployeeLayout() {
       label: t('nav.leave'),
       icon: CalendarDays,
       end: false,
+      visible: false, // Phase 4 Leave
     },
     {
       to: '/employee/overtime',
       label: t('nav.overtime'),
       icon: Clock,
       end: false,
+      visible: false, // Phase 5 Overtime
     },
   ];
 
-  const currentNav = navItems.find((item) =>
+  const visibleNavItems = navItems.filter((item: any) => item.visible !== false);
+
+  const currentNav = visibleNavItems.find((item) =>
     item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)
   );
   const pageTitle = currentNav ? currentNav.label : t('nav.dashboard');
@@ -89,7 +93,7 @@ export function EmployeeLayout() {
         </div>
 
         <nav className="flex-1 p-2 md:p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -153,3 +157,12 @@ export function EmployeeLayout() {
     </div>
   );
 }
+
+export const getEmployeeNavItems = () => [
+  { to: '/employee', end: true, visible: true },
+  { to: '/employee/projects', end: false, visible: true },
+  { to: '/employee/directory', end: false, visible: true },
+  { to: '/employee/work-log', end: true, visible: true },
+  { to: '/employee/work-log/history', end: false, visible: true },
+  { to: '/employee/work-log/export', end: false, visible: true },
+];

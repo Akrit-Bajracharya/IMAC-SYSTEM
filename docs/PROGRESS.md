@@ -879,3 +879,54 @@ Across all APIs in the IMAC Operations System:
 - `npm run lint`: clean across all workspaces (0 errors).
 - `npm run build --workspace=apps/web`: built cleanly for production.
 
+---
+
+## Current Milestone: Step 12a-FIX — Projects Sidebar 404 Resolution, Dashboard Polish & Route Guard Verification — COMPLETED
+
+### 1. Root Cause Analysis
+- **Sidebar 404 Root Cause**:
+  - In `apps/web/src/router/index.tsx`, the routes `projects` and `projects/:id` were declared as top-level redirects but were completely omitted from the `children` arrays of both the admin and employee route groups.
+  - Because both `AdminLayout` and `EmployeeLayout` contain a catch-all route `{ path: '*', element: <NotFoundPage /> }`, any navigation to `/admin/projects`, `/admin/projects/:id`, `/employee/projects`, or `/employee/projects/:id` directly resolved to `NotFoundPage`.
+
+### 2. What Was Built & Fixed
+- **Route Table Registration & Redirects (`apps/web/src/router/index.tsx`)**:
+  - Registered `projects` (`ProjectListPage`) and `projects/:id` (`ProjectDetailPage`) under `AdminLayout` children.
+  - Registered `projects` (`ProjectListPage`) and `projects/:id` (`ProjectDetailPage`) under `EmployeeLayout` children.
+  - Added role-aware top-level redirects (`ProjectsRedirect`, `ProjectParamRedirect`, helper `getProjectsRedirectPath`):
+    - `system_admin` is redirected to `/admin/projects` (or `/admin/projects/:id`).
+    - All other roles (`hr_admin`, `project_manager`, `employee`, `viewer`) are redirected to `/employee/projects` (or `/employee/projects/:id`).
+  - Added node/browser environment safety (`typeof document !== 'undefined' ? createBrowserRouter(routes) : createMemoryRouter(routes)`) allowing zero-dependency route tests under Vitest.
+- **Sidebar Navigation Dead Links Audit**:
+  - Audited all sidebar items in `AdminLayout.tsx` and `EmployeeLayout.tsx`:
+    - Discovered `/admin/audit-log` in `AdminLayout` (Audit log is not yet implemented) pointed to catch-all 404.
+    - Discovered `/employee/leave` in `EmployeeLayout` (Phase 4 scope) pointed to catch-all 404.
+    - Discovered `/employee/overtime` in `EmployeeLayout` (Phase 5 scope) pointed to catch-all 404.
+  - Set `visible: false` on these three nav items so users only see links that resolve to live, functioning screens.
+- **Dashboard Replacement (Amendment 1)**:
+  - Replaced placeholder dashboards (`AdminDashboardPage.tsx` and `EmployeeDashboardPage.tsx`) with simple, operational start pages:
+    - Personalized greeting with active user's display name.
+    - Role-appropriate quick links (Work Logs, Projects, Settings, User Management).
+    - "Today's Work Log" card displaying daily logged hours vs. target shift length, with a friendly no-profile state for users lacking an `EmployeeProfile` (such as administrative users).
+    - "My Projects" card showing the first 5 projects with real-time status badges, member count, and direct link to project details.
+    - Eliminated all duplicate text and "Phase 7" wording.
+    - 100% powered by `react-i18next` translation keys (`dashboard.*` in `en.json`). No invented statistics.
+- **Vitest Configuration in Web Workspace (Amendment 2)**:
+  - Confirmed `vitest@2.1.9` is already hoisted at root node modules.
+  - Added `"test": "vitest run"` script to `apps/web/package.json`. No external packages were installed.
+- **Route Table & Security Test Suite (`apps/web/src/router/__tests__/routes.test.ts`)**:
+  - Added 11 automated unit tests verifying:
+    - All visible sidebar links in `AdminLayout` map to concrete routes.
+    - All visible sidebar links in `EmployeeLayout` map to concrete routes.
+    - Top-level `/projects` and `/projects/:id` redirect according to user system role.
+    - Direct access to `/admin/*` routes strictly rejects non-admin roles (`employee`, `project_manager`, `viewer`) via `allowedRoles: ['system_admin', 'hr_admin']`.
+    - Daily Log, History, Export, and Settings routes resolve correctly without hitting catch-all `*`.
+
+### 3. Verification Results
+- `npm run test`: 17 test files passed, **520 total tests passed (0 failures)**:
+  - `apps/api`: 16 test files passed, 509 tests passed.
+  - `apps/web`: 1 test file passed, 11 tests passed.
+- `npm run typecheck`: clean across all workspaces (0 errors).
+- `npm run lint`: clean across all workspaces (0 errors).
+- `npm run build --workspace=apps/web`: built cleanly for production (0 errors).
+
+

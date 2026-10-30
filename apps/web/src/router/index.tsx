@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
+import { createBrowserRouter, createMemoryRouter, Navigate, useParams, type RouteObject } from 'react-router-dom';
 
 import { useAuth } from '../hooks/useAuth.js';
 import { Spinner } from '../components/layout/Spinner.js';
@@ -54,14 +54,18 @@ function WorkLogRedirect({ subpath = '' }: { subpath?: string }) {
 }
 
 
+export function getProjectsRedirectPath(systemRole?: string, subpath = ''): string {
+  const base = systemRole === 'system_admin'
+    ? '/admin/projects'
+    : '/employee/projects';
+  return subpath ? `${base}/${subpath}` : base;
+}
+
 function ProjectsRedirect({ subpath = '' }: { subpath?: string }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  const base = ['system_admin', 'hr_admin'].includes(user.systemRole)
-    ? '/admin/projects'
-    : '/employee/projects';
-  const target = subpath ? `${base}/${subpath}` : base;
+  const target = getProjectsRedirectPath(user.systemRole, subpath);
   return <Navigate to={target} replace />;
 }
 
@@ -70,7 +74,7 @@ function ProjectParamRedirect() {
   return <ProjectsRedirect subpath={id} />;
 }
 
-export const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   {
     path: '/login',
     element: <LoginPage />,
@@ -95,6 +99,14 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: <RoleBasedDashboard />,
+      },
+      {
+        path: 'projects',
+        element: <ProjectsRedirect />,
+      },
+      {
+        path: 'projects/:id',
+        element: <ProjectParamRedirect />,
       },
       {
         path: 'work-log',
@@ -136,6 +148,14 @@ export const router = createBrowserRouter([
               {
                 path: 'work-roles/assign/:userId',
                 element: <EmployeeWorkRolesPage />,
+              },
+              {
+                path: 'projects',
+                element: <ProjectListPage />,
+              },
+              {
+                path: 'projects/:id',
+                element: <ProjectDetailPage />,
               },
               {
                 path: 'directory',
@@ -187,6 +207,14 @@ export const router = createBrowserRouter([
                 element: <EmployeeDashboardPage />,
               },
               {
+                path: 'projects',
+                element: <ProjectListPage />,
+              },
+              {
+                path: 'projects/:id',
+                element: <ProjectDetailPage />,
+              },
+              {
                 path: 'directory',
                 element: <DirectoryPage />,
               },
@@ -216,4 +244,8 @@ export const router = createBrowserRouter([
     path: '*',
     element: <NotFoundPage />,
   },
-]);
+];
+
+export const router = typeof document !== 'undefined'
+  ? createBrowserRouter(routes)
+  : createMemoryRouter(routes);
