@@ -186,7 +186,45 @@ describe('Step 10c: Tasks, Subtasks, Milestones, Dependencies & Comments Tests',
   // 2. Task Creation & Subtask Rules
   // ───────────────────────────────────────────────────────────────────────────
   describe('2. POST /api/projects/:id/tasks - Creation & Invariants', () => {
-    it('allows project manager and system_admin to create task', async () => {
+        it('allows a plain project MEMBER (not manager, not system_admin) to create task (Step 10f fix)', async () => {
+      const cookie = setupAuth(employeeUserId);
+      vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+      vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+        projectId: validProjectId,
+        userId: employeeUserId,
+        projectRole: 'member',
+      } as any);
+
+      vi.mocked(db.task.create).mockResolvedValue({
+        id: validTaskId,
+        projectId: validProjectId,
+        title: 'Plain Member Task',
+        status: 'todo',
+        createdByUserId: employeeUserId,
+      } as any);
+
+      const res = await request(app)
+        .post(`/api/projects/${validProjectId}/tasks`)
+        .set('Cookie', cookie)
+        .send({
+          title: 'Plain Member Task',
+          estimatedHours: 2.5,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.title).toBe('Plain Member Task');
+      expect(res.body.createdByUserId).toBe(employeeUserId);
+      expect(db.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'task.created',
+            entityId: validTaskId,
+          }),
+        }),
+      );
+    });
+
+it('allows project manager and system_admin to create task', async () => {
       const cookie = setupAuth(pmUserId);
       vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
       vi.mocked(db.projectMember.findUnique).mockResolvedValue({
@@ -595,7 +633,41 @@ describe('Step 10c: Tasks, Subtasks, Milestones, Dependencies & Comments Tests',
       expect(res.body.error).toBe('same_status');
     });
 
-    it('returns warnings array with open_dependency and open_subtasks when completed with blockers (Amendment 10)', async () => {
+        it('rejects task completion for plain member with 409 open_dependency when blocker is not done (Step 10f)', async () => {
+      const cookie = setupAuth(employeeUserId);
+      vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+      vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+        projectId: validProjectId,
+        userId: employeeUserId,
+        projectRole: 'member',
+      } as any);
+
+      vi.mocked(db.task.findUnique).mockResolvedValue({
+        id: validTaskId,
+        projectId: validProjectId,
+        status: 'in_progress',
+        assigneeUserId: employeeUserId,
+      } as any);
+
+      vi.mocked(db.taskDependency.findMany).mockResolvedValue([
+        {
+          taskId: validTaskId,
+          dependsOnTaskId: otherTaskId,
+          dependsOnTask: { id: otherTaskId, status: 'in_progress' },
+        },
+      ] as any);
+
+      const res = await request(app)
+        .post(`/api/projects/${validProjectId}/tasks/${validTaskId}/status`)
+        .set('Cookie', cookie)
+        .send({ status: 'done' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('open_dependency');
+      expect(db.task.updateMany).not.toHaveBeenCalled();
+    });
+
+it('returns warnings array with open_dependency and open_subtasks when completed with blockers (Amendment 10)', async () => {
       const cookie = setupAuth(pmUserId);
       vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
       vi.mocked(db.projectMember.findUnique).mockResolvedValue({
@@ -2490,6 +2562,410 @@ describe('Step 10c: Tasks, Subtasks, Milestones, Dependencies & Comments Tests',
           }),
         }),
       );
+    });
+  });
+
+
+  // ── Step 10f: Delete Endpoints, Boolean Query Parsing, and Transaction Rollback Tests ──
+  describe('Step 10f: DELETE Routes, Boolean Query Flags, and Mock-based Invariants', () => {
+    /*
+     * MOCK LIMITATIONS (Step 10f Note):
+     * The unit/integration tests below use Vitest mocks for Prisma ($transaction, delete, auditLog.create).
+     * These mocks verify route authorization, validation branching, and sequential composition of transaction callbacks.
+     * Mocks CANNOT prove:
+     * 1. Real PostgreSQL database rollbacks on failure in a concurrent multi-connection environment.
+     * 2. Physical database ON DELETE CASCADE (Task -> Subtasks, Task -> Comments, Task -> TaskDependencies)
+     *    and ON DELETE SET NULL (TimeLog.taskId -> null), which are executed by the PostgreSQL engine.
+     */
+
+    describe('DELETE /api/projects/:id/tasks/:taskId', () => {
+      it('allows project manager to delete a task (audited without description)', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+          title: 'Task to be deleted',
+          description: 'Top secret description that must not be in audit log',
+        } as any);
+
+        vi.mocked(db.task.delete).mockResolvedValue({ id: validTaskId } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(200);
+        expect(res.body.ok).toBe(true);
+        expect(res.body.deletedTaskId).toBe(validTaskId);
+
+        expect(db.task.delete).toHaveBeenCalledWith({ where: { id: validTaskId } });
+        expect(db.auditLog.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              action: 'task.deleted',
+              entityType: 'Task',
+              entityId: validTaskId,
+              beforeSnapshot: {
+                title: 'Task to be deleted',
+                projectId: validProjectId,
+              },
+            }),
+          }),
+        );
+        // Verify description is strictly omitted
+        const auditCallData = vi.mocked(db.auditLog.create).mock.calls[0]![0].data as any;
+        expect(auditCallData.beforeSnapshot?.description).toBeUndefined();
+      });
+
+      it('allows system_admin to delete a task even if not a member', async () => {
+        const cookie = setupAuth(adminUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+          title: 'Admin Deleted Task',
+        } as any);
+
+        vi.mocked(db.task.delete).mockResolvedValue({ id: validTaskId } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(200);
+        expect(res.body.ok).toBe(true);
+      });
+
+      it('refuses deletion by plain project member (403 forbidden)', async () => {
+        const cookie = setupAuth(employeeUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: employeeUserId,
+          projectRole: 'member',
+        } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe('forbidden');
+        expect(db.task.delete).not.toHaveBeenCalled();
+      });
+
+      it('refuses deletion by project viewer (403 forbidden)', async () => {
+        const cookie = setupAuth(viewerUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: viewerUserId,
+          projectRole: 'viewer',
+        } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe('forbidden');
+      });
+
+      it('returns 404 for task belonging to a different project', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: 'foreign-project-id',
+          title: 'Foreign Task',
+        } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(404);
+        expect(res.body.error).toBe('not_found');
+      });
+
+      it('returns 404 for malformed task UUID', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/not-a-uuid`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(404);
+        expect(res.body.error).toBe('not_found');
+      });
+
+      it('rolls back task deletion if audit log creation fails inside transaction (mock-based)', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+          title: 'Rollback Task',
+        } as any);
+
+        vi.mocked(db.auditLog.create).mockRejectedValue(new Error('Audit DB write error'));
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(500);
+      });
+    });
+
+    describe('DELETE /api/projects/:id/tasks/:taskId/comments/:commentId', () => {
+      const validCommentId = '99999999-9999-4999-8999-999999999999';
+
+      it('allows comment author to delete their own comment (audited without body)', async () => {
+        const cookie = setupAuth(employeeUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: employeeUserId,
+          projectRole: 'member',
+        } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+        } as any);
+
+        vi.mocked(db.comment.findUnique).mockResolvedValue({
+          id: validCommentId,
+          taskId: validTaskId,
+          authorUserId: employeeUserId,
+          body: 'This is my comment body that must not be audited',
+        } as any);
+
+        vi.mocked(db.comment.delete).mockResolvedValue({ id: validCommentId } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}/comments/${validCommentId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(200);
+        expect(res.body.ok).toBe(true);
+        expect(res.body.deletedCommentId).toBe(validCommentId);
+
+        expect(db.comment.delete).toHaveBeenCalledWith({ where: { id: validCommentId } });
+        expect(db.auditLog.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              action: 'comment.deleted',
+              entityType: 'comment',
+              entityId: validCommentId,
+              beforeSnapshot: {
+                taskId: validTaskId,
+                projectId: validProjectId,
+              },
+            }),
+          }),
+        );
+        const auditCallData = vi.mocked(db.auditLog.create).mock.calls[0]![0].data as any;
+        expect(auditCallData.beforeSnapshot?.body).toBeUndefined();
+      });
+
+      it('allows project manager to delete another user comment', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+        } as any);
+
+        vi.mocked(db.comment.findUnique).mockResolvedValue({
+          id: validCommentId,
+          taskId: validTaskId,
+          authorUserId: employeeUserId, // authored by employee
+        } as any);
+
+        vi.mocked(db.comment.delete).mockResolvedValue({ id: validCommentId } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}/comments/${validCommentId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(200);
+        expect(res.body.ok).toBe(true);
+      });
+
+      it('refuses deletion by a different member who is not author and not manager (403 forbidden)', async () => {
+        const cookie = setupAuth(otherEmpUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: otherEmpUserId,
+          projectRole: 'member',
+        } as any);
+
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+        } as any);
+
+        vi.mocked(db.comment.findUnique).mockResolvedValue({
+          id: validCommentId,
+          taskId: validTaskId,
+          authorUserId: employeeUserId, // authored by someone else
+        } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}/comments/${validCommentId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe('forbidden');
+        expect(db.comment.delete).not.toHaveBeenCalled();
+      });
+
+      it('refuses deletion by project viewer (403 forbidden)', async () => {
+        const cookie = setupAuth(viewerUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: viewerUserId,
+          projectRole: 'viewer',
+        } as any);
+
+        const res = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}/comments/${validCommentId}`)
+          .set('Cookie', cookie);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe('forbidden');
+      });
+
+      it('returns 404 for malformed comment UUID or foreign task comment', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        // Malformed UUID
+        const res1 = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}/comments/bad-uuid`)
+          .set('Cookie', cookie);
+        expect(res1.status).toBe(404);
+
+        // Comment belonging to another task
+        vi.mocked(db.task.findUnique).mockResolvedValue({
+          id: validTaskId,
+          projectId: validProjectId,
+        } as any);
+        vi.mocked(db.comment.findUnique).mockResolvedValue({
+          id: validCommentId,
+          taskId: 'different-task-id',
+        } as any);
+
+        const res2 = await request(app)
+          .delete(`/api/projects/${validProjectId}/tasks/${validTaskId}/comments/${validCommentId}`)
+          .set('Cookie', cookie);
+        expect(res2.status).toBe(404);
+      });
+    });
+
+    describe('Boolean Query Parameters Parsing (topLevelOnly and overdue)', () => {
+      it('correctly parses topLevelOnly=true, topLevelOnly=false, and rejects invalid strings', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        vi.mocked(db.task.findMany).mockResolvedValue([]);
+
+        // topLevelOnly=true
+        const resTrue = await request(app)
+          .get(`/api/projects/${validProjectId}/tasks?topLevelOnly=true`)
+          .set('Cookie', cookie);
+        expect(resTrue.status).toBe(200);
+
+        // topLevelOnly=false
+        const resFalse = await request(app)
+          .get(`/api/projects/${validProjectId}/tasks?topLevelOnly=false`)
+          .set('Cookie', cookie);
+        expect(resFalse.status).toBe(200);
+
+        // topLevelOnly=invalid (must return 400 validation_error)
+        const resInvalid = await request(app)
+          .get(`/api/projects/${validProjectId}/tasks?topLevelOnly=not_a_bool`)
+          .set('Cookie', cookie);
+        expect(resInvalid.status).toBe(400);
+        expect(resInvalid.body.error).toBe('validation_error');
+      });
+
+      it('correctly parses overdue=true, overdue=false, and rejects invalid strings', async () => {
+        const cookie = setupAuth(pmUserId);
+        vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+        vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+          projectId: validProjectId,
+          userId: pmUserId,
+          projectRole: 'manager',
+        } as any);
+
+        vi.mocked(db.task.findMany).mockResolvedValue([]);
+
+        // overdue=true
+        const resTrue = await request(app)
+          .get(`/api/projects/${validProjectId}/tasks?overdue=true`)
+          .set('Cookie', cookie);
+        expect(resTrue.status).toBe(200);
+
+        // overdue=false
+        const resFalse = await request(app)
+          .get(`/api/projects/${validProjectId}/tasks?overdue=false`)
+          .set('Cookie', cookie);
+        expect(resFalse.status).toBe(200);
+
+        // overdue=invalid (must return 400 validation_error)
+        const resInvalid = await request(app)
+          .get(`/api/projects/${validProjectId}/tasks?overdue=maybe`)
+          .set('Cookie', cookie);
+        expect(resInvalid.status).toBe(400);
+        expect(resInvalid.body.error).toBe('validation_error');
+      });
     });
   });
 

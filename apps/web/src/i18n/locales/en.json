@@ -75,7 +75,9 @@
     "copy": "Copy",
     "copied": "Copied!",
     "required": "Required",
-    "you": "You"
+    "you": "You",
+    "retry": "Retry",
+    "actions": "Actions"
   },
   "roles": {
     "system_admin": "System Admin",
@@ -152,7 +154,8 @@
         "passwordReset": "Password reset successfully. A temporary password was generated."
       },
       "errors": {
-        "reactivateFailed": "Failed to reactivate user account."
+        "reactivateFailed": "Failed to reactivate user account.",
+        "deactivateFailed": "Failed to deactivate user account."
       },
       "fields": {
         "username": "Username",
@@ -206,7 +209,9 @@
         "warningDesc": "This temporary password will NOT be displayed again and is not stored in plain text. Please copy and securely deliver it to the employee now. They will be required to change it immediately upon login.",
         "label": "Temporary Password",
         "doneButton": "I have copied this password"
-      }
+      },
+      "displayName": "Name",
+      "username": "Username"
     },
     "workRoles": {
       "pageTitle": "Work-Role Catalogue",
@@ -404,8 +409,19 @@
         "row_limit_exceeded": "Maximum row limit exceeded.",
         "forbidden": "You do not have permission to modify this work log.",
         "atLeastOneEntry": "At least one entry row is required.",
-        "hoursPositive": "Hours must be greater than 0 and in 0.25 increments."
-      }
+        "hoursPositive": "Hours must be greater than 0 and in 0.25 increments.",
+        "invalidProject": "The selected project is invalid, does not exist, or you are not an active member.",
+        "invalidTask": "The selected task is invalid or does not belong to the selected project."
+      },
+      "projectLabel": "Project",
+      "taskLabel": "Task",
+      "noProject": "No project",
+      "noTask": "No task",
+      "selectProjectFirst": "Select a project to choose a task",
+      "viewerNoTasks": "Tasks not available for project viewers",
+      "legacyProject": "Legacy text:",
+      "removeProjectLink": "Remove project link",
+      "title": "Daily Work Log"
     },
     "history": {
       "pageTitle": "Work Log History & Summaries",
@@ -481,5 +497,119 @@
       "emptyTitle": "No employees found",
       "emptyDescription": "No directory entries matched your search criteria."
     }
+  },
+  "projects": {
+    "title": "Projects",
+    "subtitle": "Track organizational initiatives, tasks, milestones, and team assignments.",
+    "createProject": "Create Project",
+    "searchPlaceholder": "Search projects by name...",
+    "loadMore": "Load More Projects",
+    "loading": "Loading projects...",
+    "emptyTitle": "No Projects Found",
+    "emptyDesc": "You are currently not assigned to any projects. When you are added to a project team, it will appear here.",
+    "emptyAdminDesc": "No projects have been created yet. Click 'Create Project' to start an initiative.",
+    "errorTitle": "Failed to Load Projects",
+    "targetDate": "Target: {{date}}",
+    "noTargetDate": "No target date set",
+    "memberCount_one": "{{count}} member",
+    "memberCount_other": "{{count}} members",
+    "status": {
+      "on_track": "On Track",
+      "at_risk": "At Risk",
+      "off_track": "Off Track",
+      "on_hold": "On Hold",
+      "complete": "Complete"
+    },
+    "roles": {
+      "manager": "Project Manager",
+      "member": "Team Member",
+      "viewer": "Observer (Viewer)"
+    },
+    "detail": {
+      "backToList": "Back to Projects",
+      "editProject": "Edit Project",
+      "changeStatus": "Change Status",
+      "statusHistoryNote": "Note: Project status change history is recorded in audit logs and is not displayed here.",
+      "description": "Description",
+      "noDescription": "No project description provided.",
+      "dates": "Timeline",
+      "startDate": "Start Date",
+      "targetDate": "Target Date",
+      "notSet": "Not set",
+      "progress": "Progress & Work Breakdown",
+      "progressCompletion": "{{percentage}}% Completed ({{completed}}/{{total}} leaf tasks)",
+      "tasksTodo": "To Do",
+      "tasksInProgress": "In Progress",
+      "tasksBlocked": "Blocked",
+      "tasksDone": "Done",
+      "metrics": "Metrics & Time",
+      "overdueCount": "Overdue Tasks",
+      "blockedCount": "Blocked Tasks",
+      "estimatedHours": "Estimated Hours",
+      "loggedHours": "Logged Hours",
+      "members": "Project Team Members",
+      "addMember": "Add Member",
+      "removeMember": "Remove",
+      "removeMemberConfirmTitle": "Remove Project Member",
+      "removeMemberConfirmDesc": "Are you sure you want to remove {{name}} from this project? They will lose access to its tasks, milestones, and updates.",
+      "lastManagerError": "Cannot remove the last active manager of the project. Assign another manager first.",
+      "notFoundTitle": "Project Not Found",
+      "notFoundDesc": "The project you are looking for does not exist, was removed, or you do not have permission to view it.",
+      "forbiddenTitle": "Access Restricted",
+      "forbiddenDesc": "You do not have permission to access this project.",
+      "reload": "Reload Project"
+    },
+    "create": {
+      "modalTitle": "Create New Project",
+      "modalDesc": "Establish a new project initiative. You will automatically be assigned as a project manager.",
+      "nameLabel": "Project Name",
+      "namePlaceholder": "e.g., Nepal Bridge Engineer Training Pipeline",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Detailed project objectives, scope, and deliverables...",
+      "startDateLabel": "Start Date",
+      "targetDateLabel": "Target Date",
+      "submit": "Create Project",
+      "submitting": "Creating...",
+      "errors": {
+        "nameRequired": "Project name is required.",
+        "invalidDates": "Target date cannot precede start date."
+      }
+    },
+    "edit": {
+      "modalTitle": "Edit Project Details",
+      "modalDesc": "Update project title, description, or milestone targets.",
+      "submit": "Save Changes",
+      "submitting": "Saving..."
+    },
+    "statusModal": {
+      "modalTitle": "Change Project Status",
+      "modalDesc": "Update the operational health status of this project. A justification reason is required.",
+      "newStatusLabel": "New Status",
+      "reasonLabel": "Reason for Status Change",
+      "reasonPlaceholder": "Explain why the status is changing (e.g., 'Delay in candidate visa approvals')...",
+      "submit": "Update Status",
+      "submitting": "Updating...",
+      "conflictTitle": "Concurrent Update Conflict",
+      "conflictMessage": "The project status was updated by another team member while you were editing. Please reload the project details.",
+      "sameStatusError": "The project is already in this status.",
+      "reasonRequired": "A non-empty reason is required to change project status."
+    },
+    "addMemberModal": {
+      "modalTitle": "Add Project Member",
+      "modalDesc": "Assign an active staff member to collaborate on this project.",
+      "userLabel": "Select Staff Member",
+      "userPlaceholder": "Choose an active staff member...",
+      "roleLabel": "Project Role",
+      "roleDesc": "Project managers can update project settings, change status, and manage team members. Team members can view and work on tasks. Observers have read-only access.",
+      "submit": "Add to Project",
+      "submitting": "Adding...",
+      "errors": {
+        "userRequired": "Please select a staff member.",
+        "alreadyMember": "This staff member is already a member of this project.",
+        "inactiveUser": "Selected user is inactive.",
+        "viewerCannotWrite": "Users with system role viewer cannot be assigned as project manager or member."
+      }
+    },
+    "memberCount": "{{count}} members"
   }
 }

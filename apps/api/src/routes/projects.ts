@@ -13,6 +13,7 @@ import {
   addProjectMemberSchema,
   changeProjectStatusSchema,
   listProjectsQuerySchema,
+  type TaskStatus,
 } from '@imac/shared';
 import { parseDateOnlyUtc } from '../services/workLog.js';
 import { createAuditEntry } from '../services/auditLog.js';
@@ -21,7 +22,7 @@ import { tasksRouter } from './tasks.js';
 import { milestonesRouter } from './milestones.js';
 import { timeLogsRouter } from './timeLogs.js';
 import { messagesRouter } from './messages.js';
-import { calculateProjectProgress } from '../services/projectProgress.js';
+import { calculateProjectProgress, type ProgressTaskItem } from '../services/projectProgress.js';
 import { getKathmanduTodayDateString } from '../services/workLog.js';
 import { resolveProjectAccess } from '../services/projectAccess.js';
 
@@ -143,6 +144,21 @@ projectsRouter.get(
             },
           },
         };
+
+    if (cursor) {
+      const cursorProject = await db.project.findFirst({
+        where: {
+          id: cursor,
+          ...whereClause,
+        },
+      });
+      if (!cursorProject) {
+        return res.status(400).json({
+          error: 'invalid_cursor',
+          message: 'Specified cursor does not exist or is not accessible',
+        });
+      }
+    }
 
     const takeCount = limit + 1;
     const projects = await db.project.findMany({
@@ -354,29 +370,35 @@ projectsRouter.patch(
       updateData.targetDate = data.targetDate ? parseDateOnlyUtc(data.targetDate) : null;
     }
 
-    const updated = await db.project.update({
-      where: { id: req.params.id },
-      data: updateData,
-    });
+    const updated = await db.$transaction(async (tx) => {
+      const p = await tx.project.update({
+        where: { id: req.params.id },
+        data: updateData,
+      });
 
-    await createAuditEntry({
-      actorUserId: req.user!.id,
-      action: 'project.updated',
-      entityType: 'project',
-      entityId: updated.id,
-      beforeSnapshot: {
-        name: project.name,
-        description: project.description,
-        startDate: project.startDate,
-        targetDate: project.targetDate,
-      },
-      afterSnapshot: {
-        name: updated.name,
-        description: updated.description,
-        startDate: updated.startDate,
-        targetDate: updated.targetDate,
-      },
-      ipAddress: req.ip,
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user!.id,
+          action: 'project.updated',
+          entityType: 'project',
+          entityId: p.id,
+          beforeSnapshot: {
+            name: project.name,
+            description: project.description,
+            startDate: project.startDate,
+            targetDate: project.targetDate,
+          },
+          afterSnapshot: {
+            name: p.name,
+            description: p.description,
+            startDate: p.startDate,
+            targetDate: p.targetDate,
+          },
+          ipAddress: req.ip,
+        },
+      });
+
+      return p;
     });
 
     return res.status(200).json(updated);
@@ -827,7 +849,12 @@ projectsRouter.get(
       },
     });
 
-    const progress = calculateProjectProgress(tasks as any);
+    const progressTasks: ProgressTaskItem[] = tasks.map((t) => ({
+      id: t.id,
+      status: t.status as TaskStatus,
+      parentTaskId: t.parentTaskId,
+    }));
+    const progress = calculateProjectProgress(progressTasks);
 
     const todayStr = getKathmanduTodayDateString();
     const todayUtc = parseDateOnlyUtc(todayStr);

@@ -198,3 +198,17 @@ This document tracks unresolved policy, organizational, and operational decision
 30. **Logging Time on Completed or On-Hold Projects**
     - **Question**: Should team members be permitted to log hours against projects that are currently in `complete` or `on_hold` status, or should logging time be strictly restricted to `in_progress` and `planning` projects?
     - **Current Implementation**: By default, logging time on `complete` or `on_hold` projects is allowed. Project members can log wrap-up hours, post-launch documentation, or retrospective time on completed projects without requiring managers to reopen project status. If leadership prefers to lock time logging on non-active projects, a configurable setting or status check can enforce this policy.
+
+31. **Task Completion with Open Dependencies (Hard Block vs Warning)**
+    - **Question**: When a task has prerequisite dependencies that are not yet in `done` status, should marking the task as `done` be hard-blocked or merely issue a non-blocking warning?
+    - **Current Implementation (Step 10f)**: Role-differentiated enforcement is applied:
+      - Plain project members are hard-blocked and receive HTTP 409 `open_dependency`, re-checked inside the status-change transaction.
+      - Project managers and `system_admin` retain operational discretion to mark tasks completed even with open prerequisites; their request succeeds (HTTP 200) with a soft warning: `warnings: ['open_dependency']`.
+
+32. **Project Manager Self-Removal Constraint**
+    - **Question**: Can a project manager remove themselves from a project?
+    - **Current Implementation**: Self-removal is permitted only if at least one other active manager (`isActive = true` and `projectRole = 'manager'`) remains on the project. If the caller is the last active manager, the request is rejected with 400 `cannot_remove_last_manager`.
+
+33. **User Deactivation Impact on Project Management Continuity**
+    - **Question**: When an administrator deactivates a user account (`User.isActive = false`), what happens if that user was the sole manager of one or more projects?
+    - **Current Implementation**: User deactivation disables login, but project manager membership rows remain. Consequently, a project can be left without an active manager. System administrators retain universal manager privileges over all projects to remediate such situations, but leadership may consider adding an automated alert or manager reassignment requirement during user deactivation.

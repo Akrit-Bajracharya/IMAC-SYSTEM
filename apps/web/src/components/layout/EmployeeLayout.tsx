@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
+  FolderKanban,
   BookUser,
   ClipboardList,
   Calendar,
@@ -26,6 +27,12 @@ export function EmployeeLayout() {
       label: t('nav.dashboard'),
       icon: LayoutDashboard,
       end: true,
+    },
+    {
+      to: '/employee/projects',
+      label: t('nav.projects'),
+      icon: FolderKanban,
+      end: false,
     },
     {
       to: '/employee/directory',

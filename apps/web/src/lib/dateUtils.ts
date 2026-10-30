@@ -84,7 +84,7 @@ export function calculateShiftDifference(
 
   let formatted = '0.00h (Balanced)';
   if (isOver) {
-    formatted = `+${diff.toFixed(2)}h (Overtime/Surplus)`;
+    formatted = `+${diff.toFixed(2)}h (Over shift length)`;
   } else if (isUnder) {
     formatted = `${diff.toFixed(2)}h (Deficit)`;
   }

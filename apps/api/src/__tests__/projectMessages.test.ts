@@ -136,6 +136,7 @@ describe('Step 10e Part B: Project Messages Subsystem Tests', () => {
     vi.clearAllMocks();
     vi.mocked(db.auditLog.create).mockResolvedValue({} as any);
     vi.mocked(db.$queryRaw).mockResolvedValue([{ id: 'mock-lock' }] as any);
+    vi.mocked(db.$transaction).mockImplementation(async (cb: any) => cb(db));
   });
 
   describe('1. Non-Member and Foreign ID 404 Guards', () => {
@@ -235,6 +236,54 @@ describe('Step 10e Part B: Project Messages Subsystem Tests', () => {
         .post(`/api/projects/${validProjectId}/messages/${validMessageId}/unpin`)
         .set('Cookie', cookie);
       expect(unpinRes.status).toBe(403);
+    });
+
+    it('rolls back pin transaction if auditLog.create fails (mock-based) (Step 10f)', async () => {
+      const cookie = setupAuth(managerUserId);
+
+      vi.mocked(db.projectMessage.findFirst).mockResolvedValue({
+        id: validMessageId,
+        projectId: validProjectId,
+        isPinned: false,
+        body: 'Important announcement',
+      } as any);
+
+      vi.mocked(db.projectMessage.update).mockResolvedValue({
+        id: validMessageId,
+        isPinned: true,
+      } as any);
+
+      vi.mocked(db.auditLog.create).mockRejectedValueOnce(new Error('Audit DB write failure'));
+
+      const res = await request(app)
+        .post(`/api/projects/${validProjectId}/messages/${validMessageId}/pin`)
+        .set('Cookie', cookie);
+
+      expect(res.status).toBe(500);
+    });
+
+    it('rolls back unpin transaction if auditLog.create fails (mock-based) (Step 10f)', async () => {
+      const cookie = setupAuth(managerUserId);
+
+      vi.mocked(db.projectMessage.findFirst).mockResolvedValue({
+        id: validMessageId,
+        projectId: validProjectId,
+        isPinned: true,
+        body: 'Important announcement',
+      } as any);
+
+      vi.mocked(db.projectMessage.update).mockResolvedValue({
+        id: validMessageId,
+        isPinned: false,
+      } as any);
+
+      vi.mocked(db.auditLog.create).mockRejectedValueOnce(new Error('Audit DB write failure'));
+
+      const res = await request(app)
+        .post(`/api/projects/${validProjectId}/messages/${validMessageId}/unpin`)
+        .set('Cookie', cookie);
+
+      expect(res.status).toBe(500);
     });
 
     it('allows manager and system_admin to pin messages', async () => {
@@ -349,7 +398,7 @@ describe('Step 10e Part B: Project Messages Subsystem Tests', () => {
         createdByUserId: memberUserId,
       };
 
-      vi.mocked(db.$transaction).mockImplementation(async (cb: any) => {
+      vi.mocked(db.$transaction).mockImplementationOnce(async (cb: any) => {
         return cb({
           $queryRaw: vi.fn().mockResolvedValue([{ id: 'lock' }]),
           auditLog: {

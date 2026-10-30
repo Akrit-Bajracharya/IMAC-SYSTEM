@@ -88,20 +88,24 @@ export const changeTaskStatusSchema = z.object({
 
 export type ChangeTaskStatusInput = z.infer<typeof changeTaskStatusSchema>;
 
+export const booleanQueryParam = z.preprocess((val) => {
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    if (lower === 'true') return true;
+    if (lower === 'false') return false;
+    return val;
+  }
+  return val;
+}, z.boolean({ invalid_type_error: 'Must be a boolean (true or false)' }).optional());
+
 export const listTasksQuerySchema = z
   .object({
     status: z.enum(['todo', 'in_progress', 'blocked', 'done']).optional(),
     assigneeUserId: z.string().uuid('Invalid assigneeUserId format').optional(),
     milestoneId: z.string().uuid('Invalid milestoneId format').optional(),
     parentTaskId: z.string().uuid('Invalid parentTaskId format').optional(),
-    topLevelOnly: z
-      .enum(['true', 'false'])
-      .transform((val) => val === 'true')
-      .optional(),
-    overdue: z
-      .enum(['true', 'false'])
-      .transform((val) => val === 'true')
-      .optional(),
+    topLevelOnly: booleanQueryParam,
+    overdue: booleanQueryParam,
     limit: z.coerce.number().int().min(1).max(100).default(50),
     cursor: z.string().uuid('Invalid cursor format').optional(),
   })

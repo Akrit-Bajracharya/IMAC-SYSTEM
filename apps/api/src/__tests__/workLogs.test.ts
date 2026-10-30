@@ -1158,6 +1158,23 @@ describe('Daily Work Log Subsystem (Step 8b)', () => {
       );
     });
 
+    it('returns 200 with workLog: null when no work log exists for the requested date', async () => {
+      const app = createApp({ csrfDisabled: true });
+      setupAuth(mockEmployeeSession);
+
+      vi.mocked(db.workLogDay.findFirst).mockResolvedValue(null);
+
+      const res = await request(app)
+        .get('/api/work-logs/by-date?date=2026-10-28')
+        .set('Cookie', [`IMAC_SESSION=${mockEmployeeSession.id}`]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.workLog).toBeNull();
+      expect(res.body.totalHours).toBe(0);
+      expect(res.body.standardShiftHours).toBe(8);
+      expect(res.body.warnings).toEqual([]);
+    });
+
     it('GET /api/work-logs/by-week is handled by by-week route', async () => {
       const app = createApp({ csrfDisabled: true });
       setupAuth(mockEmployeeSession);

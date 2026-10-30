@@ -40,6 +40,8 @@ import { Select } from '../../components/ui/select.js';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.js';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card.js';
 import { WorkLogStatusBadge } from '../../components/common/WorkLogStatusBadge.js';
+import { fetchAllAccessibleProjects, fetchProjectById, fetchAllTasksForProject } from '../../api/projects.js';
+import type { ProjectListItem } from '../../types/index.js';
 import type { WorkRole } from '../../types/index.js';
 
 interface EditableEntry {
@@ -91,6 +93,33 @@ export function DailyWorkLogPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const isViewer = user?.systemRole === 'viewer';
+
+  // Query all member projects for current user (system_admin only gets projects they belong to)
+  const { data: memberProjects = [] } = useQuery({
+    queryKey: ['workLog', 'memberProjects', user?.id],
+    queryFn: async () => {
+      const all = await fetchAllAccessibleProjects();
+      if (!user) return [];
+      if (user.systemRole !== 'system_admin') {
+        return all;
+      }
+      const detailed = await Promise.all(
+        all.map(async (p) => {
+          try {
+            const detail = await fetchProjectById(p.id);
+            const isMember = detail.members.some((m) => m.userId === user.id);
+            return isMember ? p : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+      return detailed.filter((p): p is ProjectListItem => p !== null);
+    },
+    enabled: !!user,
+    staleTime: 60 * 1000,
+  });
+
 
   // 1. Fetch user's assigned active work roles
   const {
@@ -210,6 +239,12 @@ export function DailyWorkLogPage() {
     if (code === 'edit_window_expired') {
       setIsWindowExpired(true);
       return t('workLog.daily.errors.edit_window_expired');
+    }
+    if (code === 'invalid_project') {
+      return t('workLog.daily.errors.invalidProject');
+    }
+    if (code === 'invalid_task') {
+      return t('workLog.daily.errors.invalidTask');
     }
     if (code === 'hour_mismatch' || status === 422) {
       return t('workLog.daily.errors.hour_mismatch');

@@ -910,3 +910,154 @@ Documented in `docs/open-policy-questions.md`:
 - **Scope Delivery**: Both sections A and B completed fully without schema changes.
 - **Verification**: 484 passing tests across 16 test suites, clean typecheck, clean linting.
 - **Git Commit**: Not executed (per instruction). Ready for user review and commit.
+
+
+---
+
+## 15. Step 10f: Review Fixes for Projects, Tasks, Messages, and Work Logs (Backend Only)
+
+### Task 10f-01: Review Fixes, Transaction Hardening, Dependency Guards, and Missing Delete Routes
+- **Date**: 2026-10-29
+- **Day of week**: Thursday
+- **Start time**: 09:15:00
+- **End time**: in_progress
+- **Step**: Step 10f (Review fixes for projects, tasks, messages, and work logs; backend only, no schema changes)
+- **Task performed**:
+  - Item 1: Added test verifying GET /api/work-logs/by-date returns 200 with { workLog: null } on empty days.
+  - Item 2: Fixed canEditTask in POST /api/projects/:id/tasks by supplying caller user ID so plain project members can create tasks. Checked all other canEditTask call sites and verified arguments.
+  - Item 3: Updated docs/project-progress.md strategy name to leaf_tasks_done. Typed select in GET /api/projects/:id/summary to match ProgressTaskItem without as any. Added tests verifying parent tasks with subtasks are excluded from leaf count.
+  - Item 4: Moved audit log creation inside database transactions for PATCH /api/projects/:id and message pin/unpin routes. Added mock transaction rollback tests.
+  - Item 5: Implemented DELETE /api/projects/:id/tasks/:taskId (managers and system_admin only, transactional audit without description) and DELETE /api/projects/:id/tasks/:taskId/comments/:commentId (author, manager, or system_admin, transactional audit without body). Registered both in route inventory test.
+  - Item 6: Enforced dependency guard on task completion: returning 409 open_dependency for non-managers moving a task to done when open dependencies exist, re-checked inside the status-change transaction.
+  - Item 7: Validated cursor visibility in GET /api/projects (returning 400 invalid_cursor if cursor is outside caller visible projects).
+  - Item 8: Replaced z.coerce.boolean() with explicit string-to-boolean parser for query flags like topLevelOnly and overdue.
+- **End time**: 09:39:24
+- **Files created or changed**:
+  - `packages/shared/src/schemas/task.ts` (modified)
+  - `apps/api/src/routes/tasks.ts` (modified)
+  - `apps/api/src/routes/projects.ts` (modified)
+  - `apps/api/src/routes/messages.ts` (modified)
+  - `apps/api/src/__tests__/tasks.test.ts` (modified)
+  - `apps/api/src/__tests__/projects.test.ts` (modified)
+  - `apps/api/src/__tests__/projectMessages.test.ts` (modified)
+  - `apps/api/src/__tests__/projectQueries.test.ts` (modified)
+  - `apps/api/src/__tests__/workLogs.test.ts` (modified)
+  - `apps/api/src/__tests__/routeInventory.test.ts` (modified)
+  - `docs/open-policy-questions.md` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 16 test files passed, **509 total tests passed (0 failures)**:
+    - `src/__tests__/tasks.test.ts` (89 tests passed)
+    - `src/__tests__/routeInventory.test.ts` (73 tests passed, 37 routes tested)
+    - `src/__tests__/security.test.ts` (51 tests passed)
+    - `src/__tests__/projects.test.ts` (49 tests passed)
+    - `src/__tests__/workLogs.test.ts` (46 tests passed)
+    - `src/__tests__/workRoles.test.ts` (40 tests passed)
+    - `src/__tests__/permissions.test.ts` (31 tests passed)
+    - `src/__tests__/usersAdmin.test.ts` (25 tests passed)
+    - `src/__tests__/workLogExport.test.ts` (22 tests passed)
+    - `src/__tests__/projectMessages.test.ts` (18 tests passed)
+    - `src/__tests__/timeLogs.test.ts` (16 tests passed)
+    - `src/__tests__/workLogProjectLink.test.ts` (13 tests passed)
+    - `src/__tests__/auth.test.ts` (13 tests passed)
+    - `src/__tests__/projectQueries.test.ts` (10 tests passed)
+    - `src/__tests__/projectAccess.test.ts` (7 tests passed)
+    - `src/__tests__/projectProgress.test.ts` (6 tests passed)
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+  - `npm run lint`: clean across all workspaces (0 errors).
+- **Status**: done
+- **Decisions or problems**:
+  - Mock limitation clarification: Mock-based tests verify application logic branching, validation, and error propagation, but cannot simulate real multi-connection PostgreSQL rollback behavior, lock contention, or physical database engine ON DELETE CASCADE / ON DELETE SET NULL triggers.
+  - canEditTask audit: All 6 call sites audited and verified passing `req.user!.id`. Plain project members can now create tasks without manager elevation.
+  - Transactional dependency re-check: Open dependencies verified both before and within transaction boundary, returning 409 `open_dependency` for non-managers.
+  - Audit log privacy on deletion: Deleted tasks and comments omit description and body text from audit metadata.
+
+## Step 10f Summary & Verification
+- **Milestone**: Step 10f — Review Fixes for Projects, Tasks, Messages, and Work Logs (Backend Only).
+- **Scope Delivery**: All 8 items and amendments completed cleanly without database schema modifications.
+- **Verification**: 509 passing tests across 16 test suites, clean typecheck, clean linting.
+- **Git Commit**: Not executed (per instruction). Ready for user review and commit.
+
+
+---
+
+## 16. Step 12a: Project Screens, Part 1 (Frontend, apps/web)
+
+### Task 12a-01: Projects UI Implementation, Daily Work Log Pickers, Navigation & Error Handling
+- **Date**: 2026-10-29
+- **Day of week**: Thursday
+- **Start time**: 15:44:00
+- **End time**: in_progress
+- **Step**: Step 12a (Project screens, part 1, in apps/web. No attachments. No backend changes)
+- **Task performed**:
+  - Implemented typed API client for projects (`apps/web/src/api/projects.ts`) covering list, get, create, patch, status change, summary, tasks, and member add/remove.
+  - Added project models and types to `apps/web/src/types/index.ts`.
+  - Added "Projects" navigation link to `AdminLayout.tsx` and `EmployeeLayout.tsx` for all permitted roles (system_admin, hr_admin, project_manager, employee, viewer).
+  - Configured project routing in `router/index.tsx` for `/admin/projects`, `/admin/projects/:id`, `/employee/projects`, `/employee/projects/:id`, and top-level `/projects` redirect.
+  - Built `ProjectListPage.tsx` with name search, status badges, member counts, target dates, "Load more" cursor pagination, loading/error/empty states, and role-guarded "Create Project" action.
+  - Built `CreateProjectModal.tsx` and `EditProjectModal.tsx` with date validation (target >= start) and error handling.
+  - Built `ProjectDetailPage.tsx` with progress bar, summary metrics, members list, status change dialog, and add/remove member dialogs.
+  - Built `ChangeProjectStatusModal.tsx` with trimmed required reason, handling 400 same_status, 400 validation_error, 409 conflict_retry, 403, and 404.
+  - Built `AddProjectMemberModal.tsx` and `RemoveMemberModal.tsx` with confirmation, user selection from active directory users, and error handling for 409 member_already_exists, 400 inactive_user, 400 viewer_cannot_be_member_writer, and 409 last_manager_required.
+  - Built friendly 404 Not Found and 403 Forbidden screens for project routes.
+  - Updated `DailyWorkLogPage.tsx` replacing free-text project and task inputs with dynamic pickers (projects loaded with nextCursor pagination; member-only filtered for system_admin; tasks hidden for project viewers; legacy unlinked project IDs shown read-only with a "Remove project link" action and omitted from save payloads).
+  - Renamed `(Overtime/Surplus)` to `(Over shift length)` in `apps/web/src/lib/dateUtils.ts`.
+  - Fixed raw translation keys in `WorkLogSettingsPage.tsx` and `UsersListPage.tsx`, and added all English strings to `apps/web/src/i18n/locales/en.json`.
+- **End time**: 16:00:49
+- **Files created or changed**:
+  - `apps/web/src/types/index.ts` (modified)
+  - `apps/web/src/api/projects.ts` (created)
+  - `apps/web/src/components/projects/ProjectStatusBadge.tsx` (created)
+  - `apps/web/src/components/projects/ProjectRoleBadge.tsx` (created)
+  - `apps/web/src/components/projects/CreateProjectModal.tsx` (created)
+  - `apps/web/src/components/projects/EditProjectModal.tsx` (created)
+  - `apps/web/src/components/projects/ChangeProjectStatusModal.tsx` (created)
+  - `apps/web/src/components/projects/AddProjectMemberModal.tsx` (created)
+  - `apps/web/src/components/workLogs/ProjectTaskPicker.tsx` (created)
+  - `apps/web/src/components/layout/AdminLayout.tsx` (modified)
+  - `apps/web/src/components/layout/EmployeeLayout.tsx` (modified)
+  - `apps/web/src/router/index.tsx` (modified)
+  - `apps/web/src/pages/projects/ProjectListPage.tsx` (created)
+  - `apps/web/src/pages/projects/ProjectDetailPage.tsx` (created)
+  - `apps/web/src/pages/workLogs/DailyWorkLogPage.tsx` (modified)
+  - `apps/web/src/pages/admin/WorkLogSettingsPage.tsx` (modified)
+  - `apps/web/src/lib/dateUtils.ts` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 16 test files passed, **509 total tests passed (0 failures)**:
+    - `src/__tests__/tasks.test.ts` (89 tests passed)
+    - `src/__tests__/routeInventory.test.ts` (73 tests passed, 37 routes tested)
+    - `src/__tests__/security.test.ts` (51 tests passed)
+    - `src/__tests__/projects.test.ts` (49 tests passed)
+    - `src/__tests__/workLogs.test.ts` (46 tests passed)
+    - `src/__tests__/workRoles.test.ts` (40 tests passed)
+    - `src/__tests__/permissions.test.ts` (31 tests passed)
+    - `src/__tests__/usersAdmin.test.ts` (25 tests passed)
+    - `src/__tests__/workLogExport.test.ts` (22 tests passed)
+    - `src/__tests__/projectMessages.test.ts` (18 tests passed)
+    - `src/__tests__/timeLogs.test.ts` (16 tests passed)
+    - `src/__tests__/workLogProjectLink.test.ts` (13 tests passed)
+    - `src/__tests__/auth.test.ts` (13 tests passed)
+    - `src/__tests__/projectQueries.test.ts` (10 tests passed)
+    - `src/__tests__/projectAccess.test.ts` (7 tests passed)
+    - `src/__tests__/projectProgress.test.ts` (6 tests passed)
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+  - `npm run lint`: clean across all workspaces (0 errors).
+  - `npm run build --workspace=apps/web`: built cleanly for production (0 errors).
+- **Status**: done
+- **Decisions or problems**:
+  - Directory API audit (Amendment 1): Audited `GET /api/employees` and confirmed it queries the `User` table directly with `where: { isActive: true }`, returning canonical `User.id` for all active staff, including admins without employee profiles. The endpoint is accessible to all authenticated staff (including project managers), satisfying member picker requirements without guessing IDs.
+  - Daily Work Log membership gating (Amendment 2): Iteratively loaded all projects with cursor pagination until `hasMore === false`. For `system_admin`, filtered down to projects where the admin has an active `ProjectMember` row.
+  - Viewer task isolation (Amendment 2): Evaluated project membership role for the chosen project; hid the task picker for users with `viewer` role on that project.
+  - Legacy free-text protection (Amendment 3): Rendered non-UUID project IDs read-only with a "Legacy text" note and a "Remove project link" action. Ensured legacy free-text values are never passed in write payloads, protecting users from server 400 `invalid_project` errors.
+  - Translation audit (Amendment 4): Renamed `(Overtime/Surplus)` to `(Over shift length)` in `apps/web/src/lib/dateUtils.ts`. Performed automated scans of all JSX/TSX files against `en.json`, fixing all raw translation keys across settings and user list pages, achieving 0 missing keys.
+
+## Step 12a Summary & Verification
+- **Milestone**: Step 12a — Project screens, part 1, in apps/web.
+- **Scope Delivery**: Project listing, creation, detail, editing, status transitions, member management, navigation, and Daily Work Log pickers completed fully.
+- **Verification**: 509 passing tests across 16 test suites, clean typecheck, clean linting, and successful web workspace production build.
+- **Git Commit**: Not executed (per instruction). Ready for user review and commit.
+

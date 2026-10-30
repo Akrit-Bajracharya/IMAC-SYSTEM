@@ -89,7 +89,7 @@ export function WorkLogSettingsPage() {
         numHours <= 0 ||
         numHours > 8760
       ) {
-        throw new Error(t('settings.errors.invalidEditWindow'));
+        throw new Error(t('admin.settings.errors.invalidEditWindow'));
       }
 
       // Execute all setting updates
@@ -101,12 +101,12 @@ export function WorkLogSettingsPage() {
     },
     onSuccess: () => {
       setFormError(null);
-      setSuccessBanner(t('settings.notifications.saved'));
+      setSuccessBanner(t('admin.settings.notifications.saved'));
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
       setTimeout(() => setSuccessBanner(null), 5000);
     },
     onError: (err: any) => {
-      setFormError(err.message || t('settings.errors.saveFailed'));
+      setFormError(err.message || t('admin.settings.errors.saveFailed'));
     },
   });
 
@@ -131,10 +131,10 @@ export function WorkLogSettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {t('settings.pageTitle')}
+            {t('admin.settings.pageTitle')}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {t('settings.pageSubtitle')}
+            {t('admin.settings.pageSubtitle')}
           </p>
         </div>
 
@@ -174,10 +174,10 @@ export function WorkLogSettingsPage() {
               <ShieldCheck className="w-5 h-5 text-muted-foreground" />
               <div>
                 <CardTitle className="text-base font-semibold">
-                  {t('settings.requiresApprovalTitle')}
+                  {t('admin.settings.requiresApprovalTitle')}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  {t('settings.requiresApprovalDesc')}
+                  {t('admin.settings.requiresApprovalDesc')}
                 </CardDescription>
               </div>
             </div>
@@ -202,7 +202,7 @@ export function WorkLogSettingsPage() {
                 />
                 <div>
                   <span className="text-xs font-semibold block">
-                    {t('settings.enabled')}
+                    {t('admin.settings.enabled')}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
                     Logs transition to 'submitted' awaiting management sign-off
@@ -228,7 +228,7 @@ export function WorkLogSettingsPage() {
                 />
                 <div>
                   <span className="text-xs font-semibold block">
-                    {t('settings.disabled')}
+                    {t('admin.settings.disabled')}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
                     Logs transition directly to 'approved' status upon submission
@@ -246,10 +246,10 @@ export function WorkLogSettingsPage() {
               <Sliders className="w-5 h-5 text-muted-foreground" />
               <div>
                 <CardTitle className="text-base font-semibold">
-                  {t('settings.mismatchHandlingTitle')}
+                  {t('admin.settings.mismatchHandlingTitle')}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  {t('settings.mismatchHandlingDesc')}
+                  {t('admin.settings.mismatchHandlingDesc')}
                 </CardDescription>
               </div>
             </div>
@@ -274,7 +274,7 @@ export function WorkLogSettingsPage() {
                 />
                 <div className="text-xs space-y-0.5">
                   <span className="font-semibold block">
-                    {t('settings.mismatchModes.block')}
+                    {t('admin.settings.mismatchModes.block')}
                   </span>
                   <span className="text-muted-foreground">
                     Strict enforcement: logged hours must strictly match the expected shift length.
@@ -300,7 +300,7 @@ export function WorkLogSettingsPage() {
                 />
                 <div className="text-xs space-y-0.5">
                   <span className="font-semibold block">
-                    {t('settings.mismatchModes.warn')}
+                    {t('admin.settings.mismatchModes.warn')}
                   </span>
                   <span className="text-muted-foreground">
                     Permissive with feedback: accepts submission but returns an explicit warning notification.
@@ -326,7 +326,7 @@ export function WorkLogSettingsPage() {
                 />
                 <div className="text-xs space-y-0.5">
                   <span className="font-semibold block">
-                    {t('settings.mismatchModes.allow')}
+                    {t('admin.settings.mismatchModes.allow')}
                   </span>
                   <span className="text-muted-foreground">
                     Quiet acceptance: accepts submission without validation alerts or mismatch warnings.
@@ -344,10 +344,10 @@ export function WorkLogSettingsPage() {
               <Clock className="w-5 h-5 text-muted-foreground" />
               <div>
                 <CardTitle className="text-base font-semibold">
-                  {t('settings.editWindowTitle')}
+                  {t('admin.settings.editWindowTitle')}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  {t('settings.editWindowDesc')}
+                  {t('admin.settings.editWindowDesc')}
                 </CardDescription>
               </div>
             </div>
@@ -365,7 +365,7 @@ export function WorkLogSettingsPage() {
                   step="1"
                   value={editWindowHours}
                   onChange={(e) => setEditWindowHours(e.target.value)}
-                  placeholder={t('settings.editWindowPlaceholder')}
+                  placeholder={t('admin.settings.editWindowPlaceholder')}
                   disabled={saveMutation.isPending}
                   className="w-full text-xs font-mono pr-14"
                   required
@@ -392,8 +392,8 @@ export function WorkLogSettingsPage() {
             <Save className="w-4 h-4" />
             <span>
               {saveMutation.isPending
-                ? t('settings.savingSettings')
-                : t('settings.saveSettings')}
+                ? t('admin.settings.savingSettings')
+                : t('admin.settings.saveSettings')}
             </span>
           </Button>
         </div>

@@ -96,6 +96,8 @@ export interface WorkLogEntry {
   description: string | null;
   projectId: string | null;
   taskId: string | null;
+  projectName?: string | null;
+  taskTitle?: string | null;
   createdAt: string;
   updatedAt: string;
   workRole?: WorkRole;
@@ -166,4 +168,138 @@ export interface SystemSettingItem {
   description: string | null;
   updatedAt: string;
   updatedBy: string;
+}
+
+export type ProjectStatus = 'on_track' | 'at_risk' | 'off_track' | 'on_hold' | 'complete';
+export type ProjectRole = 'manager' | 'member' | 'viewer';
+
+export interface ProjectMemberUser {
+  id: string;
+  displayName: string;
+  username: string;
+  systemRole?: SystemRole;
+}
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  userId: string;
+  projectRole: ProjectRole;
+  addedByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: ProjectMemberUser;
+}
+
+export interface ProjectListItem {
+  id: string;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  startDate: string | null;
+  targetDate: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  memberCount: number;
+}
+
+export interface ProjectListResponse {
+  items: ProjectListItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface ProjectDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  startDate: string | null;
+  targetDate: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  members: ProjectMember[];
+  memberCount: number;
+}
+
+export interface ProjectSummary {
+  status: ProjectStatus;
+  progress: {
+    percentage: number;
+    totalTasks: number;
+    completedTasks: number;
+    strategy: string;
+  };
+  taskCounts: {
+    todo: number;
+    in_progress: number;
+    blocked: number;
+    done: number;
+  };
+  overdueCount: number;
+  blockedCount: number;
+  hours: {
+    estimated: number;
+    logged: number;
+  };
+  upcomingMilestones: {
+    id: string;
+    name: string;
+    dueDate: string | null;
+  }[];
+}
+
+export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority?: TaskPriority;
+  dueDate: string | null;
+  estimatedHours: number | null;
+  assigneeUserId: string | null;
+  milestoneId: string | null;
+  parentTaskId: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  assigneeIsProjectMember?: boolean;
+  milestone?: { id: string; name: string } | null;
+  assigneeUser?: { id: string; displayName: string; username: string } | null;
+}
+
+export interface ProjectTaskListResponse {
+  items: ProjectTask[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface CreateProjectPayload {
+  name: string;
+  description?: string | null;
+  startDate?: string | null;
+  targetDate?: string | null;
+}
+
+export interface PatchProjectPayload {
+  name?: string;
+  description?: string | null;
+  startDate?: string | null;
+  targetDate?: string | null;
+}
+
+export interface ChangeProjectStatusPayload {
+  status: ProjectStatus;
+  reason: string;
+}
+
+export interface AddProjectMemberPayload {
+  userId: string;
+  projectRole: ProjectRole;
 }

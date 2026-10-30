@@ -204,7 +204,7 @@ tasksRouter.post(
       return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
     }
 
-    if (!canEditTask(access.projectRole, access.isSystemAdmin!, 'create')) {
+    if (!canEditTask(access.projectRole, access.isSystemAdmin!, 'create', null, req.user!.id)) {
       return res.status(403).json({ error: 'forbidden', message: 'Viewers cannot create tasks' });
     }
 
@@ -668,6 +668,74 @@ tasksRouter.patch(
 );
 
 /**
+ * 4b. DELETE /api/projects/:id/tasks/:taskId
+ * Delete a task.
+ * Managers of this project and system_admin only.
+ * Plain members and viewers get 403 forbidden.
+ * Non-members get 404. Malformed UUID gets 404. Foreign task gets 404.
+ * Cascade behavior:
+ * - Subtasks deleted (onDelete: Cascade on parentTaskId)
+ * - Time logs have taskId set to null (onDelete: SetNull on TimeLog.taskId)
+ * - Comments and task dependencies cascade delete
+ * Audited without description in same transaction.
+ */
+tasksRouter.delete(
+  '/:taskId',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'task:write')) {
+      return res.status(403).json({ error: 'forbidden', message: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params['id'] as string;
+    const access = await resolveProjectAccess(projectId, req.user!);
+    if (access.notFound) {
+      return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
+    }
+
+    if (!access.isManager && !access.isSystemAdmin) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'Only project managers or system_admin can delete tasks',
+      });
+    }
+
+    const taskId = req.params['taskId'] as string;
+    if (!isValidUuid(taskId)) {
+      return res.status(404).json({ error: 'not_found', message: 'Task not found' });
+    }
+
+    const task = await db.task.findUnique({
+      where: { id: taskId },
+    });
+    if (!task || task.projectId !== projectId) {
+      return res.status(404).json({ error: 'not_found', message: 'Task not found' });
+    }
+
+    await db.$transaction(async (tx) => {
+      await tx.task.delete({
+        where: { id: taskId },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user!.id,
+          action: 'task.deleted',
+          entityType: 'Task',
+          entityId: taskId,
+          ipAddress: req.ip,
+          beforeSnapshot: {
+            title: task.title,
+            projectId,
+          },
+        },
+      });
+    });
+
+    return res.status(200).json({ ok: true, deletedTaskId: taskId });
+  }),
+);
+
+/**
  * 5. POST /api/projects/:id/tasks/:taskId/status
  * Change task status.
  */
@@ -720,15 +788,22 @@ tasksRouter.post(
       });
     }
 
+    const isManagerOrAdmin = access.isManager || access.isSystemAdmin;
     const warnings: string[] = [];
     if (toStatus === 'done') {
-      // Check tasks this task depends on (Amendment 10)
+      // Check tasks this task depends on (Amendment 10 & Step 10f)
       const blockingDeps = await db.taskDependency.findMany({
         where: { taskId },
         include: { dependsOnTask: true },
       });
       const hasOpenDep = blockingDeps.some((d) => d.dependsOnTask.status !== 'done');
       if (hasOpenDep) {
+        if (!isManagerOrAdmin) {
+          return res.status(409).json({
+            error: 'open_dependency',
+            message: 'Cannot mark task done while prerequisite dependencies are open',
+          });
+        }
         warnings.push('open_dependency');
       }
 
@@ -742,6 +817,22 @@ tasksRouter.post(
     }
 
     const result = await db.$transaction(async (tx) => {
+      if (toStatus === 'done') {
+        const txBlockingDeps = await tx.taskDependency.findMany({
+          where: { taskId },
+          include: { dependsOnTask: true },
+        });
+        const txHasOpenDep = txBlockingDeps.some((d) => d.dependsOnTask.status !== 'done');
+        if (txHasOpenDep) {
+          if (!isManagerOrAdmin) {
+            return { openDependency: true };
+          }
+          if (!warnings.includes('open_dependency')) {
+            warnings.push('open_dependency');
+          }
+        }
+      }
+
       const updateRes = await tx.task.updateMany({
         where: {
           id: taskId,
@@ -771,6 +862,13 @@ tasksRouter.post(
 
       return { success: true };
     });
+
+    if (result.openDependency) {
+      return res.status(409).json({
+        error: 'open_dependency',
+        message: 'Cannot mark task done while prerequisite dependencies are open',
+      });
+    }
 
     if (result.conflict) {
       return res.status(409).json({
@@ -1252,5 +1350,87 @@ tasksRouter.patch(
     });
 
     return res.status(200).json(updated);
+  }),
+);
+
+
+/**
+ * 11. DELETE /api/projects/:id/tasks/:taskId/comments/:commentId
+ * Delete comment.
+ * Comment author, project manager of this project, or system_admin.
+ * Viewers refused (403). Non-author member without manager role refused (403).
+ * Non-members get 404. Malformed UUID gets 404. Foreign comment/task gets 404.
+ * Audited without comment body in same transaction.
+ */
+tasksRouter.delete(
+  '/:taskId/comments/:commentId',
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'comment:write')) {
+      return res.status(403).json({ error: 'forbidden', message: 'Insufficient permissions' });
+    }
+
+    const projectId = req.params['id'] as string;
+    const access = await resolveProjectAccess(projectId, req.user!);
+    if (access.notFound) {
+      return res.status(404).json({ error: 'not_found', message: access.message ?? 'Project not found' });
+    }
+
+    if (access.projectRole === 'viewer') {
+      return res.status(403).json({ error: 'forbidden', message: 'Viewers cannot delete comments' });
+    }
+
+    const taskId = req.params['taskId'] as string;
+    const commentId = req.params['commentId'] as string;
+
+    if (!isValidUuid(taskId) || !isValidUuid(commentId)) {
+      return res.status(404).json({ error: 'not_found', message: 'Comment not found' });
+    }
+
+    const task = await db.task.findUnique({
+      where: { id: taskId },
+    });
+    if (!task || task.projectId !== projectId) {
+      return res.status(404).json({ error: 'not_found', message: 'Task not found' });
+    }
+
+    const comment = await db.comment.findUnique({
+      where: { id: commentId },
+    });
+    if (!comment || comment.taskId !== taskId) {
+      return res.status(404).json({ error: 'not_found', message: 'Comment not found' });
+    }
+
+    const isAuthor = comment.authorUserId === req.user!.id;
+    const isManager = access.isManager;
+    const isSystemAdmin = access.isSystemAdmin;
+
+    if (!isAuthor && !isManager && !isSystemAdmin) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'Only the comment author, project manager, or system admin can delete this comment',
+      });
+    }
+
+    await db.$transaction(async (tx) => {
+      await tx.comment.delete({
+        where: { id: commentId },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user!.id,
+          action: 'comment.deleted',
+          entityType: 'comment',
+          entityId: commentId,
+          ipAddress: req.ip,
+          beforeSnapshot: {
+            taskId,
+            projectId,
+          },
+        },
+      });
+    });
+
+    return res.status(200).json({ ok: true, deletedCommentId: commentId });
   }),
 );

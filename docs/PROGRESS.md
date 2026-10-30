@@ -709,3 +709,173 @@ Across all APIs in the IMAC Operations System:
 
 ### 4. Next Steps
 - Frontend screens and dashboard components for Projects, Tasks, Milestones, Time Logs, and Project Messages.
+
+
+---
+
+## Step 10f: Review Fixes for Projects, Tasks, Messages, and Work Logs (Backend Only)
+
+### 1. Scope & Implementation Details
+- **Item 1: Work Log Empty Day Query**:
+  - Verified `GET /api/work-logs/by-date` returns HTTP 200 with `{ workLog: null, totalHours: 0, standardShiftHours: 8, warnings: [] }` when no work log exists for the requested date. Added explicit test in `workLogs.test.ts`.
+- **Item 2: Member Task Creation Permission Fix & canEditTask Audit**:
+  - Fixed `POST /api/projects/:id/tasks` by passing caller's user ID: `canEditTask(access.projectRole, access.isSystemAdmin!, 'create', null, req.user!.id)`.
+  - Audited all `canEditTask` call sites across codebase:
+    1. `apps/api/src/routes/tasks.ts:207`: passed `access.projectRole, access.isSystemAdmin!, 'create', null, req.user!.id` (fixed).
+    2. `apps/api/src/routes/tasks.ts:556`: passed `access.projectRole, access.isSystemAdmin!, 'edit', task, req.user!.id`.
+    3. `apps/api/src/routes/tasks.ts:741`: passed `access.projectRole, access.isSystemAdmin!, 'changeStatus', task, req.user!.id`.
+    4. `apps/api/src/routes/tasks.ts:881`: passed `access.projectRole, access.isSystemAdmin!, 'manageDependencies', task, req.user!.id`.
+    5. `apps/api/src/routes/tasks.ts:1000`: passed `access.projectRole, access.isSystemAdmin!, 'manageDependencies', task, req.user!.id`.
+    6. `apps/api/src/routes/messages.ts:289`: passed `access.projectRole, access.isSystemAdmin ?? false, 'create', null, req.user!.id`.
+  - Added test in `tasks.test.ts` verifying that a plain project MEMBER (not manager, not system_admin) successfully creates tasks.
+- **Item 3: Progress Calculation Documentation, Typings, and Subtask Invariants**:
+  - Aligned progress calculation strategy name to `leaf_tasks_done` across `docs/project-progress.md` and codebase.
+  - In `GET /api/projects/:id/summary`, removed `as any` cast on task selection by mapping tasks to typed `ProgressTaskItem[]`.
+  - Added test in `projectQueries.test.ts` verifying that parent tasks with child subtasks are excluded from leaf count, even when parent task status is `done`.
+- **Item 4: Transactional Auditing**:
+  - `PATCH /api/projects/:id`: Wrapped `db.project.update` and `db.auditLog.create` inside a single `db.$transaction`.
+  - `POST /api/projects/:id/messages/:messageId/pin` and `unpin`: Wrapped message pin/unpin and `db.auditLog.create` in `db.$transaction`.
+  - Added mock-based rollback tests in `projects.test.ts` and `projectMessages.test.ts` verifying that if `auditLog.create` fails, the update is rolled back and returns 500.
+- **Item 5: Missing Delete Endpoints**:
+  - Implemented `DELETE /api/projects/:id/tasks/:taskId`:
+    - Access: Project managers of this project and `system_admin` only. Viewers and regular members denied with 403.
+    - Database integrity: Schema relations handle cascade deletes (`onDelete: Cascade` on `parentTaskId`, `Comment`, and `TaskDependency`; `onDelete: SetNull` on `TimeLog.taskId`). No schema changes needed.
+    - Audited as `task.deleted` within the same transaction, strictly omitting task description from audit metadata.
+  - Implemented `DELETE /api/projects/:id/tasks/:taskId/comments/:commentId`:
+    - Access: Comment author, project manager of this project, or `system_admin`. Viewers and non-author members denied with 403.
+    - Audited as `comment.deleted` within the same transaction, strictly omitting comment body from audit metadata.
+  - Registered both endpoints in `routeInventory.test.ts`, expanding registered route inventory from 35 to 37 routes.
+- **Item 6: Dependency Guard on Task Completion**:
+  - In `POST /api/projects/:id/tasks/:taskId/status`, when transitioning to `done` while prerequisite dependencies are open:
+    - Non-managers (regular project members) receive 409 `open_dependency`, re-checked both prior to and inside the status-change transaction.
+    - Managers and `system_admin` retain soft-warning behavior (status updates to `done` with `warnings: ['open_dependency']`).
+  - Added integration tests for both cases in `tasks.test.ts`.
+- **Item 7: Project Listing Cursor Visibility Validation**:
+  - In `GET /api/projects`, when `cursor` is provided, verified that the cursor project exists and belongs to the caller's visible project set (`db.project.findFirst({ where: { id: cursor, ...whereClause } })`).
+  - Inaccessible or foreign project cursor returns 400 `invalid_cursor`. Added integration test in `projects.test.ts`.
+- **Item 8: Boolean Query Parameter Parsing**:
+  - Replaced `z.coerce.boolean()` with `booleanQueryParam` in shared task schemas (`packages/shared/src/schemas/task.ts`) for `topLevelOnly` and `overdue`.
+  - `"false"` and `false` parse strictly to `false`; `"true"` and `true` parse to `true`; invalid strings (e.g. `"maybe"`) return 400 `validation_error`. Rebuilt `@imac/shared`.
+  - Added positive and negative test cases in `tasks.test.ts`.
+
+### 2. Mock-Based Limitations & Invariants
+- **What Mock-Based Tests Cover**:
+  - Route authorization barriers (401 unauthenticated, 403 forbidden, 404 non-member/not-found).
+  - Validation schemas (strict unknown field rejection, boolean transformations, invalid cursor checks).
+  - Transaction callback execution and error propagation.
+- **What Mocks Cannot Prove (Must Be Verified in Real Postgres Cluster)**:
+  - **Transaction Rollback Behavior**: Unit test mocks for `db.$transaction` simulate rollback by rejecting the promise when an internal operation throws. However, mocks cannot prove real PostgreSQL engine multi-connection rollback mechanics, row lock release, or serializable conflict aborts.
+  - **Physical Database Cascade Deletes**: Mocks verify application delete calls (`tx.task.delete`, `tx.comment.delete`), but cannot execute PostgreSQL engine-level `ON DELETE CASCADE` on subtasks or `ON DELETE SET NULL` on time logs. These are enforced by the applied PostgreSQL database schema constraints.
+  - **Advisory Lock Contention**: Mocks assert that `pg_advisory_xact_lock` queries are executed, but cannot prove physical lock queueing or deadlock avoidance under concurrent multi-client load.
+
+### 3. Verification & Monorepo Health
+- **Test Suite Pass Counts**:
+  - `npm run test`: 16 test files passed, **509 total tests passed (0 failures)**:
+    - `src/__tests__/tasks.test.ts`: 89 tests passed (+16 new tests)
+    - `src/__tests__/routeInventory.test.ts`: 73 tests passed (+4 new tests, 37 routes tested)
+    - `src/__tests__/security.test.ts`: 51 tests passed
+    - `src/__tests__/projects.test.ts`: 49 tests passed (+1 new test)
+    - `src/__tests__/workLogs.test.ts`: 46 tests passed (+1 new test)
+    - `src/__tests__/workRoles.test.ts`: 40 tests passed
+    - `src/__tests__/permissions.test.ts`: 31 tests passed
+    - `src/__tests__/usersAdmin.test.ts`: 25 tests passed
+    - `src/__tests__/workLogExport.test.ts`: 22 tests passed
+    - `src/__tests__/projectMessages.test.ts`: 18 tests passed (+2 new tests)
+    - `src/__tests__/timeLogs.test.ts`: 16 tests passed
+    - `src/__tests__/workLogProjectLink.test.ts`: 13 tests passed
+    - `src/__tests__/auth.test.ts`: 13 tests passed
+    - `src/__tests__/projectQueries.test.ts`: 10 tests passed (+1 new test)
+    - `src/__tests__/projectAccess.test.ts`: 7 tests passed
+    - `src/__tests__/projectProgress.test.ts`: 6 tests passed
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`, 0 errors).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint` (0 errors).
+
+### 4. Next Steps
+- Review frontend components and screens for Projects, Tasks, Milestones, Time Logs, and Project Messages.
+
+---
+
+## Current Milestone: Step 12a — Project Screens, Part 1 (`apps/web`) — COMPLETED
+
+### 1. What Was Built
+- **API Services & Types (`apps/web/src/api/projects.ts` & `apps/web/src/types/index.ts`)**:
+  - `fetchProjects`: List projects with cursor pagination (`GET /api/projects`).
+  - `fetchAllAccessibleProjects`: Iterative cursor loader until `hasMore === false`.
+  - `fetchProjectById`: Single project detail with members (`GET /api/projects/:id`).
+  - `createProject`: Create project initiative (`POST /api/projects`).
+  - `updateProject`: Edit project attributes (`PATCH /api/projects/:id`).
+  - `changeProjectStatus`: Change status with required trimmed reason (`POST /api/projects/:id/status`).
+  - `fetchProjectSummary`: Summary metrics including leaf progress percentage, task status counts, overdue/blocked counts, and estimated/logged hours (`GET /api/projects/:id/summary`).
+  - `fetchProjectTasks` & `fetchAllTasksForProject`: Paginated project tasks (`GET /api/projects/:id/tasks`).
+  - `addProjectMember`: Add active user to project (`POST /api/projects/:id/members`).
+  - `removeProjectMember`: Remove user from project (`DELETE /api/projects/:id/members/:userId`).
+  - Enhanced types: `ProjectStatus`, `ProjectRole`, `ProjectMember`, `ProjectListItem`, `ProjectDetail`, `ProjectSummary`, `ProjectTask`, and enriched `WorkLogEntry` with `projectName` and `taskTitle`.
+- **User Directory API Inspection & Assessment (Amendment 1)**:
+  - Audited `GET /api/employees` backend implementation (`apps/api/src/routes/employees.ts`).
+  - Verified: Queries the `User` table directly with `where: { isActive: true }`, returning `id: u.id` (canonical User ID) for all active staff, including administrative users who do not have an `EmployeeProfile`.
+  - Accessible to all authenticated users (including project managers). Confirmed 100% compliant with member assignment requirements without guessing IDs.
+- **Navigation & Routing Integration**:
+  - Added "Projects" navigation link with `FolderKanban` icon to both `AdminLayout.tsx` and `EmployeeLayout.tsx` for all permitted roles (`system_admin`, `hr_admin`, `project_manager`, `employee`, `viewer`).
+  - Wired routes in `apps/web/src/router/index.tsx`:
+    - Top-level `/projects` and `/projects/:id` redirects to role-appropriate layout paths.
+    - Admin layout: `/admin/projects` and `/admin/projects/:id`.
+    - Employee layout: `/employee/projects` and `/employee/projects/:id`.
+- **Project List Screen (`apps/web/src/pages/projects/ProjectListPage.tsx`)**:
+  - Real-time client-side search across loaded project cards by name and description.
+  - Project status badge (`on_track`, `at_risk`, `off_track`, `on_hold`, `complete`).
+  - Member count badge and target date formatting.
+  - "Load more" button with cursor pagination (`nextCursor` and `hasMore`).
+  - Role-guarded "Create Project" action button shown exclusively to `system_admin` and `project_manager`.
+  - Comprehensive loading, error (with retry), and friendly empty states.
+- **Project Detail Screen (`apps/web/src/pages/projects/ProjectDetailPage.tsx`)**:
+  - Title, description, start date, target date, and current status badge.
+  - Informational disclaimer explaining project status change history is preserved in audit logs.
+  - Progress bar with task completion percentage (`progress.percentage`%) and task count breakdown (`todo`, `in_progress`, `blocked`, `done`).
+  - Metrics cards for overdue count, blocked count, and estimated vs. logged hours.
+  - Members table displaying staff name, username, and role badge (`manager`, `member`, `viewer`).
+  - Actions visible exclusively to project managers and system administrators:
+    - Edit project modal (`EditProjectModal.tsx`).
+    - Change status modal (`ChangeProjectStatusModal.tsx`).
+    - Add member modal (`AddProjectMemberModal.tsx`).
+    - Remove member action with confirmation dialog (`ConfirmationModal.tsx`).
+  - Friendly 404 Not Found and 403 Forbidden screens without revealing raw JSON errors.
+- **Create & Edit Modals (`CreateProjectModal.tsx`, `EditProjectModal.tsx`)**:
+  - Name, description, start date, and target date fields (`YYYY-MM-DD`).
+  - Form validation enforcing that target date cannot precede start date.
+  - Server validation error handling (400 `validation_error`).
+  - Double-click prevention with loading state on submit button.
+- **Status Change Modal (`ChangeProjectStatusModal.tsx`)**:
+  - Target status dropdown and mandatory trimmed reason textarea.
+  - Handles 400 `same_status`, 400 `validation_error`, 409 `conflict_retry` (offering one-click project reload), 403, and 404.
+  - Only confirms success upon 2xx response, then refetches project and summary.
+- **Member Management Modals (`AddProjectMemberModal.tsx`)**:
+  - Member picker populated with active users from `GET /api/employees`.
+  - Project role selection (`manager`, `member`, `viewer`).
+  - Error handling for 409 `member_already_exists`, 400 `inactive_user`, 400 `viewer_cannot_be_member_writer`, 409 `last_manager_required`, 403, and 404.
+- **Daily Work Log Pickers (Amendment 2 & Amendment 3)**:
+  - Replaced free-text project and task inputs in both desktop table and mobile card views with dynamic pickers (`ProjectCell`, `TaskCell`).
+  - Project picker loads only projects where the user is an active member:
+    - Automatically paginates with `nextCursor` until `hasMore === false`.
+    - For `system_admin`, explicitly filters down to projects where the admin has an active `ProjectMember` row.
+    - Includes "No project" option.
+  - Task picker:
+    - Appears once a project is selected and loads that project's tasks with "No task" option.
+    - Automatically hidden for users assigned as `viewer` on the chosen project.
+  - Displays server-resolved `projectName` and `taskTitle` when stored on log entries.
+  - Legacy free-text entries:
+    - Rendered read-only with a "Legacy text" badge and a "Remove project link" button.
+    - Legacy free text is never included in write payloads, protecting against server 400 `invalid_project` errors.
+    - Friendly error messages for `invalid_project` and `invalid_task`.
+- **Label & Translation Key Audit (Amendment 4)**:
+  - Searched whole web app and renamed `(Overtime/Surplus)` to `(Over shift length)` in `apps/web/src/lib/dateUtils.ts`.
+  - Fixed raw translation keys in `WorkLogSettingsPage.tsx` (`settings.*` -> `admin.settings.*`) and `UsersListPage.tsx` (`admin.users.errors.deactivateFailed`).
+  - Added all English translations to `apps/web/src/i18n/locales/en.json`. Automated audit confirms 0 missing keys.
+
+### 2. Verification Results
+- `npm run test`: 16 test files passed, **509 total tests passed (0 failures)**.
+- `npm run typecheck`: clean across all workspaces (`packages/shared`, `apps/api`, `apps/web`).
+- `npm run lint`: clean across all workspaces (0 errors).
+- `npm run build --workspace=apps/web`: built cleanly for production.
+

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
+  FolderKanban,
   Users,
   Briefcase,
   BookUser,
@@ -43,6 +44,13 @@ export function AdminLayout() {
       to: '/admin/work-roles',
       label: t('nav.workRoles'),
       icon: Briefcase,
+      end: false,
+      visible: true,
+    },
+    {
+      to: '/admin/projects',
+      label: t('nav.projects'),
+      icon: FolderKanban,
       end: false,
       visible: true,
     },

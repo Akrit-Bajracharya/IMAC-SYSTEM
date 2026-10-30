@@ -372,6 +372,7 @@ describe('Step 10b: Projects, Members and Status APIs Integration Tests', () => 
       vi.mocked(db.project.findMany).mockResolvedValueOnce(mockItems as any);
 
       const cursorId = '00000000-0000-4000-8000-000000000000';
+      vi.mocked(db.project.findFirst).mockResolvedValueOnce({ id: cursorId } as any);
       const res = await request(app)
         .get(`/api/projects?limit=2&cursor=${cursorId}`)
         .set('Cookie', cookie);
@@ -654,6 +655,36 @@ describe('Step 10b: Projects, Members and Status APIs Integration Tests', () => 
 
       expect(res.status).toBe(200);
       expect(db.projectMember.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rolls back PATCH /api/projects/:id if auditLog.create fails inside transaction (mock-based) (Step 10f)', async () => {
+      const cookie = setupAuth(pmUserId);
+      vi.mocked(db.project.findUnique).mockResolvedValue({
+        id: validProjectId,
+        name: 'Old Name',
+        startDate: new Date('2026-11-01'),
+        targetDate: new Date('2026-11-30'),
+      } as any);
+
+      vi.mocked(db.projectMember.findUnique).mockResolvedValue({
+        projectId: validProjectId,
+        userId: pmUserId,
+        projectRole: 'manager',
+      } as any);
+
+      vi.mocked(db.project.update).mockResolvedValue({
+        id: validProjectId,
+        name: 'New Name',
+      } as any);
+
+      vi.mocked(db.auditLog.create).mockRejectedValueOnce(new Error('Audit DB write error'));
+
+      const res = await request(app)
+        .patch(`/api/projects/${validProjectId}`)
+        .set('Cookie', cookie)
+        .send({ name: 'New Name' });
+
+      expect(res.status).toBe(500);
     });
 
     it('refuses PATCH with a forbidden field (400 validation error due to strict schema)', async () => {

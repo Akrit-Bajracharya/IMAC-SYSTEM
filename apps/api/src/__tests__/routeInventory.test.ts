@@ -140,6 +140,13 @@ const PROJECT_ROUTES: RouteDefinition[] = [
     isProjectScoped: true,
   },
   {
+    method: 'delete',
+    subsystem: 'tasks',
+    routePattern: 'DELETE /api/projects/:id/tasks/:taskId',
+    buildPath: (pId, { taskId }) => `/api/projects/${pId}/tasks/${taskId}`,
+    isProjectScoped: true,
+  },
+  {
     method: 'post',
     subsystem: 'tasks',
     routePattern: 'POST /api/projects/:id/tasks/:taskId/status',
@@ -178,6 +185,13 @@ const PROJECT_ROUTES: RouteDefinition[] = [
     method: 'patch',
     subsystem: 'tasks',
     routePattern: 'PATCH /api/projects/:id/tasks/:taskId/comments/:commentId',
+    buildPath: (pId, { taskId, timeLogId }) => `/api/projects/${pId}/tasks/${taskId}/comments/${timeLogId}`,
+    isProjectScoped: true,
+  },
+  {
+    method: 'delete',
+    subsystem: 'tasks',
+    routePattern: 'DELETE /api/projects/:id/tasks/:taskId/comments/:commentId',
     buildPath: (pId, { taskId, timeLogId }) => `/api/projects/${pId}/tasks/${taskId}/comments/${timeLogId}`,
     isProjectScoped: true,
   },
@@ -332,8 +346,8 @@ describe('Step 10d: Route Inventory Test Suite', () => {
     vi.clearAllMocks();
   });
 
-  it('verifies that exactly 35 routes are registered under /api/projects', () => {
-    expect(PROJECT_ROUTES.length).toBe(35);
+  it('verifies that exactly 37 routes are registered under /api/projects', () => {
+    expect(PROJECT_ROUTES.length).toBe(37);
 
     // Count breakdown by subsystem
     const counts = PROJECT_ROUTES.reduce(
@@ -346,7 +360,7 @@ describe('Step 10d: Route Inventory Test Suite', () => {
 
     expect(counts).toEqual({
       projects: 9,
-      tasks: 12,
+      tasks: 14,
       milestones: 5,
       timeLogs: 4,
       messages: 5,

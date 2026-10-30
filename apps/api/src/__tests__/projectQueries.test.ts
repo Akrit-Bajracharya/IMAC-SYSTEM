@@ -99,6 +99,46 @@ describe('Step 10d: Project Queries Subsystem Tests (/summary, /workload, /overd
       expect(res.body.progress).toBe(0);
     });
 
+    it('excludes parent tasks with subtasks from leaf count in progress calculation (Step 10f)', async () => {
+      const cookie = setupAuth(employeeUserId);
+      vi.mocked(db.project.findUnique as any).mockResolvedValue({ id: validProjectId, status: 'on_track' });
+      vi.mocked(db.projectMember.findUnique as any).mockResolvedValue({
+        projectId: validProjectId,
+        userId: employeeUserId,
+        projectRole: 'member',
+      });
+
+      // Tasks structure:
+      // parent1: status 'done', parentTaskId: null (HAS subtasks child1, child2 -> NOT a leaf!)
+      // child1: status 'done', parentTaskId: 'parent1' (leaf 1)
+      // child2: status 'todo', parentTaskId: 'parent1' (leaf 2)
+      // standalone: status 'done', parentTaskId: null (leaf 3)
+      // Total leaves = 3 (child1, child2, standalone). Done leaves = 2 (child1, standalone).
+      // Progress = round(2 / 3 * 100) = 67%
+      vi.mocked(db.task.findMany as any).mockResolvedValue([
+        { id: 'parent1', status: 'done', dueDate: null, estimatedHours: 10, parentTaskId: null },
+        { id: 'child1', status: 'done', dueDate: null, estimatedHours: 5, parentTaskId: 'parent1' },
+        { id: 'child2', status: 'todo', dueDate: null, estimatedHours: 5, parentTaskId: 'parent1' },
+        { id: 'standalone', status: 'done', dueDate: null, estimatedHours: 4, parentTaskId: null },
+      ]);
+
+      vi.mocked(db.timeLog.aggregate as any).mockResolvedValue({ _sum: { hours: 8 } });
+      vi.mocked(db.milestone.findMany as any).mockResolvedValue([]);
+
+      const res = await request(app)
+        .get(`/api/projects/${validProjectId}/summary`)
+        .set('Cookie', cookie);
+
+      expect(res.status).toBe(200);
+      expect(res.body.progress).toBe(67);
+      expect(res.body.taskCounts).toEqual({
+        todo: 1,
+        in_progress: 0,
+        blocked: 0,
+        done: 3,
+      });
+    });
+
     it('returns calculated summary: status, progress, taskCounts, overdueCount, blockedCount, rounded hours, upcoming milestones (mock-based)', async () => {
       const cookie = setupAuth(employeeUserId);
       vi.mocked(db.project.findUnique as any).mockResolvedValue({ id: validProjectId, status: 'at_risk' });

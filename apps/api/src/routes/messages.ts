@@ -174,26 +174,30 @@ messagesRouter.post(
       return res.status(404).json({ error: 'not_found', message: 'Message not found' });
     }
 
-    const updated = await db.projectMessage.update({
-      where: { id: messageId },
-      data: { isPinned: true },
-      include: {
-        authorUser: {
-          select: { id: true, displayName: true, username: true },
+    const updated = await db.$transaction(async (tx) => {
+      const msg = await tx.projectMessage.update({
+        where: { id: messageId },
+        data: { isPinned: true },
+        include: {
+          authorUser: {
+            select: { id: true, displayName: true, username: true },
+          },
         },
-      },
-    });
+      });
 
-    await db.auditLog.create({
-      data: {
-        actorUserId: req.user!.id,
-        action: 'project_message.pinned',
-        entityType: 'ProjectMessage',
-        entityId: messageId,
-        ipAddress: req.ip,
-        beforeSnapshot: { isPinned: message.isPinned },
-        afterSnapshot: { isPinned: true },
-      },
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user!.id,
+          action: 'project_message.pinned',
+          entityType: 'ProjectMessage',
+          entityId: messageId,
+          ipAddress: req.ip,
+          beforeSnapshot: { isPinned: message.isPinned },
+          afterSnapshot: { isPinned: true },
+        },
+      });
+
+      return msg;
     });
 
     return res.status(200).json({ ok: true, message: updated });
@@ -238,26 +242,30 @@ messagesRouter.post(
       return res.status(404).json({ error: 'not_found', message: 'Message not found' });
     }
 
-    const updated = await db.projectMessage.update({
-      where: { id: messageId },
-      data: { isPinned: false },
-      include: {
-        authorUser: {
-          select: { id: true, displayName: true, username: true },
+    const updated = await db.$transaction(async (tx) => {
+      const msg = await tx.projectMessage.update({
+        where: { id: messageId },
+        data: { isPinned: false },
+        include: {
+          authorUser: {
+            select: { id: true, displayName: true, username: true },
+          },
         },
-      },
-    });
+      });
 
-    await db.auditLog.create({
-      data: {
-        actorUserId: req.user!.id,
-        action: 'project_message.unpinned',
-        entityType: 'ProjectMessage',
-        entityId: messageId,
-        ipAddress: req.ip,
-        beforeSnapshot: { isPinned: message.isPinned },
-        afterSnapshot: { isPinned: false },
-      },
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user!.id,
+          action: 'project_message.unpinned',
+          entityType: 'ProjectMessage',
+          entityId: messageId,
+          ipAddress: req.ip,
+          beforeSnapshot: { isPinned: message.isPinned },
+          afterSnapshot: { isPinned: false },
+        },
+      });
+
+      return msg;
     });
 
     return res.status(200).json({ ok: true, message: updated });
