@@ -1155,9 +1155,91 @@ Documented in `docs/open-policy-questions.md`:
   - Implement Create Task modal with required fields, validation, and error handling.
   - Add all English strings to `apps/web/src/i18n/locales/en.json`.
 - **Files created or changed**:
-  - in_progress
+  - `apps/api/src/routes/tasks.ts`
+  - `apps/api/src/__tests__/tasks.test.ts`
+  - `apps/api/src/routes/projects.ts`
+  - `apps/api/src/__tests__/projectRoutePermissions.test.ts`
+  - `docs/open-policy-questions.md`
+  - `apps/web/src/types/index.ts`
+  - `apps/web/src/api/projects.ts`
+  - `apps/web/src/pages/projects/ProjectDetailPage.tsx`
+  - `apps/web/src/components/projects/TasksTab.tsx`
+  - `apps/web/src/components/projects/TaskStatusBadge.tsx`
+  - `apps/web/src/components/projects/CreateTaskModal.tsx`
+  - `apps/web/src/i18n/locales/en.json`
 - **Tests run with pass counts**:
-  - in_progress
-- **Status**: in_progress
-- **Decisions or problems**:
-  - in_progress
+  - `npm run test`: 18 test files passed, 718 total tests passed (0 failures):
+    - `apps/api`: 17 test files, 707 passed.
+      - `apps/api/src/__tests__/projectRoutePermissions.test.ts`: 198 passed.
+      - `apps/api/src/__tests__/tasks.test.ts`: 89 passed.
+    - `apps/web`: 1 test file, 11 passed (`apps/web/src/router/__tests__/routes.test.ts`).
+  - `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`), 0 errors.
+  - `npm run lint`: clean across all workspaces, 0 errors.
+  - `npm run build --workspace=apps/web`: built cleanly in 12.15s, 0 errors.
+- **Status**: COMPLETED
+
+---
+
+## 20. Step 12b-1 Fix: TasksTab React Query useInfiniteQuery Refactor Completion
+
+### Task 12b-FIX-02: TasksTab useInfiniteQuery Refactor, Pure Helper & Unit Tests
+- **Date**: 2026-10-30
+- **Day of week**: Friday
+- **Start time**: 15:54:11
+- **End time**: 16:00:41
+- **Step**: Step 12b-1 Bugfix Completion (Items 1–7)
+- **Task performed**:
+  - Replaced `useQuery` and manual `tasks` state accumulation in `apps/web/src/components/projects/TasksTab.tsx` with `useInfiniteQuery`.
+  - Audited web workspace for query key `'projectTasks'`: found usage in `apps/web/src/components/workLogs/ProjectTaskPicker.tsx`. Selected key prefix `'projectTasksInfinite'` to eliminate any key collisions between infinite and scalar queries.
+  - Extracted pure, zero-dependency helper functions into `apps/web/src/lib/taskPagination.ts` (`flattenAndDeduplicateTasks` and `getNextTaskPageParam`) with ID de-duplication preserving initial order.
+  - Authored pure Node Vitest test suite in `apps/web/src/lib/__tests__/taskPagination.test.ts` covering empty pages, two distinct pages, cross-page duplicate IDs, `hasMore: false`, and `hasMore: true` with a cursor (6 tests passing).
+  - Wired task status mutations to await query invalidations (`projectTasksInfinite`, `projectTasks`, and `topLevelTasks`) before clearing card action/busy states.
+  - Updated filter transition behavior: `isInitialLoading` displays the loading state rather than empty "No tasks found" state while initial page for new filter combinations is fetching.
+  - Verified installed `@tanstack/react-query` version: `5.104.2` (no package upgrades or new dependencies installed).
+- **Files created or changed**:
+  - `apps/web/src/lib/taskPagination.ts` (created)
+  - `apps/web/src/lib/__tests__/taskPagination.test.ts` (created)
+  - `apps/web/src/components/projects/TasksTab.tsx` (modified)
+  - `finalreport.md` (completion entry appended)
+- **Tests run with pass counts**:
+  - `npm test`: 19 test files passed, 724 total tests passed (0 failures):
+    - `apps/api`: 17 test files, 707 passed.
+    - `apps/web`: 2 test files, 17 passed (`taskPagination.test.ts`: 6 passed, `routes.test.ts`: 11 passed).
+  - `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`), 0 errors.
+  - `npm run lint`: clean across all workspaces, 0 errors.
+  - `npm run build --workspace=apps/web`: built cleanly in 6.31s, 0 errors.
+- **Status**: COMPLETED
+
+---
+
+## 21. Step 12b-1 Hand Test Fix: Date Helpers Resiliency, ISO Due Date Parsing & Overdue Consistency
+
+### Task 12b-FIX-03: Resilient Date Helpers, ISO Timestamp Parsing, Overdue Parity, and Vitest Tests
+- **Timestamp**: 2026-11-02 08:41:17 +05:45
+- **Step**: Step 12b-1 Hand Test Bugfix
+- **Task performed**:
+  - Investigated `RangeError: Invalid time value` thrown from `formatDateDisplay` when called at `TasksTab.tsx:520` on `task.dueDate`.
+  - Identified root cause: API route returns Prisma `@db.Date` fields as JavaScript `Date` serialized to ISO 8601 UTC timestamps (e.g., `"2026-11-02T00:00:00.000Z"`). `formatDateDisplay` previously used `dateStr.split('-')`, causing `day = NaN`.
+  - Hardened `apps/web/src/lib/dateUtils.ts`:
+    - `extractDatePart(dateStr)`: extracts `YYYY-MM-DD` from date-only strings or ISO timestamps without timezone shifting; validates calendar bounds (1 <= month <= 12, valid days per month); returns `null` for missing, empty, or impossible inputs. Never invents a date.
+    - `parseYmd(dateStr)`: returns `{ year, month, day }` or `null` on invalid/empty/impossible inputs while maintaining backward call compatibility.
+    - `formatDateDisplay(dateStr)`: returns `"-"` placeholder for `null`, `undefined`, `''`, whitespace, or unparseable input. Never throws.
+    - `toDateInputValue(value)`: returns `YYYY-MM-DD` or `""` for HTML `<input type="date">`.
+    - `isTaskOverdue(dueDate, status, today)`: checks date parts only against Asia/Kathmandu today, ignores done tasks, does not crash on missing/invalid due dates.
+  - Refactored `apps/web/src/components/projects/TasksTab.tsx`:
+    - Used `isTaskOverdue` in both List and Board views.
+    - Used `formatDateDisplay(task.dueDate)` and added overdue badge in Board view to match List view.
+  - Refactored `MilestonesTabPlaceholder.tsx` to use `formatDateDisplay` instead of raw ISO string concatenation.
+  - Refactored `EditProjectModal.tsx` to initialize `<input type="date">` using `toDateInputValue`.
+  - Added pure Vitest unit tests in `apps/web/src/lib/__tests__/dateUtils.test.ts` (20 tests covering null, undefined, '', 'garbage', '2026-11-02', '2026-11-02T00:00:00.000Z', '2026-11-02T18:30:00.000Z', toDateInputValue, and day boundary overdue checks).
+- **Files created or changed**:
+  - `apps/web/src/lib/dateUtils.ts` (modified)
+  - `apps/web/src/lib/__tests__/dateUtils.test.ts` (created)
+  - `apps/web/src/components/projects/TasksTab.tsx` (modified)
+  - `apps/web/src/components/projects/MilestonesTabPlaceholder.tsx` (modified)
+  - `apps/web/src/components/projects/EditProjectModal.tsx` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test --workspace=apps/web`: 3 test files passed, 37 total tests passed (0 failures).
+  - `npm run typecheck --workspace=apps/web`: clean, 0 errors.
+- **Status**: COMPLETED

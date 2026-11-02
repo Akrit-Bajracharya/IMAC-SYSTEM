@@ -14,6 +14,7 @@ import { Input } from '../ui/input.js';
 import { Label } from '../ui/label.js';
 import { Alert, AlertDescription } from '../ui/alert.js';
 import { updateProject, getProjectErrorInfo } from '../../api/projects.js';
+import { toDateInputValue } from '../../lib/dateUtils.js';
 import type { ProjectDetail } from '../../types/index.js';
 
 interface EditProjectModalProps {
@@ -52,8 +53,8 @@ export function EditProjectModal({
       reset({
         name: project.name,
         description: project.description || '',
-        startDate: project.startDate ? project.startDate.slice(0, 10) : '',
-        targetDate: project.targetDate ? project.targetDate.slice(0, 10) : '',
+        startDate: toDateInputValue(project.startDate),
+        targetDate: toDateInputValue(project.targetDate),
       });
       setErrorMsg(null);
     }

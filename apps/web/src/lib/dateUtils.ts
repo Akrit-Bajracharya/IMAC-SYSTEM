@@ -3,6 +3,8 @@
  * Ensures consistent Asia/Kathmandu date string handling (YYYY-MM-DD, never timestamps).
  */
 
+export type ParsedYmd = { year: number; month: number; day: number };
+
 export function getKathmanduToday(): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kathmandu',
@@ -13,9 +15,46 @@ export function getKathmanduToday(): string {
   return formatter.format(new Date());
 }
 
-export function parseYmd(dateStr: string): { year: number; month: number; day: number } {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return { year: year ?? 2026, month: month ?? 1, day: day ?? 1 };
+/**
+ * Extracts YYYY-MM-DD date part from a date-only string or ISO timestamp without shifting time zones.
+ * Validates that year, month, and day represent a real calendar date.
+ * Returns null if input is missing, empty, or an impossible date (e.g. 2026-13-45).
+ */
+export function extractDatePart(dateStr?: string | null): string | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = parseInt(match[1]!, 10);
+  const month = parseInt(match[2]!, 10);
+  const day = parseInt(match[3]!, 10);
+
+  if (month < 1 || month > 12) return null;
+  const maxDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > maxDays) return null;
+
+  const mm = String(month).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  return `${year}-${mm}-${dd}`;
+}
+
+/**
+ * Safely parses a date string or ISO timestamp into { year, month, day }.
+ * Returns null if input is empty, unreadable, or impossible (e.g. 2026-13-45).
+ * Preserves call compatibility with existing callers.
+ */
+export function parseYmd(dateStr: string): ParsedYmd;
+export function parseYmd(dateStr?: string | null): ParsedYmd | null;
+export function parseYmd(dateStr?: string | null): ParsedYmd | null {
+  const datePart = extractDatePart(dateStr);
+  if (!datePart) return null;
+  const [yearStr, monthStr, dayStr] = datePart.split('-');
+  return {
+    year: parseInt(yearStr!, 10),
+    month: parseInt(monthStr!, 10),
+    day: parseInt(dayStr!, 10),
+  };
 }
 
 export function formatYmd(year: number, month: number, day: number): string {
@@ -25,14 +64,18 @@ export function formatYmd(year: number, month: number, day: number): string {
 }
 
 export function addDays(dateStr: string, days: number): string {
-  const { year, month, day } = parseYmd(dateStr);
+  const parsed = parseYmd(dateStr);
+  if (!parsed) return '';
+  const { year, month, day } = parsed;
   const date = new Date(Date.UTC(year, month - 1, day));
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().split('T')[0]!;
 }
 
 export function getWeekMonday(dateStr: string): string {
-  const { year, month, day } = parseYmd(dateStr);
+  const parsed = parseYmd(dateStr);
+  if (!parsed) return '';
+  const { year, month, day } = parsed;
   const date = new Date(Date.UTC(year, month - 1, day));
   // In JS, getUTCDay: 0 is Sun, 1 is Mon, ..., 6 is Sat
   const dayOfWeek = date.getUTCDay();
@@ -51,8 +94,16 @@ export function getFirstWeekdayOfMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
 }
 
-export function formatDateDisplay(dateStr: string): string {
-  const { year, month, day } = parseYmd(dateStr);
+/**
+ * Formats a YYYY-MM-DD string or ISO timestamp for display (e.g. "Mon, Nov 2, 2026").
+ * Takes the date part without time zone shifting.
+ * Returns neutral placeholder "-" for null, undefined, empty, or unparseable input.
+ * Never throws.
+ */
+export function formatDateDisplay(dateStr?: string | null): string {
+  const parsed = parseYmd(dateStr);
+  if (!parsed) return '-';
+  const { year, month, day } = parsed;
   const date = new Date(Date.UTC(year, month - 1, day));
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'UTC',
@@ -61,6 +112,32 @@ export function formatDateDisplay(dateStr: string): string {
     month: 'short',
     day: 'numeric',
   }).format(date);
+}
+
+/**
+ * Returns YYYY-MM-DD or empty string "" for HTML <input type="date"> elements.
+ */
+export function toDateInputValue(value?: string | null): string {
+  return extractDatePart(value) ?? '';
+}
+
+/**
+ * Determines whether a task is overdue:
+ * - Done tasks are never overdue.
+ * - Missing, empty, or invalid due dates are never overdue (does not crash).
+ * - Compares calendar date parts only (dueDatePart < referenceToday).
+ * - Defaults referenceToday to Asia/Kathmandu today.
+ */
+export function isTaskOverdue(
+  dueDate: string | null | undefined,
+  status: string,
+  today?: string
+): boolean {
+  if (status === 'done') return false;
+  const dueDatePart = extractDatePart(dueDate);
+  if (!dueDatePart) return false;
+  const referenceToday = today ?? getKathmanduToday();
+  return dueDatePart < referenceToday;
 }
 
 export function formatHours(hours: number): string {

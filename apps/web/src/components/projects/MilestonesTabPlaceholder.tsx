@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Milestone, Clock, Calendar } from 'lucide-react';
+import { Milestone, Calendar } from 'lucide-react';
+import { formatDateDisplay } from '../../lib/dateUtils.js';
 import type { ProjectDetail } from '../../types/index.js';
 
 interface MilestonesTabPlaceholderProps {
@@ -31,7 +32,7 @@ export function MilestonesTabPlaceholder({ project }: MilestonesTabPlaceholderPr
         <div className="inline-flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-900 rounded-md text-xs text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800">
           <Calendar className="w-4 h-4 text-gray-500" />
           <span>
-            {t('projects.detail.dates', 'Project Duration')}: {project.startDate} &rarr; {project.targetDate}
+            {t('projects.detail.dates', 'Project Duration')}: {formatDateDisplay(project.startDate)} &rarr; {formatDateDisplay(project.targetDate)}
           </span>
         </div>
       )}

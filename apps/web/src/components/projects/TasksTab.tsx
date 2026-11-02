@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   List,
   Kanban,
@@ -24,10 +24,14 @@ import {
   fetchProjectMilestones,
   getProjectErrorInfo,
 } from '../../api/projects.js';
+import {
+  flattenAndDeduplicateTasks,
+  getNextTaskPageParam,
+} from '../../lib/taskPagination.js';
 import { Button } from '../ui/button.js';
 import { TaskStatusBadge } from './TaskStatusBadge.js';
 import { CreateTaskModal } from './CreateTaskModal.js';
-import { getKathmanduToday, formatDateDisplay } from '../../lib/dateUtils.js';
+import { getKathmanduToday, formatDateDisplay, isTaskOverdue } from '../../lib/dateUtils.js';
 import type {
   ProjectDetail,
   ProjectTask,
@@ -57,6 +61,7 @@ export function TasksTab({
   isSystemAdmin,
 }: TasksTabProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   // View state
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
@@ -68,12 +73,6 @@ export function TasksTab({
   const [filterMilestone, setFilterMilestone] = useState<string>('');
   const [topLevelOnly, setTopLevelOnly] = useState<boolean>(false);
   const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
-
-  // Pagination accumulation state
-  const [tasks, setTasks] = useState<ProjectTask[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState<boolean>(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Mutation / Status change feedback
   const [statusActionTaskId, setStatusActionTaskId] = useState<string | null>(null);
@@ -99,16 +98,20 @@ export function TasksTab({
     return false;
   }, [isSystemAdmin, callerProjectRole]);
 
-  // Initial tasks fetch
+  // Tasks infinite query keyed by project.id and all filters
   const {
+    data,
     isLoading,
     isError,
     error,
     refetch,
     isFetching,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: [
-      'projectTasks',
+      'projectTasksInfinite',
       project.id,
       filterStatus,
       filterAssignee,
@@ -116,47 +119,37 @@ export function TasksTab({
       topLevelOnly,
       overdueOnly,
     ],
-    queryFn: async () => {
-      const res = await fetchProjectTasks(project.id, {
+    queryFn: async ({ pageParam }) => {
+      return fetchProjectTasks(project.id, {
         limit: 50,
+        cursor: pageParam || undefined,
         status: filterStatus ? (filterStatus as TaskStatus) : undefined,
         assigneeUserId: filterAssignee || undefined,
         milestoneId: filterMilestone || undefined,
         topLevelOnly: topLevelOnly ? true : undefined,
         overdue: overdueOnly ? true : undefined,
       });
-      setTasks(res.items);
-      setNextCursor(res.nextCursor);
-      setHasMore(res.hasMore);
-      return res;
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => getNextTaskPageParam(lastPage),
     staleTime: 10000,
   });
 
-  // Load more tasks with nextCursor
-  const handleLoadMore = async () => {
-    if (!nextCursor || isLoadingMore) return;
-    setIsLoadingMore(true);
-    setActionError(null);
-    try {
-      const res = await fetchProjectTasks(project.id, {
-        limit: 50,
-        cursor: nextCursor,
-        status: filterStatus ? (filterStatus as TaskStatus) : undefined,
-        assigneeUserId: filterAssignee || undefined,
-        milestoneId: filterMilestone || undefined,
-        topLevelOnly: topLevelOnly ? true : undefined,
-        overdue: overdueOnly ? true : undefined,
-      });
-      setTasks((prev) => [...prev, ...res.items]);
-      setNextCursor(res.nextCursor);
-      setHasMore(res.hasMore);
-    } catch (err: any) {
-      const errInfo = getProjectErrorInfo(err);
-      setActionError({ message: errInfo.message });
-    } finally {
-      setIsLoadingMore(false);
-    }
+  // Derive task list from pages with de-duplication
+  const tasks = useMemo(() => {
+    return flattenAndDeduplicateTasks(data?.pages);
+  }, [data?.pages]);
+
+  const hasMore = Boolean(hasNextPage);
+  const isLoadingMore = isFetchingNextPage;
+
+  // While filters change, show loading state, never "no tasks" empty state, until first page arrives
+  const isInitialLoading = isLoading || (isFetching && (!data || data.pages.length === 0));
+
+  // Load more tasks with nextCursor via fetchNextPage
+  const handleLoadMore = () => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    fetchNextPage();
   };
 
   // Rule from item 2 & 3:
@@ -179,13 +172,15 @@ export function TasksTab({
 
     try {
       const res = await changeTaskStatus(project.id, task.id, targetStatus);
-      // Update local task status
-      setTasks((prev) =>
-        prev.map((t) => (t.id === task.id ? { ...t, status: res.status } : t))
-      );
       if (res.warnings && res.warnings.length > 0) {
         setStatusSuccessWarning(res.warnings);
       }
+      // Await invalidation before clearing busy state of the card
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['projectTasksInfinite', project.id] }),
+        queryClient.invalidateQueries({ queryKey: ['projectTasks', project.id] }),
+        queryClient.invalidateQueries({ queryKey: ['topLevelTasks', project.id] }),
+      ]);
     } catch (err: any) {
       const errInfo = getProjectErrorInfo(err);
       if (errInfo.error === 'open_dependency') {
@@ -416,7 +411,7 @@ export function TasksTab({
       </div>
 
       {/* Loading state */}
-      {isLoading && (
+      {isInitialLoading && (
         <div className="flex items-center justify-center p-12 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700">
           <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mr-2" />
           <span className="text-sm text-gray-500">{t('projects.tasks.loading', 'Loading tasks...')}</span>
@@ -424,7 +419,7 @@ export function TasksTab({
       )}
 
       {/* Error state */}
-      {isError && (
+      {!isInitialLoading && isError && (
         <div className="p-8 text-center bg-white dark:bg-gray-800 rounded-lg border border-red-200 dark:border-red-900">
           <AlertCircle className="w-8 h-8 mx-auto text-red-500 mb-2" />
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -440,7 +435,7 @@ export function TasksTab({
       )}
 
       {/* Empty state */}
-      {!isLoading && !isError && tasks.length === 0 && (
+      {!isInitialLoading && !isError && tasks.length === 0 && (
         <div className="p-12 text-center bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
           <GitBranch className="w-10 h-10 mx-auto text-gray-400 mb-3" />
           <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
@@ -462,14 +457,11 @@ export function TasksTab({
       )}
 
       {/* ── View Mode: LIST VIEW ────────────────────────────────────────────── */}
-      {!isLoading && !isError && tasks.length > 0 && viewMode === 'list' && (
+      {!isInitialLoading && !isError && tasks.length > 0 && viewMode === 'list' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {tasks.map((task) => {
-              const isOverdue =
-                Boolean(task.dueDate) &&
-                task.dueDate! < kathmanduToday &&
-                task.status !== 'done';
+              const isOverdue = isTaskOverdue(task.dueDate, task.status, kathmanduToday);
 
               const member = (project.members || []).find((m) => m.userId === task.assigneeUserId);
               const assigneeName = member?.user?.displayName || member?.user?.username || task.assigneeUser?.displayName;
@@ -583,7 +575,7 @@ export function TasksTab({
       )}
 
       {/* ── View Mode: BOARD VIEW ───────────────────────────────────────────── */}
-      {!isLoading && !isError && tasks.length > 0 && viewMode === 'board' && (
+      {!isInitialLoading && !isError && tasks.length > 0 && viewMode === 'board' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {BOARD_COLUMNS.map((col) => {
             const colTasks = boardColumns[col.id] || [];
@@ -611,10 +603,7 @@ export function TasksTab({
                     </div>
                   ) : (
                     colTasks.map((task) => {
-                      const isOverdue =
-                        Boolean(task.dueDate) &&
-                        task.dueDate! < kathmanduToday &&
-                        task.status !== 'done';
+                      const isOverdue = isTaskOverdue(task.dueDate, task.status, kathmanduToday);
 
                       const member = (project.members || []).find((m) => m.userId === task.assigneeUserId);
                       const assigneeName = member?.user?.displayName || member?.user?.username || task.assigneeUser?.displayName;
@@ -652,7 +641,12 @@ export function TasksTab({
                                 }`}
                               >
                                 <Calendar className="w-3 h-3" />
-                                <span>{task.dueDate}</span>
+                                <span>{formatDateDisplay(task.dueDate)}</span>
+                                {isOverdue && (
+                                  <span className="px-1.5 py-0.2 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded text-[10px] uppercase font-bold ml-1">
+                                    {t('projects.tasks.overdueBadge', 'Overdue')}
+                                  </span>
+                                )}
                               </span>
                             )}
                           </div>
@@ -690,7 +684,7 @@ export function TasksTab({
       )}
 
       {/* Visible "Showing N tasks, load more" note & button on both List and Board */}
-      {!isLoading && !isError && tasks.length > 0 && (
+      {!isInitialLoading && !isError && tasks.length > 0 && (
         <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600 dark:text-gray-400">
           <span>
             {t(
@@ -730,9 +724,13 @@ export function TasksTab({
           project={project}
           isOpen={createModalOpen}
           onClose={() => setCreateModalOpen(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setCreateModalOpen(false);
-            refetch();
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['projectTasksInfinite', project.id] }),
+              queryClient.invalidateQueries({ queryKey: ['projectTasks', project.id] }),
+              queryClient.invalidateQueries({ queryKey: ['topLevelTasks', project.id] }),
+            ]);
           }}
         />
       )}

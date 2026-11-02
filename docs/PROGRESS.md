@@ -930,3 +930,30 @@ Across all APIs in the IMAC Operations System:
 - `npm run build --workspace=apps/web`: built cleanly for production (0 errors).
 
 
+
+
+---
+
+## Current Milestone: Step 12b-1 — Task Screens Part 1 (Backend Audits, Permission Matrix Tests, Tabs, Task List, Board & Create Task) — COMPLETED
+
+**Timestamp**: 2026-10-30 15:31:05 +05:45
+
+### 1. What Was Built & Verified
+- **Part 0: Backend Audits & Route Permission Tests**:
+  - `0.1 DELETE /api/projects/:id/tasks/:taskId Audit Hardening`: Counted subtasks and cascade-deleted comments within transaction; recorded `subtaskCount` and `commentCount` in `task.deleted` audit snapshot without sensitive `description`. Verified via unit test in `tasks.test.ts`.
+  - `0.2 Mutating Route Permission Matrix Test Suite`: Created `apps/api/src/__tests__/projectRoutePermissions.test.ts` running 198 automated test assertions across all mutating project endpoints using Express router introspection against caller roles (`system_admin`, `manager`, `member`, `viewer`, non-members, malformed UUIDs, and unauthenticated callers).
+  - `0.3 Clean up Unused Import`: Removed unused `createAuditEntry` in `apps/api/src/routes/projects.ts`.
+- **Part 1: UI Types, API Client & Task Views**:
+  - `1.1 Tab Navigation`: Added URL search param tab switching (`?tab=overview|tasks|milestones`) to `ProjectDetailPage.tsx`.
+  - `1.2 Tasks Tab List View`: Filterable by status, assignee, milestone, overdue, and top-level only, supporting cursor-based pagination.
+  - `1.3 Tasks Tab Board View`: Kanban board featuring 4 columns (`todo`, `in_progress`, `blocked`, `done`), real API-derived transition gating (`canEditTask('changeStatus')`), open warnings indicators, and pagination load-more support.
+  - `1.4 Create Task Modal`: Dialog supporting full task metadata input with real-time validation and error handling.
+  - Translations: Complete English localization in `apps/web/src/i18n/locales/en.json` (0 missing keys).
+
+### 2. Verification Results
+- `npm run test`: 18 test files passed, **718 total tests passed (0 failures)**:
+  - `apps/api`: 17 test files passed, 707 tests passed.
+  - `apps/web`: 1 test file passed, 11 tests passed.
+- `npm run typecheck`: clean across all workspaces (0 errors).
+- `npm run lint`: clean across all workspaces (0 errors).
+- `npm run build --workspace=apps/web`: built cleanly for production in 12.15s (0 errors).
