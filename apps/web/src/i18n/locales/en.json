@@ -80,7 +80,9 @@
     "actions": "Actions",
     "reload": "Reload",
     "save": "Save Changes",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "edit": "Edit",
+    "delete": "Delete"
   },
   "roles": {
     "system_admin": "System Admin",
@@ -687,12 +689,13 @@
         "openDependency": "Cannot mark task done while prerequisite dependencies are open.",
         "conflictRetry": "Task was modified concurrently by another user. Please reload.",
         "forbidden": "You do not have permission to change the status of this task.",
-        "notFound": "Task or project not found."
+        "notFound": "Task or project not found.",
+        "openDependencyWithList": "Cannot mark task done while prerequisite dependencies are open: {{tasks}}"
       },
       "statusWarnings": {
         "completedWithNotice": "Task status updated, but please note:",
-        "openDependency": "Prerequisites are still open.",
-        "openSubtasks": "Subtasks are still open."
+        "openDependency": "Warning: This task was marked done while prerequisite dependencies are still open.",
+        "openSubtasks": "Warning: This task was marked done while some subtasks are still open."
       },
       "create": {
         "title": "Create New Task",
@@ -769,6 +772,56 @@
         "notFound": "Task or project not found.",
         "generic": "Failed to update task.",
         "deleteFailed": "Failed to delete task."
+      },
+      "dependencies": {
+        "title": "Dependencies",
+        "addDependency": "Add Dependency",
+        "blockedBy": "Blocked By",
+        "blockedByDesc": "Prerequisite tasks this task depends on",
+        "unknownTask": "Deleted or unknown task",
+        "remove": "Remove dependency",
+        "noBlockedBy": "No prerequisite tasks (this task is not blocked by anything).",
+        "blocks": "Blocks",
+        "blocksDesc": "Tasks waiting on this task to finish",
+        "noBlocks": "No tasks are currently waiting on this task.",
+        "addModalTitle": "Add Prerequisite Dependency",
+        "addModalDesc": "Select a task from this project that must be completed before this task can be marked done.",
+        "searchPlaceholder": "Search candidate tasks...",
+        "loadError": "Failed to load project tasks.",
+        "noCandidates": "No available tasks found to add as a dependency.",
+        "confirmAdd": "Add Dependency",
+        "removeTitle": "Remove Prerequisite Dependency",
+        "removeConfirmText": "Are you sure you want to remove the prerequisite dependency on \"{{title}}\"? This task will no longer be blocked by it.",
+        "confirmRemove": "Remove",
+        "errors": {
+          "selfDependency": "A task cannot depend on itself.",
+          "cycle": "Adding this dependency would create a circular loop where tasks wait on each other.",
+          "duplicate": "This dependency already exists.",
+          "validation": "Invalid dependency data. Please verify the selected task.",
+          "forbidden": "You do not have permission to manage dependencies on this task.",
+          "notFound": "Task or dependency not found.",
+          "generic": "Failed to update dependency."
+        }
+      },
+      "comments": {
+        "title": "Comments",
+        "viewerNotice": "You can read comments, but project viewers cannot post or edit comments.",
+        "inputPlaceholder": "Write a comment or update (plain text, @mentions supported)...",
+        "postButton": "Post Comment",
+        "loadError": "Failed to load comments.",
+        "loadMore": "Load older comments",
+        "noComments": "No comments yet. Start the conversation!",
+        "editedMarker": "edited",
+        "deleteTitle": "Delete Comment",
+        "deleteConfirmText": "Are you sure you want to delete this comment? This action cannot be undone.",
+        "errors": {
+          "forbidden": "You do not have permission to post comments.",
+          "notFound": "Task or project not found.",
+          "validation": "Comment must be between 1 and 5000 characters.",
+          "generic": "Failed to post comment.",
+          "editForbidden": "Only the comment author may edit this comment.",
+          "deleteForbidden": "You do not have permission to delete this comment."
+        }
       }
     }
   }

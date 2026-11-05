@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { changeTaskStatus, getProjectErrorInfo } from '../../api/projects.js';
 import { canEditTask } from '../../lib/taskPermissions.js';
-import type { TaskStatus, ProjectRole } from '../../types/index.js';
+import type { TaskStatus, ProjectRole, TaskDependencyItem } from '../../types/index.js';
 
 interface TaskStatusControlProps {
   projectId: string;
@@ -12,6 +12,7 @@ interface TaskStatusControlProps {
     status: TaskStatus;
     createdByUserId: string;
     assigneeUserId?: string | null;
+    dependencies?: TaskDependencyItem[];
   };
   callerProjectRole?: ProjectRole;
   isSystemAdmin: boolean;
@@ -20,6 +21,22 @@ interface TaskStatusControlProps {
   onError?: (err: { message: string; isConflict?: boolean } | null) => void;
   onSuccessWarning?: (warnings: string[] | null) => void;
   onStatusChanged?: (newStatus: TaskStatus) => void;
+}
+
+export function formatStatusWarning(t: (key: string, def: string) => string, warning: string): string {
+  if (warning === 'open_dependency') {
+    return t(
+      'projects.tasks.statusWarnings.openDependency',
+      'Warning: This task was marked done while prerequisite dependencies are still open.'
+    );
+  }
+  if (warning === 'open_subtasks') {
+    return t(
+      'projects.tasks.statusWarnings.openSubtasks',
+      'Warning: This task was marked done while some subtasks are still open.'
+    );
+  }
+  return warning;
 }
 
 export function TaskStatusControl({
@@ -80,10 +97,22 @@ export function TaskStatusControl({
       let isConflict = false;
 
       if (errInfo.error === 'open_dependency') {
-        errMsg = t(
-          'projects.tasks.statusErrors.openDependency',
-          'Cannot mark task done while prerequisite dependencies are open.'
-        );
+        const openPrereqs = (task.dependencies || [])
+          .filter((d) => d.dependsOnTask && d.dependsOnTask.status !== 'done')
+          .map((d) => d.dependsOnTask?.title)
+          .filter(Boolean);
+
+        if (openPrereqs.length > 0) {
+          errMsg = t(
+            'projects.tasks.statusErrors.openDependencyWithList',
+            `Cannot mark task done while prerequisite dependencies are open: ${openPrereqs.join(', ')}`
+          );
+        } else {
+          errMsg = t(
+            'projects.tasks.statusErrors.openDependency',
+            'Cannot mark task done while prerequisite dependencies are open.'
+          );
+        }
       } else if (errInfo.error === 'conflict_retry') {
         errMsg = t(
           'projects.tasks.statusErrors.conflictRetry',
@@ -95,11 +124,19 @@ export function TaskStatusControl({
           'projects.tasks.statusErrors.forbidden',
           'You do not have permission to change the status of this task.'
         );
+        // Amendment 3: Invalidate queries on 403/404 so UI doesn't remain stuck
+        queryClient.invalidateQueries({ queryKey: ['projectTask', projectId, task.id] });
+        queryClient.invalidateQueries({ queryKey: ['projectTasksInfinite', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       } else if (errInfo.status === 404) {
         errMsg = t(
           'projects.tasks.statusErrors.notFound',
           'Task or project not found.'
         );
+        // Amendment 3: Invalidate queries on 403/404 so UI doesn't remain stuck
+        queryClient.invalidateQueries({ queryKey: ['projectTask', projectId, task.id] });
+        queryClient.invalidateQueries({ queryKey: ['projectTasksInfinite', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       }
 
       setInlineError(errMsg);
@@ -138,7 +175,7 @@ export function TaskStatusControl({
         {inlineWarnings && inlineWarnings.length > 0 && (
           <div className="p-2 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded text-xs text-yellow-800 dark:yellow-200 space-y-1">
             {inlineWarnings.map((w, idx) => (
-              <div key={idx}>{w}</div>
+              <div key={idx}>{formatStatusWarning(t, w)}</div>
             ))}
           </div>
         )}
@@ -146,9 +183,9 @@ export function TaskStatusControl({
     );
   }
 
-  // Board variant (default)
+  // Board variant (Amendment 2: shows same warnings and 409 explanation)
   return (
-    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+    <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-1">
       <div className="flex items-center justify-between gap-1 text-[11px]">
         <span className="text-gray-500">
           {t('projects.tasks.moveTo', 'Move to')}:
@@ -165,6 +202,20 @@ export function TaskStatusControl({
           <option value="done">{t('projects.tasks.status.done', 'Done')}</option>
         </select>
       </div>
+
+      {inlineError && (
+        <p className="text-[11px] text-red-600 dark:text-red-400 font-medium leading-tight">
+          {inlineError}
+        </p>
+      )}
+
+      {inlineWarnings && inlineWarnings.length > 0 && (
+        <div className="p-1.5 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded text-[11px] text-yellow-800 dark:text-yellow-200 space-y-0.5">
+          {inlineWarnings.map((w, idx) => (
+            <div key={idx}>{formatStatusWarning(t, w)}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

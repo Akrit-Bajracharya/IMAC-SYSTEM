@@ -7,6 +7,9 @@ import type {
   ProjectTaskListResponse,
   ProjectTask,
   ProjectTaskDetail,
+  TaskDependencyItem,
+  TaskCommentItem,
+  TaskCommentListResponse,
   TaskStatus,
   CreateTaskPayload,
   PatchTaskPayload,
@@ -219,6 +222,86 @@ export async function removeProjectMember(
 ): Promise<{ success: boolean }> {
   const res = await apiClient.delete<{ success: boolean }>(
     `/projects/${projectId}/members/${userId}`
+  );
+  return res.data;
+}
+
+export async function addTaskDependency(
+  projectId: string,
+  taskId: string,
+  dependsOnTaskId: string
+): Promise<TaskDependencyItem> {
+  const res = await apiClient.post<TaskDependencyItem>(
+    `/projects/${projectId}/tasks/${taskId}/dependencies`,
+    { dependsOnTaskId }
+  );
+  return res.data;
+}
+
+export async function removeTaskDependency(
+  projectId: string,
+  taskId: string,
+  dependsOnTaskId: string
+): Promise<{ success: boolean }> {
+  const res = await apiClient.delete<{ success: boolean }>(
+    `/projects/${projectId}/tasks/${taskId}/dependencies/${dependsOnTaskId}`
+  );
+  return res.data;
+}
+
+export interface ListTaskCommentsParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export async function fetchTaskComments(
+  projectId: string,
+  taskId: string,
+  params?: ListTaskCommentsParams
+): Promise<TaskCommentListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.set('limit', String(params.limit));
+  if (params?.cursor) queryParams.set('cursor', params.cursor);
+
+  const url = queryParams.toString()
+    ? `/projects/${projectId}/tasks/${taskId}/comments?${queryParams.toString()}`
+    : `/projects/${projectId}/tasks/${taskId}/comments`;
+  const res = await apiClient.get<TaskCommentListResponse>(url);
+  return res.data;
+}
+
+export async function createTaskComment(
+  projectId: string,
+  taskId: string,
+  body: string
+): Promise<TaskCommentItem> {
+  const res = await apiClient.post<TaskCommentItem>(
+    `/projects/${projectId}/tasks/${taskId}/comments`,
+    { body }
+  );
+  return res.data;
+}
+
+export async function patchTaskComment(
+  projectId: string,
+  taskId: string,
+  commentId: string,
+  body: string
+): Promise<TaskCommentItem> {
+  const res = await apiClient.patch<TaskCommentItem>(
+    `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`,
+    { body }
+  );
+  return res.data;
+}
+
+export async function deleteTaskComment(
+  projectId: string,
+  taskId: string,
+  commentId: string
+): Promise<{ ok: boolean; deletedCommentId: string }> {
+  const res = await apiClient.delete<{ ok: boolean; deletedCommentId: string }>(
+    `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`
   );
   return res.data;
 }

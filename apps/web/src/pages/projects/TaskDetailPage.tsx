@@ -31,6 +31,8 @@ import { Button } from '../../components/ui/button.js';
 import { Spinner } from '../../components/layout/Spinner.js';
 import { TaskStatusBadge } from '../../components/projects/TaskStatusBadge.js';
 import { TaskStatusControl } from '../../components/projects/TaskStatusControl.js';
+import { TaskDependenciesSection } from '../../components/projects/TaskDependenciesSection.js';
+import { TaskCommentsSection } from '../../components/projects/TaskCommentsSection.js';
 import { CreateTaskModal } from '../../components/projects/CreateTaskModal.js';
 import {
   canEditTask,
@@ -662,6 +664,28 @@ export function TaskDetailPage() {
               </p>
             )}
           </div>
+
+          {/* Dependencies Section */}
+          <TaskDependenciesSection
+            projectId={project.id}
+            task={task}
+            callerProjectRole={callerProjectRole}
+            isSystemAdmin={isSystemAdmin}
+            currentUserId={user?.id}
+            onRefreshTask={refetchTask}
+          />
+
+          {/* Comments Section */}
+          <TaskCommentsSection
+            projectId={project.id}
+            taskId={task.id}
+            commentCount={task.commentCount ?? 0}
+            callerProjectRole={callerProjectRole}
+            isSystemAdmin={isSystemAdmin}
+            currentUserId={user?.id}
+            projectMembers={project.members}
+            onRefreshTask={refetchTask}
+          />
         </div>
 
         {/* Right Column: Metadata Sidebar Card (1 span) */}
@@ -684,6 +708,9 @@ export function TaskDetailPage() {
                   isSystemAdmin={isSystemAdmin}
                   currentUserId={user?.id}
                   variant="detail"
+                  onStatusChanged={() => {
+                    refetchTask();
+                  }}
                 />
               </div>
             </div>

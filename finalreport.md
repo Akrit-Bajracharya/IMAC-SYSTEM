@@ -1296,3 +1296,53 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run lint --workspace=apps/web`: clean, 0 errors.
   - `npm run build --workspace=apps/web`: production build successful in 8.15s, 0 errors.
 - **Status**: COMPLETED
+
+
+---
+
+## 23. Step 12b-2b: Task Dependencies and Comments (Frontend, apps/web)
+
+### Task 12b-DETAIL-02: Task Dependencies UI, Comments Subsystem, Status Control Hardening & Unit Tests
+- **Date**: 2026-11-05
+- **Day of week**: Thursday
+- **Start time**: 08:57
+- **End time**: 09:13
+- **Step**: Step 12b-2b (Task Dependencies and Comments inside TaskDetailPage)
+- **Task performed**:
+  - Added TaskComment types and API client endpoints (`addTaskDependency`, `removeTaskDependency`, `fetchTaskComments`, `createTaskComment`, `patchTaskComment`, `deleteTaskComment`) in `apps/web/src/types/index.ts` and `apps/web/src/api/projects.ts`.
+  - Built pure helper `taskDependencyHelpers.ts` with candidate task filtering (excluding self, prerequisites, and dependent tasks per Amendment 1) and plain-word cycle/conflict error mapping.
+  - Built pure helper `taskCommentPermissions.ts` with comment authorization checks and `isCommentEdited` requiring >2000ms delta between `updatedAt` and `createdAt` (Amendment 4).
+  - Authored comprehensive unit tests in `taskDependencyHelpers.test.ts` (11 tests) and `taskCommentPermissions.test.ts` (14 tests).
+  - Hardened shared `TaskStatusControl.tsx` to render friendly plain-text warnings (`open_dependency`, `open_subtasks`) and 409 `open_dependency` explanations across both board and detail views (Amendment 2), with auto-invalidation on 403/404 (Amendment 3).
+  - Built `TaskDependenciesSection.tsx` displaying "Blocked by" (prerequisites) with remove confirmation, "Blocks" (dependents), and an "Add Dependency" dialog with real-time candidate search and permission gating.
+  - Built `TaskCommentsSection.tsx` with oldest-first infinite cursor pagination ("Load older comments"), live 5000 character limit counter, viewer read-only notice, author-only inline editing, delete with confirmation for author/manager/admin, and plain-text (`whitespace-pre-wrap`) safe rendering.
+  - Integrated both sections into `TaskDetailPage.tsx` left column below subtasks.
+  - Added all English translation keys to `apps/web/src/i18n/locales/en.json` and verified zero missing keys via automated scanner.
+  - Verified `CreateTaskModal.tsx` strictly matches `createTaskSchema` 7 permitted fields under `.strict()`.
+- **Files created or changed**:
+  - `apps/web/src/types/index.ts` (modified)
+  - `apps/web/src/api/projects.ts` (modified)
+  - `apps/web/src/lib/taskDependencyHelpers.ts` (created)
+  - `apps/web/src/lib/__tests__/taskDependencyHelpers.test.ts` (created)
+  - `apps/web/src/lib/taskCommentPermissions.ts` (created)
+  - `apps/web/src/lib/__tests__/taskCommentPermissions.test.ts` (created)
+  - `apps/web/src/components/projects/TaskStatusControl.tsx` (modified)
+  - `apps/web/src/components/projects/TaskDependenciesSection.tsx` (created)
+  - `apps/web/src/components/projects/TaskCommentsSection.tsx` (created)
+  - `apps/web/src/pages/projects/TaskDetailPage.tsx` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 25 test files passed, 848 total tests passed (0 failures):
+    - `apps/api`: 17 test files passed, 707 passed.
+    - `apps/web`: 8 test files passed, 141 passed.
+  - `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`), 0 errors.
+  - `npm run lint`: clean across all workspaces, 0 errors.
+  - `npm run build --workspace=apps/web`: production build successful in 7.32s, 0 errors.
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - Amendment 1 implemented: `filterCandidateDependencies` excludes `dependentOnMe` (Blocks) tasks to prevent immediate 2-node cycle formation.
+  - Amendment 2 implemented: `TaskStatusControl` renders identical inline warnings and 409 `open_dependency` error explanations in board view.
+  - Amendment 3 implemented: 403 and 404 responses trigger query invalidations and cache refetches so user interface does not remain stuck with stale state.
+  - Amendment 4 implemented: `isCommentEdited` helper strictly requires `updatedAt - createdAt > 2000` ms before displaying "(edited)".

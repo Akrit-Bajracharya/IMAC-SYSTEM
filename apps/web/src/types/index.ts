@@ -305,6 +305,29 @@ export interface ProjectTaskDetail extends ProjectTask {
   commentCount: number;
 }
 
+export interface TaskCommentUser {
+  id: string;
+  displayName: string;
+  username: string;
+  systemRole?: SystemRole;
+}
+
+export interface TaskCommentItem {
+  id: string;
+  taskId: string;
+  authorUserId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  authorUser?: TaskCommentUser;
+}
+
+export interface TaskCommentListResponse {
+  items: TaskCommentItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface ProjectMilestone {
   id: string;
   projectId: string;

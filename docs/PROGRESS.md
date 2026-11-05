@@ -995,3 +995,70 @@ Across all APIs in the IMAC Operations System:
 - `npm run typecheck --workspace=apps/web`: clean, **0 errors**.
 - `npm run lint --workspace=apps/web`: clean, **0 errors**.
 - `npm run build --workspace=apps/web`: built cleanly for production in 8.15s, **0 errors**.
+
+
+---
+
+## Current Milestone: Step 12b-2b — Task Dependencies & Comments inside TaskDetailPage (`apps/web`) — COMPLETED
+
+**Timestamp**: 2026-11-05 09:13:00 +05:45
+
+### 1. What Was Built & Verified
+- **API Services & Web Types (`apps/web/src/types/index.ts` & `apps/web/src/api/projects.ts`)**:
+  - Added `TaskCommentUser`, `TaskCommentItem`, and `TaskCommentListResponse`.
+  - Added `addTaskDependency`: `POST /api/projects/:id/tasks/:taskId/dependencies` (`dependsOnTaskId`).
+  - Added `removeTaskDependency`: `DELETE /api/projects/:id/tasks/:taskId/dependencies/:dependsOnTaskId`.
+  - Added `fetchTaskComments`: `GET /api/projects/:id/tasks/:taskId/comments` with `limit` and `cursor`.
+  - Added `createTaskComment`: `POST /api/projects/:id/tasks/:taskId/comments` (`body`).
+  - Added `patchTaskComment`: `PATCH /api/projects/:id/tasks/:taskId/comments/:commentId` (`body`).
+  - Added `deleteTaskComment`: `DELETE /api/projects/:id/tasks/:taskId/comments/:commentId`.
+- **Pure Helpers & Test Suites**:
+  - `taskDependencyHelpers.ts`:
+    - `filterCandidateDependencies`: Excludes current task, existing prerequisites ("Blocked by"), and existing dependent tasks ("Blocks") per Amendment 1 to prevent immediate 2-node cycles.
+    - `mapDependencyError`: Maps error codes (`self_dependency`, `dependency_cycle`, `duplicate_dependency`, `validation_error`, 403, 404) into friendly plain-language explanations (explaining cycles as circular loops where tasks wait on each other).
+    - Unit tests: `apps/web/src/lib/__tests__/taskDependencyHelpers.test.ts` (11 tests passed).
+  - `taskCommentPermissions.ts`:
+    - `canAddComment`: Allows manager, member, and system_admin; denies project viewers.
+    - `canEditComment`: Strictly comment author.
+    - `canDeleteComment`: Author, project manager, or system_admin.
+    - `isCommentEdited`: Returns true strictly when `updatedAt` is more than 2 seconds (>2000ms) after `createdAt` per Amendment 4.
+    - Unit tests: `apps/web/src/lib/__tests__/taskCommentPermissions.test.ts` (14 tests passed).
+- **Hardened Shared Status Control (`TaskStatusControl.tsx`)**:
+  - Shared across both Board (Kanban) and Task Detail views per Amendment 2.
+  - Formats server warnings (`open_dependency`, `open_subtasks`) in friendly plain text.
+  - On 409 `open_dependency` (for non-manager members), displays an explanation listing open prerequisite titles loaded from `task.dependencies`.
+  - On 403 or 404, invalidates queries and refetches so user interface does not remain stuck per Amendment 3.
+- **Task Dependencies Section (`TaskDependenciesSection.tsx`)**:
+  - Displays "Blocked by" (prerequisites) with status badge, due date, link, and remove button.
+  - Displays "Blocks" (dependents) with status badge, due date, and link.
+  - "Add Dependency" modal with candidate filtering, real-time title search, radio selection, and clear cycle/conflict error handling.
+  - Remove confirmation dialog preventing accidental deletions.
+  - Add and remove controls visible strictly to users with `manageDependencies` permissions (managers, system_admin, or creator/assignee for members; hidden for viewers).
+- **Task Comments Subsystem (`TaskCommentsSection.tsx`)**:
+  - Lists comments oldest first with "Load older comments" button powered by `useInfiniteQuery`.
+  - Add comment box with 1 to 5000 character limit, trimmed, live counter, disabled during submission to prevent double-posts.
+  - Informative banner for project viewers explaining they have read-only access.
+  - Displays author display name (never raw user ID), formatted timestamp, and "(edited)" marker when `updatedAt` > `createdAt` + 2s.
+  - Plain text rendering with `whitespace-pre-wrap` (zero `dangerouslySetInnerHTML` or HTML tags; @mentions rendered as plain text).
+  - Inline comment editing for author only, with character counter and cancel/save buttons.
+  - Delete comment with confirmation modal for author, manager, or system_admin.
+  - Automatic cache invalidation and refetch on 403/404 per Amendment 3.
+- **Verification of Create Task Modal**:
+  - Audited `CreateTaskModal.tsx` against `createTaskSchema` in `packages/shared/src/schemas/task.ts`.
+  - Confirmed modal constructs a payload containing strictly the 7 permitted keys (`title`, `description`, `dueDate`, `estimatedHours`, `assigneeUserId`, `milestoneId`, `parentTaskId`) conforming to `.strict()` validation without extra fields.
+- **Localization**:
+  - All text localized through `react-i18next` with English strings added to `apps/web/src/i18n/locales/en.json`.
+  - Automated scanner confirmed 0 missing keys.
+
+### 2. Verification Results
+- `npm run test`: 25 test files passed, **848 total tests passed (0 failures)**:
+  - `apps/api`: 17 test files passed, 707 passed.
+  - `apps/web`: 8 test files passed, 141 passed.
+- `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`), **0 errors**.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run build --workspace=apps/web`: built cleanly for production in 7.32s, **0 errors**.
+
+### 3. API Gaps & Mock Limitations
+- **API Gaps**: No backend API gaps were encountered. All required endpoints (`dependencies`, `comments`, `status`) exist and were integrated as specified.
+- **Mock Limitations (What Unit Tests Cannot Prove)**:
+  - Vitest tests in `apps/api` utilize in-memory mocks of Prisma. True PostgreSQL concurrency serialization, transactional table locks (`SELECT ... FOR UPDATE` in dependency cycle checks), physical database cascade deletions (`onDelete: Cascade`), and real network double-submit CSRF cookie token timing cannot be verified by mock-based tests and require live integration/Playwright testing on PostgreSQL.
