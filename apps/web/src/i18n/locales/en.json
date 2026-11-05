@@ -82,7 +82,8 @@
     "save": "Save Changes",
     "deleting": "Deleting...",
     "edit": "Edit",
-    "delete": "Delete"
+    "delete": "Delete",
+    "open": "Open"
   },
   "roles": {
     "system_admin": "System Admin",
@@ -736,7 +737,43 @@
     },
     "milestones": {
       "placeholderTitle": "Milestone Management",
-      "placeholderNotice": "Milestone management is coming in the next step. Project milestones and their task dependencies will be manageable directly from this tab."
+      "placeholderNotice": "Milestone management is coming in the next step. Project milestones and their task dependencies will be manageable directly from this tab.",
+      "title": "Project Milestones",
+      "subtitle": "Key delivery targets and progress tracking for this project.",
+      "createButton": "Create Milestone",
+      "loadError": "Failed to load project milestones.",
+      "status": {
+        "completed": "Completed",
+        "overdue": "Overdue",
+        "open": "In Progress"
+      },
+      "noDueDate": "No target date",
+      "taskProgress": "{{done}} of {{total}} tasks completed",
+      "completedOn": "Completed on {{date}}",
+      "reopen": "Reopen",
+      "markComplete": "Mark Complete",
+      "tasksTitle": "Tasks in this milestone",
+      "noTasks": "No tasks currently assigned to this milestone. Assign tasks using the Task form or task edit screen.",
+      "emptyTitle": "No milestones yet",
+      "emptyDesc": "Create milestones to organize deliverables, set target completion dates, and track overall project phases.",
+      "createFirst": "Create First Milestone",
+      "editModalTitle": "Edit Milestone",
+      "createModalTitle": "Create Milestone",
+      "confirmCreate": "Create Milestone",
+      "fields": {
+        "name": "Milestone Name",
+        "namePlaceholder": "e.g. Beta Release",
+        "dueDate": "Target Due Date (Optional)",
+        "dueDateHelp": "Formatted as YYYY-MM-DD. Leave blank if open-ended."
+      },
+      "errors": {
+        "alreadyCompleted": "Milestone is already completed.",
+        "alreadyOpen": "Milestone is already open.",
+        "validation": "Invalid milestone data. Please check form values.",
+        "forbidden": "You do not have permission to manage milestones on this project.",
+        "notFound": "Milestone or project not found.",
+        "generic": "Failed to update milestone."
+      }
     },
     "taskDetail": {
       "formerMember": "Former member",

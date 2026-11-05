@@ -337,6 +337,16 @@ export interface ProjectMilestone {
   createdAt: string;
 }
 
+export interface CreateMilestonePayload {
+  name: string;
+  dueDate?: string | null;
+}
+
+export interface PatchMilestonePayload {
+  name?: string;
+  dueDate?: string | null;
+}
+
 export interface CreateTaskPayload {
   title: string;
   description?: string | null;

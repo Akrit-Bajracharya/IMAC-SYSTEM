@@ -15,6 +15,8 @@ import type {
   PatchTaskPayload,
   ChangeTaskStatusResponse,
   ProjectMilestone,
+  CreateMilestonePayload,
+  PatchMilestonePayload,
   CreateProjectPayload,
   PatchProjectPayload,
   ChangeProjectStatusPayload,
@@ -185,6 +187,50 @@ export async function fetchProjectMilestones(
 /**
  * Iteratively fetches all tasks of a project using cursor pagination until hasMore is false.
  */
+
+export async function createProjectMilestone(
+  projectId: string,
+  payload: CreateMilestonePayload
+): Promise<ProjectMilestone> {
+  const res = await apiClient.post<ProjectMilestone>(
+    `/projects/${projectId}/milestones`,
+    payload
+  );
+  return res.data;
+}
+
+export async function patchProjectMilestone(
+  projectId: string,
+  milestoneId: string,
+  payload: PatchMilestonePayload
+): Promise<ProjectMilestone> {
+  const res = await apiClient.patch<ProjectMilestone>(
+    `/projects/${projectId}/milestones/${milestoneId}`,
+    payload
+  );
+  return res.data;
+}
+
+export async function completeProjectMilestone(
+  projectId: string,
+  milestoneId: string
+): Promise<{ id: string; completedAt: string }> {
+  const res = await apiClient.post<{ id: string; completedAt: string }>(
+    `/projects/${projectId}/milestones/${milestoneId}/complete`
+  );
+  return res.data;
+}
+
+export async function reopenProjectMilestone(
+  projectId: string,
+  milestoneId: string
+): Promise<{ id: string; completedAt: null }> {
+  const res = await apiClient.post<{ id: string; completedAt: null }>(
+    `/projects/${projectId}/milestones/${milestoneId}/reopen`
+  );
+  return res.data;
+}
+
 export async function fetchAllTasksForProject(
   projectId: string
 ): Promise<ProjectTask[]> {

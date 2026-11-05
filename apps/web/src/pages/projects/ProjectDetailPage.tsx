@@ -34,7 +34,7 @@ import { EditProjectModal } from '../../components/projects/EditProjectModal.js'
 import { ChangeProjectStatusModal } from '../../components/projects/ChangeProjectStatusModal.js';
 import { AddProjectMemberModal } from '../../components/projects/AddProjectMemberModal.js';
 import { TasksTab } from '../../components/projects/TasksTab.js';
-import { MilestonesTabPlaceholder } from '../../components/projects/MilestonesTabPlaceholder.js';
+import { MilestonesTab } from '../../components/projects/MilestonesTab.js';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal.js';
 import type { ProjectDetail, ProjectSummary, ProjectMember } from '../../types/index.js';
 
@@ -550,7 +550,12 @@ export function ProjectDetailPage() {
       )}
 
       {currentTab === 'milestones' && (
-        <MilestonesTabPlaceholder project={project} />
+        <MilestonesTab
+          project={project}
+          callerProjectRole={callerProjectRole}
+          isSystemAdmin={user?.systemRole === 'system_admin'}
+          currentUserId={user?.id}
+        />
       )}
 
       {/* Edit Project Modal */}

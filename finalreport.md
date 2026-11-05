@@ -1346,3 +1346,74 @@ Documented in `docs/open-policy-questions.md`:
   - Amendment 2 implemented: `TaskStatusControl` renders identical inline warnings and 409 `open_dependency` error explanations in board view.
   - Amendment 3 implemented: 403 and 404 responses trigger query invalidations and cache refetches so user interface does not remain stuck with stale state.
   - Amendment 4 implemented: `isCommentEdited` helper strictly requires `updatedAt - createdAt > 2000` ms before displaying "(edited)".
+
+
+---
+
+## 24. Step 12b: Manual Hand-Test Backlog Specification
+
+### Task 12b-HAND-TEST-01: Manual Hand-Test Backlog Specification (Step 9a, 12a, 12b, and Live DB Checks)
+- **Date**: 2026-11-05
+- **Day of week**: Thursday
+- **Start time**: 09:37
+- **End time**: 09:38
+- **Step**: Step 12b (Documentation & QA Readiness)
+- **Task performed**:
+  - Authored comprehensive manual test plan in `docs/HAND-TEST-BACKLOG.md`.
+  - Structured into 4 distinct testing categories:
+    1. Step 9a Daily Work Log (Save draft twice/upsert idempotency, double-click submit protection, block-mode edit refusal, History calendar/list view, Excel export with Nepal time verification, Settings 403 access refusal, no-profile graceful message for admins, and phone-width mobile card responsiveness).
+    2. Step 12a Project Screens (Projects list and pagination, project creation with target>=start date check, member add/remove, remove-last-manager refusal, status change mandatory reason, member/viewer read-only invariants, daily work log project pickers, friendly 404 page, and dashboards).
+    3. Step 12b Task Screens (Task list and Kanban board views, moving tasks via status control, inline editing with 5000 char counter, subtask nesting 1-level limit, cascading delete confirmation, dependency management and circular loop refusal, comments authorization and edit/delete rules, viewer read-only note, and marking done with open prerequisites).
+    4. Real-Database Live Checks (Project lifecycle audit trail, task lifecycle audit trail with privacy omissions for description/body, and double-click idempotency under real network latency).
+  - Every test is labeled strictly with `NOT RUN`, the specific role to log in as, expected results, and negative invariants (what each role must NOT be able to do).
+  - Ensured no code modifications were made.
+- **Files created or changed**:
+  - `docs/HAND-TEST-BACKLOG.md` (created)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**: N/A (Documentation only; 848 automated tests previously verified passing)
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Clean document creation with full test coverage mapped directly to prompt specifications.
+
+
+---
+
+## 25. Step 12b-3: Milestones Tab (Frontend, apps/web)
+
+### Task 12b-MILESTONES-01: Milestones Tab UI, Task Linkage, Overdue Calculations & Unit Tests
+- **Date**: 2026-11-05
+- **Day of week**: Thursday
+- **Start time**: 10:36
+- **End time**: 10:46
+- **Step**: Step 12b-3 (Milestones Tab in apps/web)
+- **Task performed**:
+  - Initialized Step 12b-3 implementation.
+  - Added API endpoints for milestone management in `apps/web/src/api/projects.ts` (`createProjectMilestone`, `patchProjectMilestone`, `completeProjectMilestone`, `reopenProjectMilestone`).
+  - Added payload types in `apps/web/src/types/index.ts` (`CreateMilestonePayload`, `PatchMilestonePayload`).
+  - Created pure helper `apps/web/src/lib/milestoneHelpers.ts` for overdue decision (Asia/Kathmandu), task counts per milestone (total and done), milestone task filtering, RBAC capability check, and error mapping.
+  - Authored unit test suite `apps/web/src/lib/__tests__/milestoneHelpers.test.ts` (15 unit tests covering all edge cases).
+  - Replaced `MilestonesTabPlaceholder.tsx` with full `MilestonesTab.tsx` component:
+    - Lists milestones with name, due date, completed state, task counts (total & done), and overdue badge.
+    - Create and edit modals (name 1-200 chars, optional due date YYYY-MM-DD).
+    - Complete and reopen action buttons gated to managers and `system_admin`.
+    - Clicking a milestone expands an accordion list showing its assigned tasks, each linking to task detail via `taskLinks`.
+    - Error handling for 403, 404, 409 (`already_completed`, `already_open`), and 400 (`validation_error`) with automatic query refetches.
+  - Wired `MilestonesTab.tsx` into `ProjectDetailPage.tsx`.
+  - Added English strings to `apps/web/src/i18n/locales/en.json` and resolved all raw keys (automated audit confirmed 0 missing keys).
+  - Added manual test backlog cases TEST-12B-09 through TEST-12B-13 in `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `apps/web/src/types/index.ts` (modified)
+  - `apps/web/src/api/projects.ts` (modified)
+  - `apps/web/src/lib/milestoneHelpers.ts` (created)
+  - `apps/web/src/lib/__tests__/milestoneHelpers.test.ts` (created)
+  - `apps/web/src/components/projects/MilestonesTab.tsx` (created)
+  - `apps/web/src/pages/projects/ProjectDetailPage.tsx` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `docs/HAND-TEST-BACKLOG.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 26 test files passed, 863 passed (707 API + 156 Web), 0 failed
+  - `npm run lint`: 0 errors
+  - `npm run typecheck`: 0 errors
+  - `npm run build --workspace=apps/web`: 0 errors (built in 6.95s)
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Overdue calculation correctly uses Asia/Kathmandu calendar day and excludes completed milestones. Tasks are paginated with `fetchAllTasksForProject` until `hasMore === false` to ensure milestone completion ratios are exact. 409 and 403/404 errors show friendly user explanations and trigger refetches.

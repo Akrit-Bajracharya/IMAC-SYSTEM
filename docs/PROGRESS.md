@@ -1062,3 +1062,51 @@ Across all APIs in the IMAC Operations System:
 - **API Gaps**: No backend API gaps were encountered. All required endpoints (`dependencies`, `comments`, `status`) exist and were integrated as specified.
 - **Mock Limitations (What Unit Tests Cannot Prove)**:
   - Vitest tests in `apps/api` utilize in-memory mocks of Prisma. True PostgreSQL concurrency serialization, transactional table locks (`SELECT ... FOR UPDATE` in dependency cycle checks), physical database cascade deletions (`onDelete: Cascade`), and real network double-submit CSRF cookie token timing cannot be verified by mock-based tests and require live integration/Playwright testing on PostgreSQL.
+
+---
+
+## Current Milestone: Step 12b-3 — Milestones Tab in apps/web — COMPLETED
+
+**Timestamp**: 2026-11-05 10:46:00 +05:45
+
+### 1. What Was Built & Verified
+- **API Services & Web Types (`apps/web/src/types/index.ts` & `apps/web/src/api/projects.ts`)**:
+  - Added `CreateMilestonePayload` (`name`, optional `dueDate`) and `PatchMilestonePayload` (`name`, optional `dueDate`).
+  - Added `createProjectMilestone`: `POST /api/projects/:id/milestones`.
+  - Added `patchProjectMilestone`: `PATCH /api/projects/:id/milestones/:milestoneId`.
+  - Added `completeProjectMilestone`: `POST /api/projects/:id/milestones/:milestoneId/complete`.
+  - Added `reopenProjectMilestone`: `POST /api/projects/:id/milestones/:milestoneId/reopen`.
+- **Pure Helpers & Test Suite (`apps/web/src/lib/milestoneHelpers.ts` & `apps/web/src/lib/__tests__/milestoneHelpers.test.ts`)**:
+  - `isMilestoneOverdue`: Compares `dueDate` (YYYY-MM-DD) against the current date in the `Asia/Kathmandu` timezone. Completed milestones (`completedAt !== null`) are never overdue.
+  - `computeMilestoneTaskCounts`: Iterates project tasks to return `{ total, done }` per milestone ID.
+  - `getTasksForMilestone`: Filters tasks assigned to a specific milestone.
+  - `canManageMilestones`: Gates create, edit, complete, and reopen actions strictly to project managers and `system_admin`.
+  - `mapMilestoneError`: Maps `already_completed`, `already_open`, `validation_error`, 403, and 404 to user-friendly plain-language messages.
+  - 15 unit tests covering overdue edge cases across timezones, task counting, task filtering, RBAC capability checks, and error mappings.
+- **Milestones Tab Component (`apps/web/src/components/projects/MilestonesTab.tsx`)**:
+  - Replaced `MilestonesTabPlaceholder.tsx` with full interactive tab in `ProjectDetailPage.tsx`.
+  - Iteratively loads all project tasks using `fetchAllTasksForProject(projectId)` until `hasMore === false` so completion fractions (`X of Y tasks done`) are always exact.
+  - Displays milestone name, due date, completion status, task progress count, and red "Overdue" badge when applicable.
+  - Accordion interaction: clicking any milestone expands a list of its assigned tasks with title, status badge, due date, and direct link to `TaskDetailPage` via `getTaskDetailPath`.
+  - Create and Edit Modals: allows setting/editing name (1–200 characters) and optional due date (`YYYY-MM-DD`), with live validation and disabled submit buttons during mutation.
+  - Complete and Reopen actions: directly toggles milestone state; catches 409 `already_completed` or `already_open` and 403/404, showing friendly banners and triggering cache invalidation.
+  - Add/Edit/Complete/Reopen controls are hidden for plain members and viewers.
+  - Responsive layout functioning smoothly at mobile/phone width with full loading, empty, and error states.
+- **Localization & Backlog**:
+  - Added complete i18n key set to `apps/web/src/i18n/locales/en.json`.
+  - Automated scanner confirmed 0 missing keys.
+  - Added manual test backlog cases `TEST-12B-09` through `TEST-12B-13` to `docs/HAND-TEST-BACKLOG.md`.
+
+### 2. Verification Results
+- `npm run test`: 26 test files passed, **863 total tests passed (0 failures)**:
+  - `apps/api`: 17 test files passed, 707 passed.
+  - `apps/web`: 9 test files passed, 156 passed.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run typecheck`: clean across `@imac/api`, `@imac/web`, `@imac/shared`, **0 errors**.
+- `npm run build --workspace=apps/web`: built cleanly for production in 6.95s, **0 errors**.
+
+### 3. API Gaps & Mock Limitations
+- **API Gaps**: None. All milestone endpoints (`/milestones`, `/milestones/:milestoneId`, `/complete`, `/reopen`) were already present and conform to spec.
+- **Mock Limitations (What Unit Tests Cannot Prove)**:
+  - Unit tests in `milestoneHelpers.test.ts` verify pure logic (Kathmandu date comparison, task counting, RBAC, error code translation) using deterministic mock objects.
+  - They do not test live network latency, database unique constraints or transaction locks on PostgreSQL, or real browser DOM reflow at mobile screen resolutions.
