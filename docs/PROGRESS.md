@@ -957,3 +957,41 @@ Across all APIs in the IMAC Operations System:
 - `npm run typecheck`: clean across all workspaces (0 errors).
 - `npm run lint`: clean across all workspaces (0 errors).
 - `npm run build --workspace=apps/web`: built cleanly for production in 12.15s (0 errors).
+
+
+---
+
+## Current Milestone: Step 12b-2a — Task Detail Screen (Inline Edit, Delete, Subtasks & Shared Permissions) — COMPLETED
+
+**Timestamp**: 2026-11-02 09:32:20 +05:45
+
+### 1. What Was Built & Verified
+- **API Client & Web Types**:
+  - Added `ProjectTaskDetail` and `TaskDependencyItem` in `apps/web/src/types/index.ts`.
+  - Added `fetchTaskDetail`, `patchTask`, and `deleteTask` in `apps/web/src/api/projects.ts`.
+- **Pure Helpers & Test Suites**:
+  - `taskPermissions.ts`: Mirrors backend `apps/api/src/services/projectAccess.ts` (`canEditTask`, `canDeleteTask`, `canCommentOnTask`). Verified via table-driven Vitest test with 54 test assertions across all roles and ownership scenarios.
+  - `taskEditPayload.ts`: Pure helper validating and building PATCH payloads (unchanged fields omitted, cleared fields converted to `null`, character bounds, 0.25h increments, `YYYY-MM-DD` regex). Verified with 15 unit tests.
+  - `taskLinks.ts`: Canonical link builder for task detail routes and back links across admin and employee layouts. Verified with 6 unit tests.
+- **Shared Status Control Component**:
+  - Extracted `TaskStatusControl.tsx` for shared status transition logic across Board and Detail screens with identical error mapping and React Query cache invalidations.
+- **Task Detail Screen (`TaskDetailPage.tsx`)**:
+  - Header: Breadcrumb navigation, back link to `?tab=tasks`, status badge, delete button.
+  - Warnings: Assignee membership status banner when `assigneeIsProjectMember === false`.
+  - Main section: Title, plain text description (`whitespace-pre-wrap`), parent subtask link badge.
+  - Properties sidebar: Status selector, assignee, milestone, due date with overdue badge, estimated hours, creator, creation date.
+  - Inline Edit: Edit button reveals inputs with a live 5000 character counter for description; background queries do not overwrite user input; Save sends single PATCH with changed fields.
+  - Delete with Confirmation: Dialog displaying exact database cascade impact (`subtasks.length`, comment cascades, dependency cascades, time-log preservation note). On deletion, navigates back first, purges cache entry, and invalidates list keys.
+  - Subtasks: List of subtasks with links, badges, assignees, due dates. Quick-add via `CreateTaskModal` with locked `defaultParentTaskId`; subtasks cannot have nested subtasks.
+  - User Names: Never displays raw IDs; looks up from `project.members` or displays "Former member".
+- **Routing & Navigation**:
+  - Registered `/admin/projects/:id/tasks/:taskId`, `/employee/projects/:id/tasks/:taskId`, and top-level redirect `/projects/:id/tasks/:taskId`.
+  - Linked task titles in List and Board views to detail page.
+- **Localization**:
+  - Added all English strings in `apps/web/src/i18n/locales/en.json` under `projects.taskDetail.*` (0 missing keys confirmed).
+
+### 2. Verification Results
+- `npm run test --workspace=apps/web`: 6 test files passed, **116 total tests passed (0 failures)**.
+- `npm run typecheck --workspace=apps/web`: clean, **0 errors**.
+- `npm run lint --workspace=apps/web`: clean, **0 errors**.
+- `npm run build --workspace=apps/web`: built cleanly for production in 8.15s, **0 errors**.

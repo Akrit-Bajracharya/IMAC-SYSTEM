@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   List,
@@ -31,6 +32,9 @@ import {
 import { Button } from '../ui/button.js';
 import { TaskStatusBadge } from './TaskStatusBadge.js';
 import { CreateTaskModal } from './CreateTaskModal.js';
+import { TaskStatusControl } from './TaskStatusControl.js';
+import { canEditTask } from '../../lib/taskPermissions.js';
+import { getTaskDetailPath } from '../../lib/taskLinks.js';
 import { getKathmanduToday, formatDateDisplay, isTaskOverdue } from '../../lib/dateUtils.js';
 import type {
   ProjectDetail,
@@ -155,12 +159,7 @@ export function TasksTab({
   // Rule from item 2 & 3:
   // "isSystemAdmin || callerProjectRole === 'manager' || (callerProjectRole === 'member' && task.assigneeUserId === currentUser.id)"
   const canMoveTask = (task: ProjectTask): boolean => {
-    if (isSystemAdmin) return true;
-    if (callerProjectRole === 'manager') return true;
-    if (callerProjectRole === 'member' && currentUser && task.assigneeUserId === currentUser.id) {
-      return true;
-    }
-    return false;
+    return canEditTask(callerProjectRole, isSystemAdmin, 'changeStatus', task, currentUser?.id);
   };
 
   // Handle status transition
@@ -475,9 +474,12 @@ export function TasksTab({
                   <div className="space-y-1.5 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <TaskStatusBadge status={task.status} />
-                      <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                      <Link
+                        to={getTaskDetailPath(project.id, task.id, currentUser?.systemRole)}
+                        className="font-medium text-sm text-gray-900 dark:text-gray-100 hover:text-primary dark:hover:text-primary hover:underline truncate"
+                      >
                         {task.title}
-                      </span>
+                      </Link>
                       {task.parentTaskId && (
                         <span className="px-2 py-0.5 rounded text-[10px] bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                           {t('projects.tasks.subtask', 'Subtask')}
@@ -613,9 +615,12 @@ export function TasksTab({
                           key={task.id}
                           className="bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-700 shadow-sm space-y-2 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
                         >
-                          <div className="font-medium text-sm text-gray-900 dark:text-gray-100 line-clamp-2">
+                          <Link
+                            to={getTaskDetailPath(project.id, task.id, currentUser?.systemRole)}
+                            className="font-medium text-sm text-gray-900 dark:text-gray-100 line-clamp-2 hover:text-primary dark:hover:text-primary hover:underline block"
+                          >
                             {task.title}
-                          </div>
+                          </Link>
 
                           {task.milestone && (
                             <div className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400">
@@ -652,26 +657,16 @@ export function TasksTab({
                           </div>
 
                           {/* "Move to" status transition control */}
-                          {canMoveTask(task) && (
-                            <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
-                              <div className="flex items-center justify-between gap-1 text-[11px]">
-                                <span className="text-gray-500">
-                                  {t('projects.tasks.moveTo', 'Move to')}:
-                                </span>
-                                <select
-                                  value={task.status}
-                                  onChange={(e) => handleStatusChange(task, e.target.value as TaskStatus)}
-                                  disabled={statusActionTaskId === task.id}
-                                  className="px-2 py-0.5 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 focus:ring-1 focus:ring-primary focus:outline-none"
-                                >
-                                  <option value="todo">{t('projects.tasks.status.todo', 'To Do')}</option>
-                                  <option value="in_progress">{t('projects.tasks.status.inProgress', 'In Progress')}</option>
-                                  <option value="blocked">{t('projects.tasks.status.blocked', 'Blocked')}</option>
-                                  <option value="done">{t('projects.tasks.status.done', 'Done')}</option>
-                                </select>
-                              </div>
-                            </div>
-                          )}
+                          <TaskStatusControl
+                            projectId={project.id}
+                            task={task}
+                            callerProjectRole={callerProjectRole}
+                            isSystemAdmin={isSystemAdmin}
+                            currentUserId={currentUser?.id}
+                            variant="board"
+                            onError={setActionError}
+                            onSuccessWarning={setStatusSuccessWarning}
+                          />
                         </div>
                       );
                     })

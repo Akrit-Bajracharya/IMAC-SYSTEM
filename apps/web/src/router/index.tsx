@@ -17,6 +17,7 @@ import { WorkLogSettingsPage } from '../pages/admin/WorkLogSettingsPage.js';
 import { DirectoryPage } from '../pages/directory/DirectoryPage.js';
 import { ProjectListPage } from '../pages/projects/ProjectListPage.js';
 import { ProjectDetailPage } from '../pages/projects/ProjectDetailPage.js';
+import { TaskDetailPage } from '../pages/projects/TaskDetailPage.js';
 import { DailyWorkLogPage } from '../pages/workLogs/DailyWorkLogPage.js';
 import { WorkLogHistoryPage } from '../pages/workLogs/WorkLogHistoryPage.js';
 import { WorkLogExportPage } from '../pages/workLogs/WorkLogExportPage.js';
@@ -74,6 +75,11 @@ function ProjectParamRedirect() {
   return <ProjectsRedirect subpath={id} />;
 }
 
+function TaskParamRedirect() {
+  const { id, taskId } = useParams<{ id: string; taskId: string }>();
+  return <ProjectsRedirect subpath={`${id}/tasks/${taskId}`} />;
+}
+
 export const routes: RouteObject[] = [
   {
     path: '/login',
@@ -107,6 +113,10 @@ export const routes: RouteObject[] = [
       {
         path: 'projects/:id',
         element: <ProjectParamRedirect />,
+      },
+      {
+        path: 'projects/:id/tasks/:taskId',
+        element: <TaskParamRedirect />,
       },
       {
         path: 'work-log',
@@ -156,6 +166,10 @@ export const routes: RouteObject[] = [
               {
                 path: 'projects/:id',
                 element: <ProjectDetailPage />,
+              },
+              {
+                path: 'projects/:id/tasks/:taskId',
+                element: <TaskDetailPage />,
               },
               {
                 path: 'directory',
@@ -213,6 +227,10 @@ export const routes: RouteObject[] = [
               {
                 path: 'projects/:id',
                 element: <ProjectDetailPage />,
+              },
+              {
+                path: 'projects/:id/tasks/:taskId',
+                element: <TaskDetailPage />,
               },
               {
                 path: 'directory',

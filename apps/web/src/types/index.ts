@@ -279,6 +279,32 @@ export interface ProjectTask {
   };
 }
 
+export interface TaskDependencyItem {
+  id: string;
+  taskId: string;
+  dependsOnTaskId: string;
+  createdAt: string;
+  dependsOnTask?: {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    dueDate: string | null;
+  };
+  task?: {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    dueDate: string | null;
+  };
+}
+
+export interface ProjectTaskDetail extends ProjectTask {
+  subtasks: ProjectTask[];
+  dependencies: TaskDependencyItem[];
+  dependentOnMe: TaskDependencyItem[];
+  commentCount: number;
+}
+
 export interface ProjectMilestone {
   id: string;
   projectId: string;

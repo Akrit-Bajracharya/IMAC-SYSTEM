@@ -11,9 +11,16 @@ interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  defaultParentTaskId?: string;
 }
 
-export function CreateTaskModal({ project, isOpen, onClose, onSuccess }: CreateTaskModalProps) {
+export function CreateTaskModal({
+  project,
+  isOpen,
+  onClose,
+  onSuccess,
+  defaultParentTaskId,
+}: CreateTaskModalProps) {
   const { t } = useTranslation();
 
   const [title, setTitle] = useState('');
@@ -22,7 +29,13 @@ export function CreateTaskModal({ project, isOpen, onClose, onSuccess }: CreateT
   const [estimatedHours, setEstimatedHours] = useState('');
   const [assigneeUserId, setAssigneeUserId] = useState('');
   const [milestoneId, setMilestoneId] = useState('');
-  const [parentTaskId, setParentTaskId] = useState('');
+  const [parentTaskId, setParentTaskId] = useState(defaultParentTaskId || '');
+
+  React.useEffect(() => {
+    if (defaultParentTaskId) {
+      setParentTaskId(defaultParentTaskId);
+    }
+  }, [defaultParentTaskId, isOpen]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -262,7 +275,7 @@ export function CreateTaskModal({ project, isOpen, onClose, onSuccess }: CreateT
               value={parentTaskId}
               onChange={(e) => setParentTaskId(e.target.value)}
               className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 focus:ring-2 focus:ring-primary focus:outline-none"
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(defaultParentTaskId)}
             >
               <option value="">{t('projects.tasks.create.noParentTask', 'None (Top-level task)')}</option>
               {(topLevelTasksData?.items || []).map((t) => (

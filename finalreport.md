@@ -1243,3 +1243,56 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run test --workspace=apps/web`: 3 test files passed, 37 total tests passed (0 failures).
   - `npm run typecheck --workspace=apps/web`: clean, 0 errors.
 - **Status**: COMPLETED
+
+
+---
+
+## 22. Step 12b-2a: Task Detail Screen (Inline Edit, Delete, Subtasks & Shared Permissions)
+
+### Task 12b-DETAIL-01: Task Detail Page, Inline Editing, Delete Confirmation, Subtasks List, and Route Tests
+- **Timestamp**: 2026-11-02 09:32:20 +05:45
+- **Step**: Step 12b-2a (Task Detail Screen, Part 1)
+- **Task performed**:
+  - Implemented `ProjectTaskDetail` and `TaskDependencyItem` in `apps/web/src/types/index.ts`.
+  - Added API endpoints in `apps/web/src/api/projects.ts` (`fetchTaskDetail`, `patchTask`, `deleteTask`).
+  - Created `apps/web/src/lib/taskPermissions.ts` mirroring `apps/api/src/services/projectAccess.ts` (`canEditTask`, `canDeleteTask`, `canCommentOnTask`).
+  - Authored table-driven test suite `apps/web/src/lib/__tests__/taskPermissions.test.ts` (54 test assertions across all roles, creator, assignee, other, viewer, undefined, empty user ID).
+  - Created pure helper `apps/web/src/lib/taskEditPayload.ts` for PATCH payload generation, change detection, and validation (title, description <= 5000 chars, date YYYY-MM-DD regex, quarter hours).
+  - Authored unit test suite `apps/web/src/lib/__tests__/taskEditPayload.test.ts` (15 tests).
+  - Created canonical path helper `apps/web/src/lib/taskLinks.ts` with unit test suite `apps/web/src/lib/__tests__/taskLinks.test.ts` (6 tests).
+  - Extracted `TaskStatusControl.tsx` for shared status transition logic across Board and Detail screens with identical error mapping (`open_dependency`, `conflict_retry`, 403, 404, warnings array).
+  - Developed `apps/web/src/pages/projects/TaskDetailPage.tsx`:
+    - Title, plain text description (no `dangerouslySetInnerHTML`), status badge, assignee, milestone, due date, estimated hours, creator, creation date.
+    - User name resolution from `project.members` with "Former member" fallback (no raw IDs shown).
+    - Status transition control and assignee membership warning banner (`assigneeIsProjectMember === false`).
+    - Inline editing mode with live 5000 character counter; background queries do not overwrite typing; Save sends single PATCH with changed fields.
+    - Delete dialog matching exact database cascade reality (`subtasks.length` count, comments, dependency links, preserved time logs). Navigates back first, purges cache entry, and invalidates list keys.
+    - Subtasks list with links and metadata; Quick-Add subtask modal with locked `defaultParentTaskId` prop; blocks nested subtasks on subtasks.
+  - Registered `/admin/projects/:id/tasks/:taskId`, `/employee/projects/:id/tasks/:taskId`, and top-level redirect `/projects/:id/tasks/:taskId` in `apps/web/src/router/index.tsx`.
+  - Linked task titles in List and Board views in `TasksTab.tsx` using `getTaskDetailPath`.
+  - Extended route test suite in `apps/web/src/router/__tests__/routes.test.ts` for all three routes and link resolution (15 tests).
+  - Added all English strings to `apps/web/src/i18n/locales/en.json` under `projects.taskDetail.*` (0 missing keys confirmed).
+- **Files created or changed**:
+  - `apps/web/src/types/index.ts` (modified)
+  - `apps/web/src/api/projects.ts` (modified)
+  - `apps/web/src/lib/taskPermissions.ts` (created)
+  - `apps/web/src/lib/__tests__/taskPermissions.test.ts` (created)
+  - `apps/web/src/lib/taskEditPayload.ts` (created)
+  - `apps/web/src/lib/__tests__/taskEditPayload.test.ts` (created)
+  - `apps/web/src/lib/taskLinks.ts` (created)
+  - `apps/web/src/lib/__tests__/taskLinks.test.ts` (created)
+  - `apps/web/src/components/projects/TaskStatusControl.tsx` (created)
+  - `apps/web/src/components/projects/CreateTaskModal.tsx` (modified)
+  - `apps/web/src/components/projects/TasksTab.tsx` (modified)
+  - `apps/web/src/pages/projects/TaskDetailPage.tsx` (created)
+  - `apps/web/src/router/index.tsx` (modified)
+  - `apps/web/src/router/__tests__/routes.test.ts` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test --workspace=apps/web`: 6 test files passed, 116 total tests passed (0 failures).
+  - `npm run typecheck --workspace=apps/web`: clean, 0 errors.
+  - `npm run lint --workspace=apps/web`: clean, 0 errors.
+  - `npm run build --workspace=apps/web`: production build successful in 8.15s, 0 errors.
+- **Status**: COMPLETED

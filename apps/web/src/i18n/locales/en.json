@@ -78,7 +78,9 @@
     "you": "You",
     "retry": "Retry",
     "actions": "Actions",
-    "reload": "Reload"
+    "reload": "Reload",
+    "save": "Save Changes",
+    "deleting": "Deleting..."
   },
   "roles": {
     "system_admin": "System Admin",
@@ -726,11 +728,48 @@
           "forbidden": "You do not have permission to create tasks in this project.",
           "generic": "Failed to create task."
         }
-      }
+      },
+      "statusLabel": "Status"
     },
     "milestones": {
       "placeholderTitle": "Milestone Management",
       "placeholderNotice": "Milestone management is coming in the next step. Project milestones and their task dependencies will be manageable directly from this tab."
+    },
+    "taskDetail": {
+      "formerMember": "Former member",
+      "edit": "Edit Task",
+      "delete": "Delete",
+      "deleteTitle": "Delete Task",
+      "deleteConfirmText": "This permanently deletes this task, its {{subtaskCount}} subtasks, its comments and all comments on its subtasks, and its dependency links. Logged hours are kept but lose their link to this task.",
+      "confirmDelete": "Delete Permanently",
+      "unassignedMemberTitle": "Assignee Warning",
+      "unassignedMemberDesc": "The assigned user is no longer an active member of this project.",
+      "subtaskOf": "Subtask",
+      "titlePlaceholder": "Task title",
+      "descriptionLabel": "Description",
+      "descPlaceholder": "Add detailed task description or criteria...",
+      "noDescription": "No description provided.",
+      "subtasksTitle": "Subtasks",
+      "noNestedSubtasks": "Subtasks cannot have nested subtasks.",
+      "addSubtask": "Add Subtask",
+      "noSubtasks": "No subtasks for this task.",
+      "propertiesTitle": "Task Properties",
+      "createdBy": "Created by",
+      "createdAt": "Created on",
+      "notFoundTitle": "Task Not Found",
+      "notFoundDesc": "The task you requested does not exist or may have been deleted.",
+      "backToTasks": "Back to Tasks",
+      "forbiddenTitle": "Access Denied",
+      "forbiddenDesc": "You do not have permission to view this task.",
+      "loadError": "Failed to load task details.",
+      "errors": {
+        "invalidAssignee": "Assignee must be an active project member with role manager or member.",
+        "invalidMilestone": "Selected milestone does not belong to this project.",
+        "forbidden": "You do not have permission to edit this task.",
+        "notFound": "Task or project not found.",
+        "generic": "Failed to update task.",
+        "deleteFailed": "Failed to delete task."
+      }
     }
   }
 }

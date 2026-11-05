@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { matchRoutes } from 'react-router-dom';
 import { routes, getProjectsRedirectPath } from '../index.js';
+import { getTaskDetailPath } from '../../lib/taskLinks.js';
 import { getAdminNavItems } from '../../components/layout/AdminLayout.js';
 import { getEmployeeNavItems } from '../../components/layout/EmployeeLayout.js';
 
@@ -119,6 +120,7 @@ describe('Web App Route Table and Navigation Integrity Tests', () => {
       expect(allowedRoles.includes('viewer')).toBe(false);
     });
 
+
     it('enforces allowedRoles on /employee route branch', () => {
       const rootRoute = routes.find((r) => r.path === '/');
       const employeeRoute = rootRoute?.children?.find((r) => r.path === 'employee');
@@ -126,6 +128,43 @@ describe('Web App Route Table and Navigation Integrity Tests', () => {
 
       const element = employeeRoute?.element as any;
       expect(element.props.allowedRoles).toEqual(['employee', 'project_manager', 'viewer']);
+    });
+  });
+
+  describe('5. Task Detail Routes and List/Board Link Resolution (Step 12b-2a)', () => {
+    const sampleProjectId = '11111111-1111-4111-8111-111111111111';
+    const sampleTaskId = '22222222-2222-4222-8222-222222222222';
+
+    it('resolves task detail route under /admin', () => {
+      const match = matchConcreteRoute(`/admin/projects/${sampleProjectId}/tasks/${sampleTaskId}`);
+      expect(match.route.path).toBe('projects/:id/tasks/:taskId');
+    });
+
+    it('resolves task detail route under /employee', () => {
+      const match = matchConcreteRoute(`/employee/projects/${sampleProjectId}/tasks/${sampleTaskId}`);
+      expect(match.route.path).toBe('projects/:id/tasks/:taskId');
+    });
+
+    it('resolves top-level redirect /projects/:id/tasks/:taskId', () => {
+      const match = matchConcreteRoute(`/projects/${sampleProjectId}/tasks/${sampleTaskId}`);
+      expect(match.route.path).toBe('projects/:id/tasks/:taskId');
+    });
+
+    it('ensures getTaskDetailPath outputs routes that resolve to concrete registered routes', () => {
+      // 1. Admin link (used by admin List and Board)
+      const adminPath = getTaskDetailPath(sampleProjectId, sampleTaskId, 'system_admin');
+      const adminMatch = matchConcreteRoute(adminPath);
+      expect(adminMatch.route.path).toBe('projects/:id/tasks/:taskId');
+
+      // 2. Employee link (used by member / PM List and Board)
+      const employeePath = getTaskDetailPath(sampleProjectId, sampleTaskId, 'employee');
+      const employeeMatch = matchConcreteRoute(employeePath);
+      expect(employeeMatch.route.path).toBe('projects/:id/tasks/:taskId');
+
+      // 3. Top-level link (redirect)
+      const redirectPath = getTaskDetailPath(sampleProjectId, sampleTaskId);
+      const redirectMatch = matchConcreteRoute(redirectPath);
+      expect(redirectMatch.route.path).toBe('projects/:id/tasks/:taskId');
     });
   });
 });

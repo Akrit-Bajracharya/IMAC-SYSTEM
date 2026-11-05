@@ -6,8 +6,10 @@ import type {
   ProjectSummary,
   ProjectTaskListResponse,
   ProjectTask,
+  ProjectTaskDetail,
   TaskStatus,
   CreateTaskPayload,
+  PatchTaskPayload,
   ChangeTaskStatusResponse,
   ProjectMilestone,
   CreateProjectPayload,
@@ -139,6 +141,33 @@ export async function changeTaskStatus(
   const res = await apiClient.post<ChangeTaskStatusResponse>(
     `/projects/${projectId}/tasks/${taskId}/status`,
     { status }
+  );
+  return res.data;
+}
+
+export async function fetchTaskDetail(
+  projectId: string,
+  taskId: string
+): Promise<ProjectTaskDetail> {
+  const res = await apiClient.get<ProjectTaskDetail>(`/projects/${projectId}/tasks/${taskId}`);
+  return res.data;
+}
+
+export async function patchTask(
+  projectId: string,
+  taskId: string,
+  payload: PatchTaskPayload
+): Promise<ProjectTask> {
+  const res = await apiClient.patch<ProjectTask>(`/projects/${projectId}/tasks/${taskId}`, payload);
+  return res.data;
+}
+
+export async function deleteTask(
+  projectId: string,
+  taskId: string
+): Promise<{ ok: boolean; deletedTaskId: string }> {
+  const res = await apiClient.delete<{ ok: boolean; deletedTaskId: string }>(
+    `/projects/${projectId}/tasks/${taskId}`
   );
   return res.data;
 }
