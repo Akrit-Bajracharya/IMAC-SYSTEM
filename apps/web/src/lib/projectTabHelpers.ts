@@ -2,7 +2,7 @@
  * Helper to validate and resolve project tabs with role capability checks.
  */
 
-export type ProjectTabId = 'overview' | 'tasks' | 'milestones' | 'time' | 'workload';
+export type ProjectTabId = 'overview' | 'tasks' | 'milestones' | 'time' | 'workload' | 'messages';
 
 export function resolveProjectTab(
   tabParam: string | null | undefined,
@@ -10,7 +10,7 @@ export function resolveProjectTab(
 ): ProjectTabId {
   if (!tabParam) return 'overview';
 
-  const validTabs: ProjectTabId[] = ['overview', 'tasks', 'milestones', 'time', 'workload'];
+  const validTabs: ProjectTabId[] = ['overview', 'tasks', 'milestones', 'time', 'workload', 'messages'];
   if (!validTabs.includes(tabParam as ProjectTabId)) {
     return 'overview';
   }

@@ -1182,3 +1182,56 @@ Across all APIs in the IMAC Operations System:
 - **Mock Limitations (What Unit Tests Cannot Prove)**:
   - Unit tests verify in-memory calculations and logic. They do not test live PostgreSQL advisory transaction locks (`pg_advisory_xact_lock`), high-concurrency race conditions across browser tabs, or real DOM reflow under physical mobile hardware.
 
+
+
+---
+
+## Current Milestone: Step 12c-2 — Project Messages Tab (apps/web) — COMPLETED
+
+**Timestamp**: 2026-11-13 10:55:00 +05:45
+
+### 1. What Was Built & Verified
+- **API Services & Web Types (`apps/web/src/types/index.ts` & `apps/web/src/api/projects.ts`)**:
+  - Added types: `ProjectMessageUser`, `ProjectMessage`, `ProjectMessageListResponse`, `ConvertedTask`, `ConvertToTaskResponse`.
+  - Added API endpoints: `fetchProjectMessages`, `createProjectMessage`, `pinProjectMessage`, `unpinProjectMessage`, `convertProjectMessageToTask`.
+- **Pure Helpers & Test Suites (`apps/web/src/lib/projectMessageHelpers.ts` & `apps/web/src/lib/__tests__/projectMessageHelpers.test.ts`)**:
+  - `canPostMessage(callerProjectRole, systemRole)`:
+    - Allowed only for systemRole in `['system_admin', 'project_manager', 'employee', 'hr_admin']` (mirroring `apps/api/src/lib/permissions.ts:83-85`).
+    - Project role: `system_admin`, `manager`, or `member`. Disallows `viewer` or unknown role.
+  - `canPinMessage(callerProjectRole, systemRole)`:
+    - Allowed only for systemRole in `['system_admin', 'project_manager', 'employee', 'hr_admin']`.
+    - Project role: `system_admin` or `manager`. Disallows `member`, `viewer`, or unknown role.
+  - `canConvertToTask(callerProjectRole, systemRole, userId)`:
+    - Allowed only for systemRole in `['system_admin', 'project_manager', 'employee', 'hr_admin']` (mirroring `task:write`).
+    - Calls `canEditTask(callerProjectRole, isSystemAdmin, 'create', null, userId)`. Fails closed if `userId` is missing/empty for a member.
+  - Table-driven unit tests: 37 tests in `projectMessageHelpers.test.ts` covering all combinations (system_admin without member row, manager, member, project viewer, system-role viewer who is manager/member, missing role, unknown role, agreement with `canEditTask`).
+  - `deduplicateMessagesById(pages)`: Flattens infinite query pages and deduplicates by message id preserving server order.
+  - `getConvertedMessageKey(projectId, messageId)` & `isMessageConverted`: Manages session-based conversion tracking scoped by `${projectId}:${messageId}`.
+  - `mapProjectMessageError(err)`: Plain-language translation mapper for `already_converted` (409), `invalid_cursor` (400), `validation_error` (400), `forbidden` (403), `not_found` (404), and fallback unexpected errors.
+- **Date Formatting (`apps/web/src/lib/dateUtils.ts` & `apps/web/src/lib/__tests__/dateUtils.test.ts`)**:
+  - `formatDateTimeDisplay(isoString)`: Formats ISO timestamps to `Asia/Kathmandu` with year and 24h clock (`hourCycle: 'h23'`). Verified with `2026-11-02T18:30:00.000Z` -> `3 Nov 2026, 00:15`, and `2026-11-02T18:16:00.000Z` -> `3 Nov 2026, 00:01`. Returns `"-"` on invalid input; never throws.
+- **Cache Invalidation (`apps/web/src/lib/projectTaskCache.ts`)**:
+  - Centralized cache invalidator `invalidateProjectTaskCaches` invalidating all verified task and summary query keys: `projectTasksInfinite`, `projectTasks`, `topLevelTasks`, `projectSummary`, `projectWorkload`, `projectOverdueTasks`, `projectBlockedTasks`, `projectTasksAll`.
+- **Navigation & MessagesTab UI (`MessagesTab.tsx` & `ProjectDetailPage.tsx`)**:
+  - Messages tab in `<nav>` alongside Overview, Tasks, Milestones, Time (gated by `canSeeTime`), and Workload.
+  - Plain-text message rendering with `whitespace-pre-wrap break-words font-sans text-sm`.
+  - Author name resolution with fallback to `"Former member"`; never raw UUID.
+  - Pinned badge indicator; managers and system_admin can pin/unpin with immediate reset.
+  - 1–5000 char trimmed post form with live counter; viewers see read-only informational banner. Double-submit prevented via `isPending` and local ref guard. Text preserved on failure.
+  - Convert to Task confirmation dialog accurately explaining what the API really creates (one unassigned task in 'todo', title from first line up to 200 chars, full body as description, original message unchanged, can be converted only once).
+  - Session tracking remembers converted messages, displays "Converted" badge with direct task link, and keeps convert button accessible after reload (server enforces 409).
+  - Cursor recovery: on 400 `invalid_cursor`, automatically recovers to page 1 once with an informational banner (no infinite retry loop).
+
+### 2. Verification Results
+- `npm run test`: 31 test files passed, **989 total tests passed (0 failures)**:
+  - `apps/api`: 17 test files, 707 passed.
+  - `apps/web`: 14 test files, 282 passed.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run typecheck`: clean across `@imac/api`, `@imac/web`, `@imac/shared`, **0 errors**.
+- `npm run build --workspace=apps/web`: production build succeeded cleanly.
+
+### 3. Known Backend Limitations & Mock Limitations
+- **Known Backend Limitations**:
+  - The backend API decides "already converted" based on the `AuditLog` table (`action: 'project_message.converted_to_task'`). Two simultaneous conversions (if race conditions bypass the advisory transaction lock), or administrative audit-log cleanup/truncation, could allow a second conversion.
+- **Mock Limitations (What Unit Tests Cannot Prove)**:
+  - Pure helper unit tests verify role matrix logic, error mapping, and string formatting in memory. They do not test live SSE notification delivery, physical mobile viewport touch interactions, or real concurrent database connections.

@@ -87,7 +87,9 @@
     "filters": "Filters",
     "reset": "Reset",
     "unassigned": "Unassigned",
-    "unknownError": "An unexpected error occurred."
+    "unknownError": "An unexpected error occurred.",
+    "info": "Notice",
+    "loadingMore": "Loading older items..."
   },
   "roles": {
     "system_admin": "System Admin",
@@ -652,7 +654,8 @@
       "tasks": "Tasks",
       "milestones": "Milestones",
       "time": "Time",
-      "workload": "Workload"
+      "workload": "Workload",
+      "messages": "Messages"
     },
     "tasks": {
       "status": {
@@ -941,6 +944,41 @@
       "blockedTasksTitle": "Blocked Tasks",
       "noBlockedTasks": "No blocked tasks.",
       "showingFirstN": "Showing first {{count}} tasks"
+    },
+    "messages": {
+      "title": "Project Messages",
+      "count": "{{count}} messages loaded",
+      "postPlaceholder": "Share an update, note, or question with the project team...",
+      "charHint": "Plain text; first line becomes task title upon conversion.",
+      "posting": "Posting...",
+      "postButton": "Post Message",
+      "viewerNotice": "You have read-only access to project messages. Posting is reserved for project members and managers.",
+      "loading": "Loading messages...",
+      "loadFailed": "Failed to load project messages.",
+      "emptyTitle": "No messages yet",
+      "emptyDesc": "Start a discussion or post team notes for this project.",
+      "formerMember": "Former member",
+      "pinned": "Pinned",
+      "convertedBadge": "Converted",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "toTaskButton": "Turn into task",
+      "loadMore": "Load older messages",
+      "convertedSuccessTitle": "Task Created",
+      "convertedSuccessDesc": "Task created successfully:",
+      "convertDialog": {
+        "title": "Convert Message to Task",
+        "description": "One unassigned task in \"To do\" will be created by you from this message. The first line becomes the title (up to 200 characters), the whole message becomes the description, the message itself stays unchanged, and a message can be converted only once.",
+        "confirm": "Convert to Task"
+      },
+      "errors": {
+        "alreadyConverted": "Message has already been converted to a task",
+        "invalidCursor": "Message list was refreshed due to an updated cursor.",
+        "validationError": "Message body must be between 1 and 5000 characters",
+        "forbidden": "You do not have permission to perform this action",
+        "notFound": "Message or project not found",
+        "unexpected": "An unexpected error occurred. Please try again."
+      }
     }
   }
 }

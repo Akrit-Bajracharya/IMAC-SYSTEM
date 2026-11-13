@@ -18,6 +18,7 @@ import {
   FolderKanban,
   Shield,
   RefreshCw,
+  MessageSquare,
 } from 'lucide-react';
 import {
   fetchProjectById,
@@ -39,6 +40,7 @@ import { TasksTab } from '../../components/projects/TasksTab.js';
 import { MilestonesTab } from '../../components/projects/MilestonesTab.js';
 import { TimeLogsTab } from '../../components/projects/TimeLogsTab.js';
 import { ProjectWorkloadTab } from '../../components/projects/ProjectWorkloadTab.js';
+import { MessagesTab } from '../../components/projects/MessagesTab.js';
 import { canSeeTimeTab } from '../../lib/timeLogPermissions.js';
 import { resolveProjectTab, type ProjectTabId } from '../../lib/projectTabHelpers.js';
 import { getTaskDetailPath } from '../../lib/taskLinks.js';
@@ -338,11 +340,11 @@ export function ProjectDetailPage() {
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex space-x-6" aria-label="Tabs">
+        <nav className="flex space-x-6 overflow-x-auto" aria-label="Tabs">
           <button
             type="button"
             onClick={() => handleTabChange('overview')}
-            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
               currentTab === 'overview'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -354,7 +356,7 @@ export function ProjectDetailPage() {
           <button
             type="button"
             onClick={() => handleTabChange('tasks')}
-            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
               currentTab === 'tasks'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -366,7 +368,7 @@ export function ProjectDetailPage() {
           <button
             type="button"
             onClick={() => handleTabChange('milestones')}
-            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
               currentTab === 'milestones'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -374,6 +376,44 @@ export function ProjectDetailPage() {
           >
             <Calendar className="w-4 h-4" />
             <span>{t('projects.tabs.milestones', 'Milestones')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('messages')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
+              currentTab === 'messages'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>{t('projects.tabs.messages', 'Messages')}</span>
+          </button>
+          {canSeeTime && (
+            <button
+              type="button"
+              onClick={() => handleTabChange('time')}
+              className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
+                currentTab === 'time'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>{t('projects.tabs.time', 'Time')}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleTabChange('workload')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
+              currentTab === 'workload'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>{t('projects.tabs.workload', 'Workload')}</span>
           </button>
         </nav>
       </div>
@@ -676,6 +716,14 @@ export function ProjectDetailPage() {
       )}
 
 
+            {currentTab === 'messages' && (
+        <MessagesTab
+          project={project}
+          currentUser={user}
+          callerProjectRole={callerProjectRole}
+          isSystemAdmin={user?.systemRole === 'system_admin'}
+        />
+      )}
       {currentTab === 'time' && (
         <TimeLogsTab
           project={project}

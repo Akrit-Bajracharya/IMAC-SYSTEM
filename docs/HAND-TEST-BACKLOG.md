@@ -415,6 +415,72 @@ Each test is specified in plain language with:
 - **Expected Result**: Cards show the exact aggregate counts from the project summary (`summary.overdueCount`, `summary.blockedCount`), display up to 5 tasks linking directly to task detail, and display *"Showing first 5 tasks"* if more tasks exist.
 - **What Must NOT Happen**: Must **NOT** crash, flicker, or show raw IDs.
 
+### TEST-12C-07: Messages Tab Navigation, Cursor Pagination & Mobile Viewport
+- **Status**: `NOT RUN`
+- **Role**: Any project member, manager, or `system_admin`
+- **Test Steps**:
+  1. Open a project detail page.
+  2. Click the "Messages" tab (observe URL updates with `?tab=messages`).
+  3. Verify pinned messages appear at the top with a distinct pinned badge.
+  4. Scroll to bottom and click "Load older messages".
+  5. Resize browser to mobile viewport width (<640px).
+- **Expected Result**: Pinned messages appear first, then descending chronological messages. Dates are formatted in Asia/Kathmandu time with year (e.g. "3 Nov 2026, 00:15"). "Load older messages" loads next page. Mobile viewport stacks cards cleanly without horizontal overflow.
+- **What Must NOT Happen**: Must **NOT** crash, display raw JSON, or show raw UUIDs for authors.
+
+### TEST-12C-08: Posting Messages, 5,000 Char Counter & Viewer Read-Only Invariant
+- **Status**: `NOT RUN`
+- **Role**: Compare Project Member vs Project Viewer
+- **Test Steps**:
+  1. Log in as a Project Member (`employee` with project role `member`).
+  2. In the Messages tab, type a message with multiple lines. Observe live character counter.
+  3. Submit the message. Verify message appears in list and input box clears.
+  4. Attempt rapid double-click on "Post Message" button.
+  5. Log in as a Project Viewer (`projectRole: 'viewer'`) or System Role Viewer (`systemRole: 'viewer'`).
+- **Expected Result**: Project members can post messages up to 5,000 characters. Rapid double-click sends only one POST request. Viewers see an informational read-only notice and NO post message textarea.
+- **What Must NOT Happen**: Viewers must **NOT** see or be able to submit the message posting form. Submitting an empty or whitespace-only message must **NOT** be permitted.
+
+### TEST-12C-09: Pin and Unpin Gated to Managers and System Admin
+- **Status**: `NOT RUN`
+- **Role**: Compare Project Manager / System Admin vs Plain Project Member
+- **Test Steps**:
+  1. Log in as Project Member. Inspect message cards.
+  2. Log in as Project Manager or `system_admin`. Inspect message cards.
+  3. Click "Pin" on an unpinned message.
+  4. Verify the message is marked pinned and sorted to top.
+  5. Click "Unpin" on a pinned message.
+- **Expected Result**: Only project managers and `system_admin` see "Pin" / "Unpin" action buttons. Pinning immediately promotes the message to the pinned section; unpinning restores it to chronological position.
+- **What Must NOT Happen**: Plain members and viewers must **NOT** see pin/unpin buttons.
+
+### TEST-12C-10: Convert Message to Task with Confirmation Dialog
+- **Status**: `NOT RUN`
+- **Role**: Project Member, Manager, or `system_admin`
+- **Test Steps**:
+  1. Find a message with a distinct first line (e.g., "Implement login audit logging\nDetailed notes on requirements...").
+  2. Click "Turn into task".
+  3. Inspect the confirmation dialog text.
+  4. Confirm conversion.
+  5. Click the task link in the success banner or on the "Converted" badge.
+- **Expected Result**: Confirmation dialog accurately explains that one unassigned task in 'todo' status will be created by the user, the first line becomes the title (up to 200 chars), the full message becomes the description, and the message itself is unchanged. Success alert displays a clickable link navigating directly to the new task detail page. Overview, Tasks tab, and Workload tab reflect the new task immediately.
+- **What Must NOT Happen**: Must **NOT** create duplicate tasks or promise attributes not supported by the API.
+
+### TEST-12C-11: Conversion Idempotency & 409 Already Converted Handling
+- **Status**: `NOT RUN`
+- **Role**: Project Member, Manager, or `system_admin`
+- **Test Steps**:
+  1. Convert a message to a task.
+  2. Reload the page (simulating a fresh session where in-memory state is reset).
+  3. Click "Turn into task" on the same message again and confirm.
+- **Expected Result**: The server returns HTTP 409 `already_converted`. The UI gracefully handles the response with a clear message: *"Message has already been converted to a task"*, and marks the message as converted in the UI session.
+- **What Must NOT Happen**: Must **NOT** show an unhandled red error crash or create a second task.
+
+### TEST-12C-12: Invalid Cursor Single Recovery without Retry Loop
+- **Status**: `NOT RUN`
+- **Role**: Project Member or Manager
+- **Test Steps**:
+  1. Trigger an invalid cursor condition (e.g. simulated via developer tools or outdated cursor).
+- **Expected Result**: The UI captures the 400 `invalid_cursor` error, displays a notification (*"Message list was refreshed due to an updated cursor."*), and reloads the first page once without entering an infinite loop.
+- **What Must NOT Happen**: Must **NOT** enter a repeating refetch loop.
+
 ---
 
 ## 4. Real-Database Integration & Audit Checks Pending

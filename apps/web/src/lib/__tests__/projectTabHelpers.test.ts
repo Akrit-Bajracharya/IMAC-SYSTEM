@@ -8,6 +8,7 @@ describe('projectTabHelpers', () => {
     expect(resolveProjectTab('milestones')).toBe('milestones');
     expect(resolveProjectTab('time')).toBe('time');
     expect(resolveProjectTab('workload')).toBe('workload');
+    expect(resolveProjectTab('messages')).toBe('messages');
   });
 
   it('falls back to overview for unknown or invalid tabs', () => {
@@ -21,5 +22,10 @@ describe('projectTabHelpers', () => {
   it('falls back to overview if tab is time but canSeeTime is false', () => {
     expect(resolveProjectTab('time', { canSeeTime: false })).toBe('overview');
     expect(resolveProjectTab('time', { canSeeTime: true })).toBe('time');
+  });
+
+  it('resolves messages tab for all viewers regardless of canSeeTime', () => {
+    expect(resolveProjectTab('messages', { canSeeTime: false })).toBe('messages');
+    expect(resolveProjectTab('messages', { canSeeTime: true })).toBe('messages');
   });
 });

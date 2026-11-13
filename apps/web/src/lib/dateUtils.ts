@@ -177,3 +177,30 @@ export function calculateShiftDifference(
     isBalanced,
   };
 }
+
+
+/**
+ * Formats an ISO timestamp for display in Asia/Kathmandu time zone including the year
+ * (e.g. "3 Nov 2026, 00:15").
+ * Uses hourCycle 'h23'.
+ * Returns "-" for null, undefined, empty, or unparseable input.
+ * Never throws.
+ */
+export function formatDateTimeDisplay(isoString?: string | null): string {
+  if (!isoString || typeof isoString !== 'string' || !isoString.trim()) {
+    return '-';
+  }
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) {
+    return '-';
+  }
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kathmandu',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+}

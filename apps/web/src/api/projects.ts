@@ -27,6 +27,9 @@ import type {
   CreateTimeLogPayload,
   PatchTimeLogPayload,
   ProjectWorkloadResponse,
+  ProjectMessage,
+  ProjectMessageListResponse,
+  ConvertToTaskResponse,
 } from '../types/index.js';
 
 export interface ListProjectsParams {
@@ -467,4 +470,62 @@ export function getProjectErrorInfo(err: any): {
   const details = data?.details;
 
   return { status, error, message, details };
+}
+
+export interface ListProjectMessagesParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export async function fetchProjectMessages(
+  projectId: string,
+  params?: ListProjectMessagesParams
+): Promise<ProjectMessageListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.set('limit', String(params.limit));
+  if (params?.cursor) queryParams.set('cursor', params.cursor);
+
+  const url = queryParams.toString()
+    ? `/projects/${projectId}/messages?${queryParams.toString()}`
+    : `/projects/${projectId}/messages`;
+  const res = await apiClient.get<ProjectMessageListResponse>(url);
+  return res.data;
+}
+
+export async function createProjectMessage(
+  projectId: string,
+  body: string
+): Promise<ProjectMessage> {
+  const res = await apiClient.post<ProjectMessage>(`/projects/${projectId}/messages`, { body });
+  return res.data;
+}
+
+export async function pinProjectMessage(
+  projectId: string,
+  messageId: string
+): Promise<{ ok: boolean; message: ProjectMessage }> {
+  const res = await apiClient.post<{ ok: boolean; message: ProjectMessage }>(
+    `/projects/${projectId}/messages/${messageId}/pin`
+  );
+  return res.data;
+}
+
+export async function unpinProjectMessage(
+  projectId: string,
+  messageId: string
+): Promise<{ ok: boolean; message: ProjectMessage }> {
+  const res = await apiClient.post<{ ok: boolean; message: ProjectMessage }>(
+    `/projects/${projectId}/messages/${messageId}/unpin`
+  );
+  return res.data;
+}
+
+export async function convertProjectMessageToTask(
+  projectId: string,
+  messageId: string
+): Promise<ConvertToTaskResponse> {
+  const res = await apiClient.post<ConvertToTaskResponse>(
+    `/projects/${projectId}/messages/${messageId}/to-task`
+  );
+  return res.data;
 }

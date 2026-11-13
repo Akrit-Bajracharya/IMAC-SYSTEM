@@ -1472,3 +1472,50 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run build --workspace=apps/web`: 0 errors (built in 7.35s)
 - **Status**: COMPLETED
 - **Decisions or problems**: Time tab and task detail time section hidden for viewers per Amendment 2. system_admin without a project membership row sees time tab with notice instead of form. Workload null loggedHours renders "-" and is excluded from totals. Changing filters resets pagination to the first page. Handled invalid_cursor with automatic first-page reload. Zero query key collisions.
+
+
+---
+
+## 27. Step 12c-2: Project Messages Tab (Frontend, apps/web)
+
+### Task 12c-MESSAGES-01: Messages Tab UI, Role Capabilities, Conversion to Task, Cache Invalidation & Unit Tests
+- **Date**: 2026-11-13
+- **Day of week**: Friday
+- **Start time**: 10:46
+- **End time**: 10:56
+- **Step**: Step 12c-2 (Project Messages Tab in apps/web)
+- **Task performed**:
+  - Investigated schema and API types for ProjectMessage, AuthorUser, and Task model in schema.prisma.
+  - Added pure helpers in `apps/web/src/lib/projectMessageHelpers.ts` with `canPostMessage`, `canPinMessage`, and `canConvertToTask` (mirroring `message:create`, `message:pin`, and `task:write` from `apps/api/src/lib/permissions.ts:79-85`), `deduplicateMessagesById`, session converted tracking, and `mapProjectMessageError`.
+  - Authored comprehensive table-driven unit test suite in `apps/web/src/lib/__tests__/projectMessageHelpers.test.ts` (37 tests) verifying all system and project role combinations, fail-closed behavior for members without a userId, and agreement with `canEditTask`.
+  - Added `formatDateTimeDisplay` to `apps/web/src/lib/dateUtils.ts` with `hourCycle: 'h23'` formatting Asia/Kathmandu date and time with year, verified with explicit UTC timestamps in `dateUtils.test.ts` (24 tests passed).
+  - Created centralized cache invalidator `apps/web/src/lib/projectTaskCache.ts` invalidating all verified task/summary/workload query keys.
+  - Added API client functions in `apps/web/src/api/projects.ts` (`fetchProjectMessages`, `createProjectMessage`, `pinProjectMessage`, `unpinProjectMessage`, `convertProjectMessageToTask`).
+  - Extended `resolveProjectTab` in `apps/web/src/lib/projectTabHelpers.ts` and test suite (4 tests passed).
+  - Built `apps/web/src/components/projects/MessagesTab.tsx` with `useInfiniteQuery` (query key `['projectMessagesInfinite', project.id]`, `staleTime: 0`), post message form (1–5000 chars, counter, viewer banner, double-click protection), author name resolution with former-member fallback, plain-text body (`whitespace-pre-wrap`), manager/system_admin pin controls, single-recovery cursor reload, and task conversion with confirmation dialog and direct task link.
+  - Integrated Messages tab into `ProjectDetailPage.tsx` navigation and tab body.
+  - Added all English translations to `apps/web/src/i18n/locales/en.json` with 0 missing keys.
+  - Documented known backend limitations in `docs/PROGRESS.md` and appended manual test cases `TEST-12C-07` through `TEST-12C-12` to `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `apps/web/src/types/index.ts` (modified)
+  - `apps/web/src/api/projects.ts` (modified)
+  - `apps/web/src/lib/dateUtils.ts` (modified)
+  - `apps/web/src/lib/__tests__/dateUtils.test.ts` (modified)
+  - `apps/web/src/lib/projectTabHelpers.ts` (modified)
+  - `apps/web/src/lib/__tests__/projectTabHelpers.test.ts` (modified)
+  - `apps/web/src/lib/projectTaskCache.ts` (created)
+  - `apps/web/src/lib/projectMessageHelpers.ts` (created)
+  - `apps/web/src/lib/__tests__/projectMessageHelpers.test.ts` (created)
+  - `apps/web/src/components/projects/MessagesTab.tsx` (created)
+  - `apps/web/src/pages/projects/ProjectDetailPage.tsx` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `docs/HAND-TEST-BACKLOG.md` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 31 test files passed, 989 passed (707 API + 282 Web), 0 failed
+  - `npm run lint`: 0 errors
+  - `npm run typecheck`: 0 errors across `@imac/api`, `@imac/web`, `@imac/shared`
+  - `npm run build --workspace=apps/web`: 0 errors (built production bundle in 7.09s)
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Zero query key collisions. Helper functions strictly derive admin status from `systemRole === 'system_admin'`. Task model in `schema.prisma` verified and type declared with confirmed fields only. Format timestamp uses `hourCycle: 'h23'`. Double-click submit prevented via ref guard and disabled state.

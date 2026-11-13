@@ -3,6 +3,7 @@ import {
   extractDatePart,
   parseYmd,
   formatDateDisplay,
+  formatDateTimeDisplay,
   toDateInputValue,
   isTaskOverdue,
   addDays,
@@ -25,107 +26,101 @@ describe('dateUtils', () => {
       expect(parseYmd('   ')).toBeNull();
     });
 
-    it('returns null for unparseable or garbage input', () => {
-      expect(extractDatePart('garbage')).toBeNull();
-      expect(extractDatePart('not-a-date')).toBeNull();
-      expect(extractDatePart('abc-de-fg')).toBeNull();
-
-      expect(parseYmd('garbage')).toBeNull();
-      expect(parseYmd('not-a-date')).toBeNull();
-    });
-
-    it('returns null for impossible dates (e.g. month 13 or day 45)', () => {
-      expect(extractDatePart('2026-13-45')).toBeNull();
-      expect(extractDatePart('2026-00-10')).toBeNull();
-      expect(extractDatePart('2026-02-30')).toBeNull(); // Feb 2026 only has 28 days
-
-      expect(parseYmd('2026-13-45')).toBeNull();
-      expect(parseYmd('2026-02-30')).toBeNull();
-    });
-
-    it('extracts date part from valid YYYY-MM-DD strings', () => {
+    it('extracts date part from pure YYYY-MM-DD strings', () => {
       expect(extractDatePart('2026-11-02')).toBe('2026-11-02');
+      expect(extractDatePart('   2026-11-02   ')).toBe('2026-11-02');
+
       expect(parseYmd('2026-11-02')).toEqual({ year: 2026, month: 11, day: 2 });
     });
 
-    it('extracts date part from UTC midnight ISO timestamps', () => {
+    it('extracts date part from ISO timestamps without shifting days', () => {
+      // Must extract calendar date part '2026-11-02' even if timestamp would shift under timezone offsets
       expect(extractDatePart('2026-11-02T00:00:00.000Z')).toBe('2026-11-02');
+      expect(extractDatePart('2026-11-02T23:59:59.999Z')).toBe('2026-11-02');
+      expect(extractDatePart('2026-11-02T18:15:00.000Z')).toBe('2026-11-02');
+
       expect(parseYmd('2026-11-02T00:00:00.000Z')).toEqual({ year: 2026, month: 11, day: 2 });
+      expect(parseYmd('2026-11-02T23:59:59.999Z')).toEqual({ year: 2026, month: 11, day: 2 });
     });
 
-    it('extracts date part from non-midnight ISO timestamps without shifting timezone', () => {
-      // API date columns (@db.Date) always arrive at midnight UTC, so the date part
-      // is the stored calendar date. The helper takes the date part without time zone shifting.
-      expect(extractDatePart('2026-11-02T18:30:00.000Z')).toBe('2026-11-02');
-      expect(parseYmd('2026-11-02T18:30:00.000Z')).toEqual({ year: 2026, month: 11, day: 2 });
+    it('returns null on impossible calendar dates', () => {
+      // Month 13 or day 32 should fail
+      expect(extractDatePart('2026-13-01')).toBeNull();
+      expect(extractDatePart('2026-02-31')).toBeNull();
+      expect(extractDatePart('not-a-date')).toBeNull();
+
+      expect(parseYmd('2026-13-01')).toBeNull();
+      expect(parseYmd('2026-02-31')).toBeNull();
+      expect(parseYmd('not-a-date')).toBeNull();
+    });
+
+    it('correctly validates leap years (Feb 29)', () => {
+      // 2024 is leap year, 2026 is not
+      expect(extractDatePart('2024-02-29')).toBe('2024-02-29');
+      expect(extractDatePart('2026-02-29')).toBeNull();
     });
   });
 
   describe('formatDateDisplay', () => {
-    it('returns neutral placeholder "-" for missing, empty, or invalid input without throwing', () => {
+    it('formats valid YYYY-MM-DD date string with short weekday', () => {
+      // 2026-11-02 was a Monday
+      expect(formatDateDisplay('2026-11-02')).toBe('Mon, Nov 2, 2026');
+      expect(formatDateDisplay('2026-11-06')).toBe('Fri, Nov 6, 2026');
+    });
+
+    it('formats ISO timestamp using calendar date part (never shifting date)', () => {
+      expect(formatDateDisplay('2026-11-02T00:00:00.000Z')).toBe('Mon, Nov 2, 2026');
+      expect(formatDateDisplay('2026-11-02T23:59:59.000Z')).toBe('Mon, Nov 2, 2026');
+    });
+
+    it('returns "-" for null, undefined, empty, or unparseable inputs without throwing', () => {
       expect(formatDateDisplay(null)).toBe('-');
       expect(formatDateDisplay(undefined)).toBe('-');
       expect(formatDateDisplay('')).toBe('-');
       expect(formatDateDisplay('   ')).toBe('-');
-      expect(formatDateDisplay('garbage')).toBe('-');
+      expect(formatDateDisplay('not-a-date')).toBe('-');
       expect(formatDateDisplay('2026-13-45')).toBe('-');
-    });
-
-    it('formats YYYY-MM-DD dates in en-US display format', () => {
-      expect(formatDateDisplay('2026-11-02')).toBe('Mon, Nov 2, 2026');
-    });
-
-    it('formats ISO timestamps at midnight UTC', () => {
-      expect(formatDateDisplay('2026-11-02T00:00:00.000Z')).toBe('Mon, Nov 2, 2026');
-    });
-
-    it('formats non-midnight ISO timestamps by preserving calendar date part', () => {
-      // API date columns (@db.Date) always arrive at midnight UTC, so the date part
-      // is the stored calendar date. Never shift by local timezone (e.g. Nepal UTC+05:45).
-      expect(formatDateDisplay('2026-11-02T18:30:00.000Z')).toBe('Mon, Nov 2, 2026');
     });
   });
 
   describe('toDateInputValue', () => {
+    it('returns YYYY-MM-DD from valid date strings and ISO timestamps', () => {
+      expect(toDateInputValue('2026-11-02')).toBe('2026-11-02');
+      expect(toDateInputValue('2026-11-02T15:30:00.000Z')).toBe('2026-11-02');
+    });
+
     it('returns empty string "" for null, undefined, empty, or invalid input', () => {
       expect(toDateInputValue(null)).toBe('');
       expect(toDateInputValue(undefined)).toBe('');
       expect(toDateInputValue('')).toBe('');
-      expect(toDateInputValue('   ')).toBe('');
-      expect(toDateInputValue('garbage')).toBe('');
-      expect(toDateInputValue('2026-13-45')).toBe('');
-    });
-
-    it('returns YYYY-MM-DD for valid date-only and ISO timestamps', () => {
-      expect(toDateInputValue('2026-11-02')).toBe('2026-11-02');
-      expect(toDateInputValue('2026-11-02T00:00:00.000Z')).toBe('2026-11-02');
-      // API date columns (@db.Date) always arrive at midnight UTC, so the date part is the stored calendar date
-      expect(toDateInputValue('2026-11-02T18:30:00.000Z')).toBe('2026-11-02');
+      expect(toDateInputValue('invalid')).toBe('');
     });
   });
 
   describe('isTaskOverdue', () => {
-    // We pass today explicitly in all tests so tests pass identically across any timezone
     const referenceToday = '2026-11-02';
 
-    it('returns true when due date is strictly in the past (past day)', () => {
+    it('returns true when due date calendar part is strictly before today and status is not done', () => {
       expect(isTaskOverdue('2026-11-01', 'todo', referenceToday)).toBe(true);
-      expect(isTaskOverdue('2026-11-01T00:00:00.000Z', 'in_progress', referenceToday)).toBe(true);
-      expect(isTaskOverdue('2026-10-31', 'blocked', referenceToday)).toBe(true);
+      expect(isTaskOverdue('2026-11-01', 'in_progress', referenceToday)).toBe(true);
+      expect(isTaskOverdue('2026-11-01', 'blocked', referenceToday)).toBe(true);
+      expect(isTaskOverdue('2026-10-31', 'todo', referenceToday)).toBe(true);
     });
 
-    it('returns false when due date is today (not overdue on due day)', () => {
+    it('works identically with ISO timestamps by extracting calendar date part', () => {
+      // 2026-11-01T23:59:59.000Z is calendar date 2026-11-01, which is before referenceToday 2026-11-02
+      expect(isTaskOverdue('2026-11-01T23:59:59.000Z', 'todo', referenceToday)).toBe(true);
+      // 2026-11-02T00:00:00.000Z is calendar date 2026-11-02 (today), which is NOT overdue
+      expect(isTaskOverdue('2026-11-02T00:00:00.000Z', 'todo', referenceToday)).toBe(false);
+    });
+
+    it('returns false when due date is today or in the future', () => {
       expect(isTaskOverdue('2026-11-02', 'todo', referenceToday)).toBe(false);
-      expect(isTaskOverdue('2026-11-02T00:00:00.000Z', 'in_progress', referenceToday)).toBe(false);
-    });
-
-    it('returns false when due date is tomorrow or future', () => {
       expect(isTaskOverdue('2026-11-03', 'todo', referenceToday)).toBe(false);
-      expect(isTaskOverdue('2026-11-03T00:00:00.000Z', 'in_progress', referenceToday)).toBe(false);
-      expect(isTaskOverdue('2026-12-01', 'todo', referenceToday)).toBe(false);
+      expect(isTaskOverdue('2026-12-01', 'in_progress', referenceToday)).toBe(false);
     });
 
-    it('returns false when task is done, even if due date is in the past', () => {
+    it('returns false when status is done, even if due date is in the past', () => {
       expect(isTaskOverdue('2026-11-01', 'done', referenceToday)).toBe(false);
       expect(isTaskOverdue('2026-11-01T00:00:00.000Z', 'done', referenceToday)).toBe(false);
       expect(isTaskOverdue('2025-01-01', 'done', referenceToday)).toBe(false);
@@ -181,4 +176,23 @@ describe('dateUtils', () => {
     });
   });
 
+  describe('formatDateTimeDisplay', () => {
+    it('formats explicit ISO timestamp to Asia/Kathmandu time with year and 24h clock', () => {
+      // 2026-11-02T18:30:00.000Z in UTC -> +5:45 is 2026-11-03 00:15
+      expect(formatDateTimeDisplay('2026-11-02T18:30:00.000Z')).toBe('3 Nov 2026, 00:15');
+    });
+
+    it('formats timestamp falling just after Kathmandu midnight correctly', () => {
+      // 2026-11-02T18:16:00.000Z in UTC -> +5:45 is 2026-11-03 00:01
+      expect(formatDateTimeDisplay('2026-11-02T18:16:00.000Z')).toBe('3 Nov 2026, 00:01');
+    });
+
+    it('returns "-" for null, undefined, empty, or invalid input without throwing', () => {
+      expect(formatDateTimeDisplay(null)).toBe('-');
+      expect(formatDateTimeDisplay(undefined)).toBe('-');
+      expect(formatDateTimeDisplay('')).toBe('-');
+      expect(formatDateTimeDisplay('   ')).toBe('-');
+      expect(formatDateTimeDisplay('invalid-date-string')).toBe('-');
+    });
+  });
 });

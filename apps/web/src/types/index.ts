@@ -467,3 +467,46 @@ export interface ProjectWorkloadResponse {
 }
 
 export type User = AuthUser;
+
+export interface ProjectMessageUser {
+  id: string;
+  displayName: string;
+  username: string;
+}
+
+export interface ProjectMessage {
+  id: string;
+  projectId: string;
+  authorUserId: string;
+  body: string;
+  isPinned: boolean;
+  createdAt: string;
+  authorUser?: ProjectMessageUser;
+}
+
+export interface ProjectMessageListResponse {
+  items: ProjectMessage[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface ConvertedTask {
+  id: string;
+  projectId: string;
+  parentTaskId?: string | null;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  assigneeUserId?: string | null;
+  dueDate?: string | null;
+  estimatedHours?: number | null;
+  milestoneId?: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConvertToTaskResponse {
+  ok: boolean;
+  task: ConvertedTask;
+}
