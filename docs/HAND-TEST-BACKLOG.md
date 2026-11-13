@@ -481,6 +481,17 @@ Each test is specified in plain language with:
 - **Expected Result**: The UI captures the 400 `invalid_cursor` error, displays a notification (*"Message list was refreshed due to an updated cursor."*), and reloads the first page once without entering an infinite loop.
 - **What Must NOT Happen**: Must **NOT** enter a repeating refetch loop.
 
+### TEST-12C-13: Concurrent Message Conversion in Two Browsers
+- **Status**: `NOT RUN`
+- **Role**: `system_admin` (`akrit`)
+- **Test Steps**:
+  1. Log in as `akrit` in two different browsers (e.g. Chrome and Firefox, or two distinct browser profiles).
+  2. In both browsers, navigate to the same project and open the Messages tab.
+  3. Locate the same unconverted project message in both browser windows.
+  4. Click "Turn into task" in both browsers at the exact same moment.
+- **Expected Result**: Exactly one new task is created and one browser displays the success banner with the task link; the other browser receives the 409 `already_converted` response and displays the "Message has already been converted to a task" notification.
+- **What Must NOT Happen**: Must **NOT** create duplicate tasks or result in an unhandled 500 error. If both browsers show success, record it as a bug.
+
 ---
 
 ## 4. Real-Database Integration & Audit Checks Pending

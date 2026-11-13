@@ -1519,3 +1519,43 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run build --workspace=apps/web`: 0 errors (built production bundle in 7.09s)
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Zero query key collisions. Helper functions strictly derive admin status from `systemRole === 'system_admin'`. Task model in `schema.prisma` verified and type declared with confirmed fields only. Format timestamp uses `hourCycle: 'h23'`. Double-click submit prevented via ref guard and disabled state.
+
+### Task 12c-POLICY-01: Document Open Policy Question on Message Conversion Task Title in Audit Log
+- **Date**: 2026-11-13
+- **Day of week**: Friday
+- **Start time**: 16:28
+- **End time**: 16:29
+- **Step**: Step 12c-2 (Documentation & Policy Alignment)
+- **Task performed**:
+  - Checked `docs/open-policy-questions.md` for existing task-title-in-audit questions; verified no duplicate exists.
+  - Appended Question 37 ("Message Conversion Task Title and Audit Log Exposure") to `docs/open-policy-questions.md`, continuing sequential numbering.
+  - Formulated question for IMAC leadership regarding whether storing the task title derived from the first line (or full text for one-line messages) in audit log events (`project_message.converted_to_task` and `task.created`) is acceptable, or whether audit entries should record entity IDs only (`taskId`, `messageId`, `projectId`) to prevent message text exposure in audit trails.
+- **Files created or changed**:
+  - `docs/open-policy-questions.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**: N/A (Documentation update only)
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Confirmed zero duplicate questions; sequential numbering continued from 36 to 37.
+
+### Task 12c-DOCS-02: Documentation Alignment, Backend Limitation Corrections & Concurrent Hand-Test Backlog
+- **Date**: 2026-11-13
+- **Day of week**: Friday
+- **Start time**: 16:47
+- **End time**: 16:49
+- **Step**: Step 12c-2 (Documentation Alignment & Hand-Test Backlog)
+- **Task performed**:
+  - Corrected Question 37 in `docs/open-policy-questions.md`: updated audit metadata field names to `afterSnapshot.title`, noted additional properties (`taskId`, `status`, `projectId`, `fromMessageId`), and clarified that standard message creation writes no audit entry, pinning/unpinning writes audit entries without message text (`afterSnapshot.isPinned`), and conversion writes two audit entries.
+  - Replaced "Known backend limitations" note in `docs/PROGRESS.md` under Step 12c-2: noted that simultaneous conversions are prevented via transaction-level advisory locking (`pg_advisory_xact_lock`) and audit check in `apps/api/src/routes/messages.ts`, and identified real limits (audit row dependency and permanent unconvertibility if created task is deleted).
+  - Added security review note under Step 10f in `docs/PROGRESS.md`: "messages.ts reviewed 2026-11-13: no access-control, IDOR or transaction findings".
+  - Appended `TEST-12C-13` to `docs/HAND-TEST-BACKLOG.md` (marked `NOT RUN`) specifying concurrent message conversion testing in two browser sessions by `akrit`, noting that if both show success it must be recorded as a bug. Confirmed continuous ID sequence without duplicates.
+  - Investigated `deploy/.env.production.example`: cause unknown; no tool call in this session edited it; the user restored it with git restore; a generated value was never committed and was verified absent from `finalreport.md`, `docs/`, and repository files.
+- **Files created or changed**:
+  - `docs/open-policy-questions.md` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `docs/HAND-TEST-BACKLOG.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**: N/A (Documentation updates only; 989 automated tests previously verified)
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Strictly maintained zero secret references in reports and logs.
+
+

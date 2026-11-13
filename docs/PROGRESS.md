@@ -716,6 +716,7 @@ Across all APIs in the IMAC Operations System:
 ## Step 10f: Review Fixes for Projects, Tasks, Messages, and Work Logs (Backend Only)
 
 ### 1. Scope & Implementation Details
+- messages.ts reviewed 2026-11-13: no access-control, IDOR or transaction findings
 - **Item 1: Work Log Empty Day Query**:
   - Verified `GET /api/work-logs/by-date` returns HTTP 200 with `{ workLog: null, totalHours: 0, standardShiftHours: 8, warnings: [] }` when no work log exists for the requested date. Added explicit test in `workLogs.test.ts`.
 - **Item 2: Member Task Creation Permission Fix & canEditTask Audit**:
@@ -1232,6 +1233,6 @@ Across all APIs in the IMAC Operations System:
 
 ### 3. Known Backend Limitations & Mock Limitations
 - **Known Backend Limitations**:
-  - The backend API decides "already converted" based on the `AuditLog` table (`action: 'project_message.converted_to_task'`). Two simultaneous conversions (if race conditions bypass the advisory transaction lock), or administrative audit-log cleanup/truncation, could allow a second conversion.
+  - Simultaneous conversions ARE prevented (advisory lock plus audit check inside one transaction in apps/api/src/routes/messages.ts); the real limits are (a) "already converted" is derived from the audit log only, so archiving or deleting audit rows would allow a second conversion, and (b) deleting the created task leaves the message permanently unconvertible.
 - **Mock Limitations (What Unit Tests Cannot Prove)**:
   - Pure helper unit tests verify role matrix logic, error mapping, and string formatting in memory. They do not test live SSE notification delivery, physical mobile viewport touch interactions, or real concurrent database connections.
