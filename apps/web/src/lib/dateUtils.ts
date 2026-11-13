@@ -140,8 +140,11 @@ export function isTaskOverdue(
   return dueDatePart < referenceToday;
 }
 
-export function formatHours(hours: number): string {
-  return `${hours.toFixed(2)}h`;
+export function formatHours(hours?: number | string | null): string {
+  if (hours === null || hours === undefined) return '-';
+  const num = typeof hours === 'string' ? parseFloat(hours) : hours;
+  if (typeof num !== 'number' || isNaN(num)) return '-';
+  return `${num.toFixed(2)}h`;
 }
 
 export function calculateShiftDifference(

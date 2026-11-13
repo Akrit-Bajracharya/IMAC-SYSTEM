@@ -33,6 +33,7 @@ import { TaskStatusBadge } from '../../components/projects/TaskStatusBadge.js';
 import { TaskStatusControl } from '../../components/projects/TaskStatusControl.js';
 import { TaskDependenciesSection } from '../../components/projects/TaskDependenciesSection.js';
 import { TaskCommentsSection } from '../../components/projects/TaskCommentsSection.js';
+import { TaskTimeLogsSection } from '../../components/projects/TaskTimeLogsSection.js';
 import { CreateTaskModal } from '../../components/projects/CreateTaskModal.js';
 import {
   canEditTask,
@@ -675,6 +676,17 @@ export function TaskDetailPage() {
             onRefreshTask={refetchTask}
           />
 
+
+          {/* Time Logged Section */}
+          <TaskTimeLogsSection
+            projectId={project.id}
+            task={task}
+            currentUser={user}
+            callerProjectRole={callerProjectRole}
+            isSystemAdmin={isSystemAdmin}
+            projectMembers={project.members}
+            onRefreshTask={refetchTask}
+          />
           {/* Comments Section */}
           <TaskCommentsSection
             projectId={project.id}

@@ -83,7 +83,11 @@
     "deleting": "Deleting...",
     "edit": "Edit",
     "delete": "Delete",
-    "open": "Open"
+    "open": "Open",
+    "filters": "Filters",
+    "reset": "Reset",
+    "unassigned": "Unassigned",
+    "unknownError": "An unexpected error occurred."
   },
   "roles": {
     "system_admin": "System Admin",
@@ -646,7 +650,9 @@
     "tabs": {
       "overview": "Overview",
       "tasks": "Tasks",
-      "milestones": "Milestones"
+      "milestones": "Milestones",
+      "time": "Time",
+      "workload": "Workload"
     },
     "tasks": {
       "status": {
@@ -860,6 +866,81 @@
           "deleteForbidden": "You do not have permission to delete this comment."
         }
       }
+    },
+    "timeLogs": {
+      "title": "Project Time Logs",
+      "subtitle": "Track and review hours spent on project tasks.",
+      "logTimeBtn": "Log Time",
+      "adminNoMembershipNotice": "Add yourself as a project member to log time.",
+      "filterTask": "Task",
+      "filterPerson": "Person",
+      "allTasks": "All Tasks",
+      "allMembers": "All Members",
+      "totalLoadedRows": "Total of loaded rows: {{total}}",
+      "totalHours": "Total: {{total}}",
+      "formerMember": "Former member",
+      "generalTime": "General project time",
+      "generalProjectTime": "— General Project Time —",
+      "noLogsTitle": "No Time Logs Found",
+      "noLogsFiltered": "No time logs match your selected filters.",
+      "noLogsDesc": "No time has been logged on this project yet.",
+      "logFirstTime": "Log First Time Entry",
+      "loadMore": "Load older time logs",
+      "taskSectionTitle": "Time Logged",
+      "noLogsOnTask": "No time logged on this task yet.",
+      "logTimeTitle": "Log Time",
+      "editTimeTitle": "Edit Time Log",
+      "taskLabel": "Task",
+      "workDate": "Date (Asia/Kathmandu)",
+      "hours": "Hours (0.25 increments, max 24)",
+      "taskOptional": "Task (Optional)",
+      "noteOptional": "Note (Optional)",
+      "notePlaceholder": "Describe what was accomplished...",
+      "saveTimeLog": "Save Time Log",
+      "deleteTitle": "Delete Time Log",
+      "deleteDesc": "Are you sure you want to delete this time entry? This cannot be undone.",
+      "forbiddenView": "You do not have permission to view project time logs.",
+      "errors": {
+        "dailyHoursExceeded": "Total logged hours for this day across all projects cannot exceed 24.",
+        "invalidDateRange": "Date must be within 90 days in the past and at most 1 day in the future.",
+        "invalidTask": "Selected task does not belong to this project.",
+        "invalidCursor": "Pagination cursor is invalid. Refreshing list.",
+        "validationError": "Please check entered values (positive hours in 0.25 steps up to 24h).",
+        "forbidden": "You do not have permission to perform this action.",
+        "notFound": "Project, task or time log not found.",
+        "quarterHourIncrement": "Hours must be entered in 0.25 (15 min) increments.",
+        "positiveHours": "Hours must be greater than 0.",
+        "maxHours": "Hours cannot exceed 24.",
+        "noteTooLong": "Note must be 5000 characters or less."
+      }
+    },
+    "workload": {
+      "title": "Project Workload & Distribution",
+      "subtitle": "Overview of open tasks and hours allocation across team members.",
+      "unassignedTitle": "Unassigned or Departed Assignee Tasks",
+      "unassignedDesc": "Tasks requiring manager assignment or backlog grooming.",
+      "openTasksCount": "{{count}} open tasks",
+      "estimatedHoursShort": "est",
+      "noMembersTitle": "No Project Members",
+      "noMembersDesc": "There are no active members assigned to this project.",
+      "member": "Member",
+      "role": "Role",
+      "openTasks": "Open Tasks",
+      "estimatedHours": "Estimated Hours",
+      "loggedHours": "Logged Hours",
+      "yourLoggedHoursOnly": "Your Logged Hours Only",
+      "openTasksShort": "Open",
+      "estShort": "Est",
+      "loggedShort": "Logged",
+      "loading": "Loading workload distribution...",
+      "error": "Failed to load project workload."
+    },
+    "summary": {
+      "overdueTasksTitle": "Overdue Tasks",
+      "noOverdueTasks": "No overdue tasks for this project.",
+      "blockedTasksTitle": "Blocked Tasks",
+      "noBlockedTasks": "No blocked tasks.",
+      "showingFirstN": "Showing first {{count}} tasks"
     }
   }
 }

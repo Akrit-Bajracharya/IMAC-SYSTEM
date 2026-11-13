@@ -1417,3 +1417,58 @@ Documented in `docs/open-policy-questions.md`:
   - `npm run build --workspace=apps/web`: 0 errors (built in 6.95s)
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Overdue calculation correctly uses Asia/Kathmandu calendar day and excludes completed milestones. Tasks are paginated with `fetchAllTasksForProject` until `hasMore === false` to ensure milestone completion ratios are exact. 409 and 403/404 errors show friendly user explanations and trigger refetches.
+
+
+---
+
+## 26. Step 12c-1: Project Time Logs, Workload & Project Summary (apps/web)
+
+### Task 12c-TIMELOGS-01: Time Tab, Workload Tab, Task Time Log Section, Overdue/Blocked Cards & Unit Tests
+- **Date**: 2026-11-05
+- **Day of week**: Thursday
+- **Start time**: 14:51
+- **End time**: 15:12
+- **Step**: Step 12c-1 (Project Time Logs, Workload & Project Summary in apps/web)
+- **Task performed**:
+  - Investigated schema and API types for `TimeLog.hours` (Float in Prisma, numbers in JSON), `TimeLog.workDate` (DateTime @db.Date), and workload response attributes.
+  - Added pure helpers: `timeLogPermissions.ts`, `timeLogPayload.ts`, `timeLogTotals.ts`, `projectTabHelpers.ts`, `timeLogErrorHelpers.ts`.
+  - Authored comprehensive unit tests with explicit `referenceToday` parameter across 4 test suites.
+  - Hardened `formatHours` in `apps/web/src/lib/dateUtils.ts` to handle number, string, null, undefined, and NaN, returning "-" safely without breaking existing callers.
+  - Added API client functions in `apps/web/src/api/projects.ts` (`fetchProjectTimeLogs`, `createProjectTimeLog`, `patchProjectTimeLog`, `deleteProjectTimeLog`, `fetchProjectWorkload`, `fetchProjectOverdueTasks`, `fetchProjectBlockedTasks`).
+  - Created `TimeLogsTab.tsx` component with role capability gates (hidden for viewers; system_admin without membership sees notice instead of form), create modal, inline edit, delete confirmation, cursor pagination, and clear loaded-row totals.
+  - Created `TaskTimeLogsSection.tsx` in `TaskDetailPage.tsx` with task-scoped time logs and prefilled log modal (hidden for viewers).
+  - Created `ProjectWorkloadTab.tsx` with responsive desktop table and mobile stacked cards, masking other members' logged hours for non-managers with "Your Logged Hours Only" header.
+  - Enhanced Overview tab with Overdue and Blocked tasks cards displaying exact server counts and first 5 tasks linked via `getTaskDetailPath`.
+  - Added English translations to `apps/web/src/i18n/locales/en.json` (automated scanner confirmed 0 missing keys).
+  - Updated `docs/open-policy-questions.md` with Question 36 regarding member visibility of peer workload metrics.
+  - Appended manual test cases `TEST-12C-01` through `TEST-12C-06` to `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `apps/web/src/types/index.ts` (modified)
+  - `apps/web/src/api/projects.ts` (modified)
+  - `apps/web/src/lib/dateUtils.ts` (modified)
+  - `apps/web/src/lib/__tests__/dateUtils.test.ts` (modified)
+  - `apps/web/src/lib/timeLogPermissions.ts` (created)
+  - `apps/web/src/lib/__tests__/timeLogPermissions.test.ts` (created)
+  - `apps/web/src/lib/timeLogTotals.ts` (created)
+  - `apps/web/src/lib/__tests__/timeLogTotals.test.ts` (created)
+  - `apps/web/src/lib/timeLogPayload.ts` (created)
+  - `apps/web/src/lib/__tests__/timeLogPayload.test.ts` (created)
+  - `apps/web/src/lib/projectTabHelpers.ts` (created)
+  - `apps/web/src/lib/__tests__/projectTabHelpers.test.ts` (created)
+  - `apps/web/src/lib/timeLogErrorHelpers.ts` (created)
+  - `apps/web/src/components/projects/TimeLogsTab.tsx` (created)
+  - `apps/web/src/components/projects/TaskTimeLogsSection.tsx` (created)
+  - `apps/web/src/components/projects/ProjectWorkloadTab.tsx` (created)
+  - `apps/web/src/pages/projects/ProjectDetailPage.tsx` (modified)
+  - `apps/web/src/pages/projects/TaskDetailPage.tsx` (modified)
+  - `apps/web/src/i18n/locales/en.json` (modified)
+  - `docs/open-policy-questions.md` (modified)
+  - `docs/HAND-TEST-BACKLOG.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `npm run test`: 30 test files passed, 950 passed (707 API + 243 Web), 0 failed
+  - `npm run lint`: 0 errors
+  - `npm run typecheck`: 0 errors
+  - `npm run build --workspace=apps/web`: 0 errors (built in 7.35s)
+- **Status**: COMPLETED
+- **Decisions or problems**: Time tab and task detail time section hidden for viewers per Amendment 2. system_admin without a project membership row sees time tab with notice instead of form. Workload null loggedHours renders "-" and is excluded from totals. Changing filters resets pagination to the first page. Handled invalid_cursor with automatic first-page reload. Zero query key collisions.

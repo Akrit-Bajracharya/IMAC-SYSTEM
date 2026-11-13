@@ -343,6 +343,80 @@ Each test is specified in plain language with:
 
 ---
 
+## 3. Step 12c: Project Time Logs, Workload & Project Summary
+
+### TEST-12C-01: Time Tab & Task Time Log Hidden for Project Viewers
+- **Status**: `NOT RUN`
+- **Role**: Project `viewer`
+- **Test Steps**:
+  1. Log in as a user who has `projectRole: 'viewer'` on the target project.
+  2. Navigate to `/employee/projects/:id`.
+  3. Inspect the project tab navigation bar.
+  4. Attempt to access `?tab=time` directly in the browser address bar.
+  5. Navigate to any task detail page within the project.
+- **Expected Result**: The "Time" tab button is completely hidden from the tab bar. Navigating directly to `?tab=time` falls back to the `overview` tab. In the Task Detail page, the "Time Logged" section is hidden.
+- **What Must NOT Happen**: Viewers must **NOT** see the Time tab, cannot log time, and cannot see time log forms.
+
+### TEST-12C-02: System Admin without Member Row Sees Notice Instead of Form
+- **Status**: `NOT RUN`
+- **Role**: `system_admin` (who has NOT been added as a member in `project.members`)
+- **Test Steps**:
+  1. Log in as `system_admin` (`boss` or `akrit`).
+  2. Open a project where the admin has not been added as a member.
+  3. Click on the "Time" tab.
+  4. Inspect the top action area.
+  5. Navigate to a task detail page and inspect the "Time Logged" section.
+- **Expected Result**: Admin sees all project time logs. Instead of a "Log Time" button/form, an informative amber notice is displayed: *"Add yourself as a project member to log time."*
+- **What Must NOT Happen**: Admin must **NOT** see a time logging form that fails with HTTP 404 from the server.
+
+### TEST-12C-03: Log Time Validation and Creation
+- **Status**: `NOT RUN`
+- **Role**: Project `member` or `manager` (with an explicit membership row)
+- **Test Steps**:
+  1. On the "Time" tab, click "Log Time".
+  2. Verify the date input defaults to today in `Asia/Kathmandu` and enforces min (today - 90 days) and max (today + 1 day).
+  3. Test invalid hours: enter 0, negative values, 25, or non-quarter increments like 1.10.
+  4. Enter valid values: 2.25 hours, select a project task, and enter a note. Submit the form.
+- **Expected Result**: Submitting invalid hours is blocked with inline validation. Valid entry disables the button during submission, closes the modal, places the log under today's date group, and updates the loaded row total.
+- **What Must NOT Happen**: Must **NOT** send caller `userId` in payload. Must **NOT** permit values outside quarter-hour steps.
+
+### TEST-12C-04: Edit and Delete are Strictly Author-Only
+- **Status**: `NOT RUN`
+- **Role**: Project `manager` inspecting another member's log; and `member` inspecting peer's log
+- **Test Steps**:
+  1. As a project manager, navigate to the "Time" tab of a project with logs submitted by other members.
+  2. Inspect the action buttons next to other members' logs.
+  3. Inspect the action buttons next to the manager's own logged entries.
+  4. As a regular member, repeat the inspection.
+- **Expected Result**: Edit (pencil) and Delete (trash) buttons appear strictly on logs where `log.userId === session.userId`. For any other user's log, no edit or delete controls appear.
+- **What Must NOT Happen**: Managers and system administrators must **NOT** be able to edit or delete time logs created by another person.
+
+### TEST-12C-05: Workload View Privacy and Mobile Responsiveness
+- **Status**: `NOT RUN`
+- **Role**: Project `member` (non-manager) vs Project `manager`
+- **Test Steps**:
+  1. Log in as a plain project `member` and open the "Workload" tab.
+  2. Inspect the "Logged Hours" column header and row values.
+  3. Log in as a project `manager` and open the "Workload" tab.
+  4. Resize the browser viewport down to mobile width (<640px).
+- **Expected Result**:
+  - For plain members, the logged hours column is labeled *"Your Logged Hours Only"*, shows logged hours for their own row, and displays `'-'` (never 0) for all other members.
+  - For managers, all members' logged hours are displayed.
+  - At mobile viewport width, the table cleanly transforms into stacked cards.
+- **What Must NOT Happen**: Plain members must **NOT** see logged hours of peers. Null values must **NOT** render as 0 and must **NOT** be added to totals.
+
+### TEST-12C-06: Overview Tab Overdue and Blocked Tasks Cards
+- **Status**: `NOT RUN`
+- **Role**: Any project member or `system_admin`
+- **Test Steps**:
+  1. Navigate to the `Overview` tab of a project with overdue and blocked tasks.
+  2. Inspect the "Overdue Tasks" and "Blocked Tasks" cards.
+  3. Click a task link in either card.
+- **Expected Result**: Cards show the exact aggregate counts from the project summary (`summary.overdueCount`, `summary.blockedCount`), display up to 5 tasks linking directly to task detail, and display *"Showing first 5 tasks"* if more tasks exist.
+- **What Must NOT Happen**: Must **NOT** crash, flicker, or show raw IDs.
+
+---
+
 ## 4. Real-Database Integration & Audit Checks Pending
 
 The following checks cannot be proven by Vitest in-memory mocks and must be verified against a live PostgreSQL database instance:

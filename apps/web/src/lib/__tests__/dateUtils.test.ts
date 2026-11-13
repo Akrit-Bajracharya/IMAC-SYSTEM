@@ -8,6 +8,7 @@ import {
   addDays,
   getWeekMonday,
   formatYmd,
+  formatHours,
 } from '../dateUtils.js';
 
 describe('dateUtils', () => {
@@ -158,4 +159,26 @@ describe('dateUtils', () => {
       expect(formatYmd(2026, 5, 9)).toBe('2026-05-09');
     });
   });
+
+  describe('formatHours safe formatting', () => {
+    it('formats numeric hours with 2 decimal places', () => {
+      expect(formatHours(2.5)).toBe('2.50h');
+      expect(formatHours(0)).toBe('0.00h');
+      expect(formatHours(8)).toBe('8.00h');
+    });
+
+    it('formats string hours with 2 decimal places', () => {
+      expect(formatHours('2.5')).toBe('2.50h');
+      expect(formatHours('0.25')).toBe('0.25h');
+    });
+
+    it('returns "-" for null, undefined, empty, or NaN inputs without throwing', () => {
+      expect(formatHours(null)).toBe('-');
+      expect(formatHours(undefined)).toBe('-');
+      expect(formatHours('')).toBe('-');
+      expect(formatHours('not-a-number')).toBe('-');
+      expect(formatHours(NaN)).toBe('-');
+    });
+  });
+
 });

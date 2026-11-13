@@ -401,3 +401,69 @@ export interface AddProjectMemberPayload {
   userId: string;
   projectRole: ProjectRole;
 }
+
+
+export interface ProjectTimeLogUser {
+  id: string;
+  displayName: string;
+  username: string;
+}
+
+export interface ProjectTimeLogTask {
+  id: string;
+  title: string;
+}
+
+export interface ProjectTimeLog {
+  id: string;
+  projectId: string;
+  userId: string;
+  taskId: string | null;
+  workDate: string;
+  hours: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: ProjectTimeLogUser;
+  task?: ProjectTimeLogTask | null;
+}
+
+export interface ProjectTimeLogListResponse {
+  items: ProjectTimeLog[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface CreateTimeLogPayload {
+  taskId?: string | null;
+  workDate: string;
+  hours: number;
+  note?: string | null;
+}
+
+export interface PatchTimeLogPayload {
+  taskId?: string | null;
+  workDate?: string;
+  hours?: number;
+  note?: string | null;
+}
+
+export interface ProjectWorkloadMember {
+  userId: string;
+  displayName: string;
+  username: string;
+  projectRole: ProjectRole;
+  openTasksCount: number;
+  estimatedHours: number;
+  loggedHours: number | null;
+}
+
+export interface ProjectWorkloadResponse {
+  members: ProjectWorkloadMember[];
+  unassignedOrDeparted: {
+    openTasksCount: number;
+    estimatedHours: number;
+  };
+}
+
+export type User = AuthUser;

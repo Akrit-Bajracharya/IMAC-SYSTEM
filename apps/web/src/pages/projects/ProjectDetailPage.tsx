@@ -22,6 +22,8 @@ import {
 import {
   fetchProjectById,
   fetchProjectSummary,
+  fetchProjectOverdueTasks,
+  fetchProjectBlockedTasks,
   removeProjectMember,
   getProjectErrorInfo,
 } from '../../api/projects.js';
@@ -35,8 +37,14 @@ import { ChangeProjectStatusModal } from '../../components/projects/ChangeProjec
 import { AddProjectMemberModal } from '../../components/projects/AddProjectMemberModal.js';
 import { TasksTab } from '../../components/projects/TasksTab.js';
 import { MilestonesTab } from '../../components/projects/MilestonesTab.js';
+import { TimeLogsTab } from '../../components/projects/TimeLogsTab.js';
+import { ProjectWorkloadTab } from '../../components/projects/ProjectWorkloadTab.js';
+import { canSeeTimeTab } from '../../lib/timeLogPermissions.js';
+import { resolveProjectTab, type ProjectTabId } from '../../lib/projectTabHelpers.js';
+import { getTaskDetailPath } from '../../lib/taskLinks.js';
+import { formatDateDisplay } from '../../lib/dateUtils.js';
 import { ConfirmationModal } from '../../components/common/ConfirmationModal.js';
-import type { ProjectDetail, ProjectSummary, ProjectMember } from '../../types/index.js';
+import type { ProjectDetail, ProjectSummary, ProjectMember, ProjectTask } from '../../types/index.js';
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,15 +53,6 @@ export function ProjectDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = (searchParams.get('tab') as 'overview' | 'tasks' | 'milestones') || 'overview';
-
-  const handleTabChange = (newTab: 'overview' | 'tasks' | 'milestones') => {
-    setSearchParams((prev) => {
-      const p = new URLSearchParams(prev);
-      p.set('tab', newTab);
-      return p;
-    });
-  };
 
   const basePath = user && ['system_admin', 'hr_admin'].includes(user.systemRole)
     ? '/admin/projects'
@@ -92,6 +91,36 @@ export function ProjectDetailPage() {
     enabled: !!id && !!project,
     retry: 1,
   });
+
+  // 3. Fetch overdue tasks for Overview card
+  const { data: overdueTasksData } = useQuery({
+    queryKey: ['projectOverdueTasks', id],
+    queryFn: () => fetchProjectOverdueTasks(id!, { limit: 5 }),
+    enabled: !!id && !!project,
+    staleTime: 0,
+  });
+
+  // 4. Fetch blocked tasks for Overview card
+  const { data: blockedTasksData } = useQuery({
+    queryKey: ['projectBlockedTasks', id],
+    queryFn: () => fetchProjectBlockedTasks(id!, { limit: 5 }),
+    enabled: !!id && !!project,
+    staleTime: 0,
+  });
+
+  const canSeeTime = useMemo(() => {
+    return canSeeTimeTab(user, project);
+  }, [user, project]);
+
+  const currentTab = resolveProjectTab(searchParams.get('tab'), { canSeeTime });
+
+  const handleTabChange = (newTab: ProjectTabId) => {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set('tab', newTab);
+      return p;
+    });
+  };
 
   // Determine caller project membership role
   const callerProjectRole = useMemo(() => {
@@ -461,6 +490,94 @@ export function ProjectDetailPage() {
         </div>
       </div>
 
+
+          {/* Overdue and Blocked Tasks Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Overdue Tasks Card */}
+            <div className="border rounded-xl p-5 bg-card flex flex-col justify-between space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span>{t('projects.summary.overdueTasksTitle', 'Overdue Tasks')}</span>
+                </div>
+                <span className="font-mono font-bold text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 rounded-full">
+                  {summary?.overdueCount ?? 0}
+                </span>
+              </div>
+
+              {(overdueTasksData?.items.length ?? 0) === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-3">
+                  {t('projects.summary.noOverdueTasks', 'No overdue tasks for this project.')}
+                </p>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <div className="divide-y text-xs border rounded-lg overflow-hidden bg-background">
+                    {overdueTasksData?.items.map((tItem: ProjectTask) => (
+                      <div key={tItem.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/30">
+                        <a
+                          href={getTaskDetailPath(project.id, tItem.id, user?.systemRole)}
+                          className="font-medium text-primary hover:underline truncate"
+                        >
+                          {tItem.title}
+                        </a>
+                        <span className="text-muted-foreground text-[11px] shrink-0 font-mono">
+                          {formatDateDisplay(tItem.dueDate)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {(summary?.overdueCount ?? 0) > (overdueTasksData?.items.length ?? 0) && (
+                    <p className="text-[11px] text-muted-foreground text-right italic">
+                      {t('projects.summary.showingFirstN', { count: overdueTasksData?.items.length, defaultValue: 'Showing first {{count}} tasks' })}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Blocked Tasks Card */}
+            <div className="border rounded-xl p-5 bg-card flex flex-col justify-between space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <AlertOctagon className="h-4 w-4 text-rose-600" />
+                  <span>{t('projects.summary.blockedTasksTitle', 'Blocked Tasks')}</span>
+                </div>
+                <span className="font-mono font-bold text-xs bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 px-2.5 py-0.5 rounded-full">
+                  {summary?.blockedCount ?? 0}
+                </span>
+              </div>
+
+              {(blockedTasksData?.items.length ?? 0) === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-3">
+                  {t('projects.summary.noBlockedTasks', 'No blocked tasks.')}
+                </p>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <div className="divide-y text-xs border rounded-lg overflow-hidden bg-background">
+                    {blockedTasksData?.items.map((tItem: ProjectTask) => (
+                      <div key={tItem.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/30">
+                        <a
+                          href={getTaskDetailPath(project.id, tItem.id, user?.systemRole)}
+                          className="font-medium text-primary hover:underline truncate"
+                        >
+                          {tItem.title}
+                        </a>
+                        <span className="text-muted-foreground text-[11px] shrink-0 font-mono">
+                          {tItem.assigneeUser?.displayName || t('common.unassigned', 'Unassigned')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {(summary?.blockedCount ?? 0) > (blockedTasksData?.items.length ?? 0) && (
+                    <p className="text-[11px] text-muted-foreground text-right italic">
+                      {t('projects.summary.showingFirstN', { count: blockedTasksData?.items.length, defaultValue: 'Showing first {{count}} tasks' })}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
       {/* Project Members Section */}
       <div className="border rounded-xl p-6 bg-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -558,6 +675,24 @@ export function ProjectDetailPage() {
         />
       )}
 
+
+      {currentTab === 'time' && (
+        <TimeLogsTab
+          project={project}
+          currentUser={user}
+          callerProjectRole={callerProjectRole}
+          isSystemAdmin={user?.systemRole === 'system_admin'}
+        />
+      )}
+
+      {currentTab === 'workload' && (
+        <ProjectWorkloadTab
+          project={project}
+          currentUser={user}
+          callerProjectRole={callerProjectRole}
+          isSystemAdmin={user?.systemRole === 'system_admin'}
+        />
+      )}
       {/* Edit Project Modal */}
       <EditProjectModal
         open={editModalOpen}

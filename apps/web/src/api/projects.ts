@@ -22,6 +22,11 @@ import type {
   ChangeProjectStatusPayload,
   AddProjectMemberPayload,
   ProjectMember,
+  ProjectTimeLog,
+  ProjectTimeLogListResponse,
+  CreateTimeLogPayload,
+  PatchTimeLogPayload,
+  ProjectWorkloadResponse,
 } from '../types/index.js';
 
 export interface ListProjectsParams {
@@ -349,6 +354,103 @@ export async function deleteTaskComment(
   const res = await apiClient.delete<{ ok: boolean; deletedCommentId: string }>(
     `/projects/${projectId}/tasks/${taskId}/comments/${commentId}`
   );
+  return res.data;
+}
+
+
+export interface ListProjectTimeLogsParams {
+  limit?: number;
+  cursor?: string;
+  userId?: string;
+  taskId?: string;
+}
+
+export async function fetchProjectTimeLogs(
+  projectId: string,
+  params?: ListProjectTimeLogsParams
+): Promise<ProjectTimeLogListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.set('limit', String(params.limit));
+  if (params?.cursor) queryParams.set('cursor', params.cursor);
+  if (params?.userId) queryParams.set('userId', params.userId);
+  if (params?.taskId) queryParams.set('taskId', params.taskId);
+
+  const url = queryParams.toString()
+    ? `/projects/${projectId}/time-logs?${queryParams.toString()}`
+    : `/projects/${projectId}/time-logs`;
+  const res = await apiClient.get<ProjectTimeLogListResponse>(url);
+  return res.data;
+}
+
+export async function createProjectTimeLog(
+  projectId: string,
+  payload: CreateTimeLogPayload
+): Promise<ProjectTimeLog> {
+  const res = await apiClient.post<ProjectTimeLog>(
+    `/projects/${projectId}/time-logs`,
+    payload
+  );
+  return res.data;
+}
+
+export async function patchProjectTimeLog(
+  projectId: string,
+  timeLogId: string,
+  payload: PatchTimeLogPayload
+): Promise<ProjectTimeLog> {
+  const res = await apiClient.patch<ProjectTimeLog>(
+    `/projects/${projectId}/time-logs/${timeLogId}`,
+    payload
+  );
+  return res.data;
+}
+
+export async function deleteProjectTimeLog(
+  projectId: string,
+  timeLogId: string
+): Promise<{ success: boolean }> {
+  const res = await apiClient.delete<{ success: boolean }>(
+    `/projects/${projectId}/time-logs/${timeLogId}`
+  );
+  return res.data;
+}
+
+export async function fetchProjectWorkload(
+  projectId: string
+): Promise<ProjectWorkloadResponse> {
+  const res = await apiClient.get<ProjectWorkloadResponse>(
+    `/projects/${projectId}/workload`
+  );
+  return res.data;
+}
+
+export async function fetchProjectOverdueTasks(
+  projectId: string,
+  params?: { limit?: number; cursor?: string }
+): Promise<ProjectTaskListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.set('limit', String(params.limit));
+  if (params?.cursor) queryParams.set('cursor', params.cursor);
+
+  const url = queryParams.toString()
+    ? `/projects/${projectId}/tasks/overdue?${queryParams.toString()}`
+    : `/projects/${projectId}/tasks/overdue`;
+  const res = await apiClient.get<ProjectTaskListResponse>(url);
+  return res.data;
+}
+
+export async function fetchProjectBlockedTasks(
+  projectId: string,
+  params?: { limit?: number; cursor?: string }
+): Promise<ProjectTaskListResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.set('limit', String(params.limit));
+  if (params?.cursor) queryParams.set('cursor', params.cursor);
+
+  const url = queryParams.toString()
+    ? `/projects/${projectId}/tasks/blocked?${queryParams.toString()}`
+    : `/projects/${projectId}/tasks/blocked`;
+  const res = await apiClient.get<ProjectTaskListResponse>(url);
   return res.data;
 }
 

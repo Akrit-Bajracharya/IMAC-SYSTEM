@@ -1110,3 +1110,75 @@ Across all APIs in the IMAC Operations System:
 - **Mock Limitations (What Unit Tests Cannot Prove)**:
   - Unit tests in `milestoneHelpers.test.ts` verify pure logic (Kathmandu date comparison, task counting, RBAC, error code translation) using deterministic mock objects.
   - They do not test live network latency, database unique constraints or transaction locks on PostgreSQL, or real browser DOM reflow at mobile screen resolutions.
+
+---
+
+## Current Milestone: Step 12c-1 — Project Time Logs, Workload & Project Summary (apps/web) — COMPLETED
+
+**Timestamp**: 2026-11-05 15:12:00 +05:45
+
+### 1. What Was Built & Verified
+- **API Services & Web Types (`apps/web/src/types/index.ts` & `apps/web/src/api/projects.ts`)**:
+  - Added types: `ProjectTimeLog`, `ProjectTimeLogListResponse`, `CreateTimeLogPayload`, `PatchTimeLogPayload`, `ProjectWorkloadResponse`, `ProjectWorkloadMember`.
+  - Added API endpoints: `fetchProjectTimeLogs`, `createProjectTimeLog`, `patchProjectTimeLog`, `deleteProjectTimeLog`, `fetchProjectWorkload`, `fetchProjectOverdueTasks`, `fetchProjectBlockedTasks`.
+- **Pure Helpers & Test Suites**:
+  - `timeLogPermissions.ts`:
+    - Role-based permissions matching `apps/api/src/routes/timeLogs.ts` and `apps/api/src/services/projectAccess.ts`.
+    - Viewers cannot log and cannot view the Time tab or Task Time section per Amendment 2.
+    - `system_admin` without a member row cannot log time (sees notice instead of form).
+    - Edit and delete are strictly author-only for everyone (including managers and system_admin).
+    - Unit tests: `timeLogPermissions.test.ts` (63 table-driven tests passed).
+  - `timeLogTotals.ts`:
+    - `sumTimeLogHours`: handles number, string, null, undefined, and NaN inputs safely.
+    - `groupTimeLogsByDate`: groups by calendar date part (`extractDatePart`) handling both date strings and ISO timestamps.
+    - Unit tests: `timeLogTotals.test.ts` (7 tests passed).
+  - `timeLogPayload.ts`:
+    - Date min/max bounds in Kathmandu (`[-90, +1]` days).
+    - Quarter-hour increment validation (`0.25` step, `> 0`, max 24).
+    - Patch payload diffing: omits unchanged fields and passes `null` to clear task or note per Amendment 8.
+    - Unit tests: `timeLogPayload.test.ts` (11 tests passed with explicit `referenceToday`).
+  - `projectTabHelpers.ts`:
+    - Validates tab parameter against `'overview' | 'tasks' | 'milestones' | 'time' | 'workload'`.
+    - Falls back to `'overview'` if unknown or if `canSeeTime` is false.
+    - Unit tests: `projectTabHelpers.test.ts` (3 tests passed).
+  - `dateUtils.ts`:
+    - Hardened `formatHours` to safely accept string, null, undefined, and NaN, returning `"-"` without breaking existing callers (23 tests passed in `dateUtils.test.ts`).
+  - `timeLogErrorHelpers.ts`:
+    - User-friendly localized error mapping for `daily_hours_exceeded`, `invalid_date_range`, `invalid_task`, `invalid_cursor`, `validation_error`, 403, and 404.
+- **Time Logs UI (`TimeLogsTab.tsx`)**:
+  - Filterable by Task and Person (Person filter restricted to managers and system_admin).
+  - Filter change resets cursor/pagination to first page.
+  - Infinite scroll with "Load older time logs" button.
+  - Totals clearly labeled as "Total of loaded rows: Xh" or "Total: Xh".
+  - Log Time modal with Kathmandu today default, quarter-hour steps, task picker, live note counter (5000 chars).
+  - Author-only inline edit modal and delete confirmation dialog.
+- **Task Detail Integration (`TaskTimeLogsSection.tsx`)**:
+  - Embedded in `TaskDetailPage.tsx`, scoped by `taskId`.
+  - Hidden for project viewers.
+  - Log time modal prefilled with the task.
+  - Author-only edit and delete controls.
+- **Workload View (`ProjectWorkloadTab.tsx`)**:
+  - Displays member rows with open tasks count, estimated hours, and logged hours.
+  - Column labeled "Your Logged Hours Only" for plain members; other members' logged hours masked as `'-'` (never 0 and excluded from totals).
+  - Displays unassigned / departed assignee tasks section card.
+  - Responsive: table transforms into stacked cards at phone width (<640px).
+- **Overview Tab Enhancements**:
+  - Added "Overdue Tasks" and "Blocked Tasks" cards linking up to 5 tasks via `getTaskDetailPath`.
+  - Reflects exact aggregate counts from project summary.
+- **Docs & Backlog**:
+  - Added Question 36 to `docs/open-policy-questions.md`.
+  - Added test cases `TEST-12C-01` through `TEST-12C-06` to `docs/HAND-TEST-BACKLOG.md`.
+
+### 2. Verification Results
+- `npm run test`: 30 test files passed, **950 total tests passed (0 failures)**:
+  - `apps/api`: 17 test files, 707 passed.
+  - `apps/web`: 13 test files, 243 passed.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run typecheck`: clean across `@imac/api`, `@imac/web`, `@imac/shared`, **0 errors**.
+- `npm run build --workspace=apps/web`: built production bundle in 7.35s, **0 errors**.
+
+### 3. API Gaps & Mock Limitations
+- **API Gaps**: Date range filtering (`startDate`, `endDate`) is not supported by `GET /api/projects/:id/time-logs` (route only supports `limit`, `cursor`, `userId`, `taskId`). Total hours is only returned at project level in `/summary`, not per task or list filter.
+- **Mock Limitations (What Unit Tests Cannot Prove)**:
+  - Unit tests verify in-memory calculations and logic. They do not test live PostgreSQL advisory transaction locks (`pg_advisory_xact_lock`), high-concurrency race conditions across browser tabs, or real DOM reflow under physical mobile hardware.
+
