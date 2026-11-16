@@ -7,6 +7,7 @@ import { tasksRouter } from '../routes/tasks.js';
 import { milestonesRouter } from '../routes/milestones.js';
 import { timeLogsRouter } from '../routes/timeLogs.js';
 import { messagesRouter } from '../routes/messages.js';
+import { getKathmanduDate } from './testDateHelper.js';
 
 /**
  * =============================================================================
@@ -261,7 +262,7 @@ export const MUTATING_PROJECT_ROUTES: MutatingRouteSpec[] = [
     method: 'post',
     routePattern: 'POST /api/projects/:id/time-logs',
     buildPath: (pId) => `/api/projects/${pId}/time-logs`,
-    payload: { workDate: '2026-10-28', hours: 2.5, note: 'Development work' },
+    payload: { workDate: getKathmanduDate(-1), hours: 2.5, note: 'Development work' },
     isProjectScoped: true,
     systemAdminAllowed: true,
     managerAllowed: true,

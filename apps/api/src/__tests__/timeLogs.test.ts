@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app.js';
 import { db } from '../db.js';
+import { getKathmanduToday, getKathmanduDate } from './testDateHelper.js';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -92,12 +93,19 @@ describe('Step 10d: Time Logs Subsystem Tests', () => {
   const otherTaskId = '20202020-2020-4020-8020-202020202020';
   const validTimeLogId = '90909090-9090-4090-8090-909090909090';
 
-  const todayStr = '2026-10-28';
+  let todayStr: string;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-13T06:00:00Z')); // 11:45 AM on 2026-11-13 in Asia/Kathmandu (+05:45)
+    todayStr = getKathmanduToday();
     vi.clearAllMocks();
     (db.auditLog.create as any).mockResolvedValue({});
     (db.$queryRaw as any).mockResolvedValue([{ id: 'mock-id' }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('1. Authentication & Route Guards', () => {
@@ -273,21 +281,138 @@ describe('Step 10d: Time Logs Subsystem Tests', () => {
         projectRole: 'member',
       } as any);
 
-      // Future date (> 1 day in future)
+      // System date is frozen at 2026-11-13 in Asia/Kathmandu.
+      // Valid window is [-90 days, +1 day] derived via shared helper.
+
+      // Exact future boundary: +1 day is allowed
+      const plus1Day = getKathmanduDate(1);
+      vi.mocked(db.timeLog.create).mockResolvedValue({
+        id: validTimeLogId,
+        projectId: validProjectId,
+        taskId: null,
+        userId: employeeUserId,
+        workDate: new Date(plus1Day),
+        hours: 2,
+        note: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      const resAllowedFuture = await request(app)
+        .post(`/api/projects/${validProjectId}/time-logs`)
+        .set('Cookie', cookie)
+        .send({ workDate: plus1Day, hours: 2 });
+      expect(resAllowedFuture.status).toBe(201);
+
+      // Future boundary violation: +2 days is refused
+      const plus2Days = getKathmanduDate(2);
       const resFuture = await request(app)
         .post(`/api/projects/${validProjectId}/time-logs`)
         .set('Cookie', cookie)
-        .send({ workDate: '2026-11-15', hours: 2 });
+        .send({ workDate: plus2Days, hours: 2 });
       expect(resFuture.status).toBe(400);
       expect(resFuture.body.error).toBe('invalid_date_range');
 
-      // Past date (> 90 days ago)
+      // Exact past boundary: -90 days is allowed
+      const minus90Days = getKathmanduDate(-90);
+      vi.mocked(db.timeLog.create).mockResolvedValue({
+        id: validTimeLogId,
+        projectId: validProjectId,
+        taskId: null,
+        userId: employeeUserId,
+        workDate: new Date(minus90Days),
+        hours: 2,
+        note: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      const resAllowedPast = await request(app)
+        .post(`/api/projects/${validProjectId}/time-logs`)
+        .set('Cookie', cookie)
+        .send({ workDate: minus90Days, hours: 2 });
+      expect(resAllowedPast.status).toBe(201);
+
+      // Past boundary violation: -91 days is refused
+      const minus91Days = getKathmanduDate(-91);
       const resPast = await request(app)
         .post(`/api/projects/${validProjectId}/time-logs`)
         .set('Cookie', cookie)
-        .send({ workDate: '2025-01-01', hours: 2 });
+        .send({ workDate: minus91Days, hours: 2 });
       expect(resPast.status).toBe(400);
       expect(resPast.body.error).toBe('invalid_date_range');
+    });
+
+    it('Kathmandu midnight boundary: 18:14 UTC Nov 13 evaluates today as 13 Nov (+1d 2026-11-14 allowed, +2d 2026-11-15 refused)', async () => {
+      vi.setSystemTime(new Date('2026-11-13T18:14:00Z'));
+      const cookie = setupAuth(employeeUserId);
+      vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+      vi.mocked(db.projectMember.findUnique as any).mockResolvedValue({
+        projectId: validProjectId,
+        userId: employeeUserId,
+        projectRole: 'member',
+      } as any);
+
+      // +1 day (2026-11-14) is allowed
+      vi.mocked(db.timeLog.create).mockResolvedValue({
+        id: validTimeLogId,
+        projectId: validProjectId,
+        taskId: null,
+        userId: employeeUserId,
+        workDate: new Date('2026-11-14'),
+        hours: 2,
+        note: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      const resAllowed = await request(app)
+        .post(`/api/projects/${validProjectId}/time-logs`)
+        .set('Cookie', cookie)
+        .send({ workDate: '2026-11-14', hours: 2 });
+      expect(resAllowed.status).toBe(201);
+
+      // +2 days (2026-11-15) is refused
+      const resRefused = await request(app)
+        .post(`/api/projects/${validProjectId}/time-logs`)
+        .set('Cookie', cookie)
+        .send({ workDate: '2026-11-15', hours: 2 });
+      expect(resRefused.status).toBe(400);
+      expect(resRefused.body.error).toBe('invalid_date_range');
+    });
+
+    it('Kathmandu midnight boundary: 18:15 UTC Nov 13 evaluates today as 14 Nov (+1d 2026-11-15 allowed, +2d 2026-11-16 refused)', async () => {
+      vi.setSystemTime(new Date('2026-11-13T18:15:00Z'));
+      const cookie = setupAuth(employeeUserId);
+      vi.mocked(db.project.findUnique).mockResolvedValue({ id: validProjectId } as any);
+      vi.mocked(db.projectMember.findUnique as any).mockResolvedValue({
+        projectId: validProjectId,
+        userId: employeeUserId,
+        projectRole: 'member',
+      } as any);
+
+      // In Kathmandu it is Nov 14 00:00 (+05:45). +1 day (2026-11-15) is allowed
+      vi.mocked(db.timeLog.create).mockResolvedValue({
+        id: validTimeLogId,
+        projectId: validProjectId,
+        taskId: null,
+        userId: employeeUserId,
+        workDate: new Date('2026-11-15'),
+        hours: 2,
+        note: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      const resAllowed = await request(app)
+        .post(`/api/projects/${validProjectId}/time-logs`)
+        .set('Cookie', cookie)
+        .send({ workDate: '2026-11-15', hours: 2 });
+      expect(resAllowed.status).toBe(201);
+
+      // +2 days (2026-11-16) is refused
+      const resRefused = await request(app)
+        .post(`/api/projects/${validProjectId}/time-logs`)
+        .set('Cookie', cookie)
+        .send({ workDate: '2026-11-16', hours: 2 });
+      expect(resRefused.status).toBe(400);
+      expect(resRefused.body.error).toBe('invalid_date_range');
     });
 
     it('refuses daily total hours exceeding 24 across all projects (400 daily_hours_exceeded) (mock-based)', async () => {

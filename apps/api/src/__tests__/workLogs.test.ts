@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { isQuarterHourIncrement } from '@imac/shared';
 import { createApp } from '../app.js';
@@ -6,7 +6,13 @@ import { db } from '../db.js';
 
 describe('Daily Work Log Subsystem (Step 8b)', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T06:00:00Z'));
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const mockAdminUser = {

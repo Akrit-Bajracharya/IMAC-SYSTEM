@@ -1236,3 +1236,19 @@ Across all APIs in the IMAC Operations System:
   - Simultaneous conversions ARE prevented (advisory lock plus audit check inside one transaction in apps/api/src/routes/messages.ts); the real limits are (a) "already converted" is derived from the audit log only, so archiving or deleting audit rows would allow a second conversion, and (b) deleting the created task leaves the message permanently unconvertible.
 - **Mock Limitations (What Unit Tests Cannot Prove)**:
   - Pure helper unit tests verify role matrix logic, error mapping, and string formatting in memory. They do not test live SSE notification delivery, physical mobile viewport touch interactions, or real concurrent database connections.
+
+
+---
+
+## Maintenance Note: Step 12c Test Suite Stabilization (2026-11-15 & 2026-11-16)
+- **Time Log Date Range Test**: Fixed `apps/api/src/__tests__/timeLogs.test.ts` where wall-clock progression to `2026-11-15` caused a fixed future date test to return 201 instead of 400. Installed Vitest fake timers (`vi.useFakeTimers({ toFake: ['Date'] })`) set to `2026-11-13T06:00:00Z` restored in `afterEach`, and added exact boundary checks (+1d allowed, +2d refused, -90d allowed, -91d refused in Asia/Kathmandu).
+- **Shared Test Date Helper & Permissions Test Stabilization (Items 10-12)**:
+  - Created shared helper `apps/api/src/__tests__/testDateHelper.ts` (`getKathmanduDate`, `getKathmanduToday`) to dynamically calculate Asia/Kathmandu dates and calendar day offsets without freezing system timers or adding external packages.
+  - Used shared helper in `apps/api/src/__tests__/timeLogs.test.ts` for dynamic `todayStr` and boundary offsets (`+1d`, `+2d`, `-90d`, `-91d`).
+  - Confirmed `apps/api/src/__tests__/projectRoutePermissions.test.ts` line 264 sent fixed date `'2026-10-28'` to `POST /api/projects/:id/time-logs`, which accepts `[-90 days, +1 day]` relative to Kathmandu today and would fail on 2027-01-27. Fixed by deriving `workDate: getKathmanduDate(-1)` via `testDateHelper.ts`. Verified lines 486 and 494 are unvalidated mock DB returns and left them untouched.
+  - Performed comprehensive date audit across all remaining test files sending dates to routes (`workLogs`, `workLogExport`, `workLogProjectLink`, `projects`, `tasks`) and calculated exact calendar expiration dates for unfrozen clocks.
+- **Date-Fix Final Round (Items 1-7 & 5 Additional Requirements)**:
+  - Frozen `Date` in `apps/api/src/__tests__/workLogs.test.ts` and `apps/api/src/__tests__/workLogProjectLink.test.ts` at `2026-10-30T06:00:00Z` in `beforeEach`, cleaned up in `afterEach`. All date literals fall within `[2026-08-01, 2026-10-31]`. Confirmed sessions, edit window logic, and optimistic locks operate identically.
+  - Added two explicit midnight boundary tests to `apps/api/src/__tests__/timeLogs.test.ts` proving Asia/Kathmandu timezone (+05:45) is enforced rather than UTC (18:14 UTC evaluates as Nov 13; 18:15 UTC evaluates as Nov 14).
+  - Executed 120-day forward time-travel verification using external setup configuration in `$env:TEMP`; confirmed 0 date-related regressions.
+- **Verification**: All 991 automated tests passing (apps/api: 709, apps/web: 282), 0 lint/typecheck errors.

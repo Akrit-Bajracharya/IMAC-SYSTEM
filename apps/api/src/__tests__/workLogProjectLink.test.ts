@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app.js';
 import { db } from '../db.js';
@@ -87,6 +87,8 @@ describe('Step 10e Part A: Daily Work Log Project/Task Linking & Read Resolution
   }
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T06:00:00Z'));
     vi.clearAllMocks();
     vi.mocked(db.auditLog.create).mockResolvedValue({} as any);
 
@@ -97,6 +99,10 @@ describe('Step 10e Part A: Daily Work Log Project/Task Linking & Read Resolution
     vi.mocked(db.workRole.findMany).mockResolvedValue([
       { id: mockRoleDevId, name: 'Developer', isActive: true },
     ] as any);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('1. POST /api/work-logs (Draft Creation/Upsert)', () => {
