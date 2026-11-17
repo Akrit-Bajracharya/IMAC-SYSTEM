@@ -89,6 +89,71 @@ Each test is specified in plain language with:
 - **Expected Result**: The entry table gracefully transitions to a vertical card layout; inputs, dropdowns, and "Save Draft" / "Submit" buttons fit comfortably without horizontal blowout or clipped elements.
 - **What Must NOT Happen**: Tables must **NOT** overflow horizontally off-screen or obscure touch targets.
 
+### TEST-09A-09: Daily Work Log Project & Task Pickers, Role Eligibility & Legacy Text
+- **Status**: `NOT RUN`
+- **Description**: Verifies that project and task options are strictly filtered according to the user's active membership (role `manager` or `member`), that viewer-only or unassigned projects are omitted, that task pickers only appear after project selection, and that legacy free text is displayed read-only with a warning badge and never submitted.
+- **Role-by-Role Test Steps & Invariants**:
+  - **1. Persona: `demo_dev` (Software Developer)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Log in as `demo_dev`. Navigate to `/employee/work-logs`. Click "Add Entry Row". Open the Project dropdown.
+    - *Expected Result*: Only projects where `demo_dev` has project role `member` (e.g. `[DEMO] Nepal Disaster Relief Portal`, `[DEMO] Valley Transit App`) are listed, plus "No project". Selecting a project reveals the Task dropdown populated with active tasks from that project. Changing project clears task selection.
+    - *Negative Invariants*: Must **NOT** be offered projects where `demo_dev` is not a member or has only viewer access. Must **NOT** see task dropdown before selecting a project.
+  - **2. Persona: `demo_pm` (Project Manager)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Log in as `demo_pm`. Navigate to `/employee/work-logs`. Add or inspect entry rows.
+    - *Expected Result*: Sees projects where `demo_pm` is `manager` or `member`. May link logged hours to both project tasks and milestones.
+    - *Negative Invariants*: Must **NOT** see projects where `demo_pm` has no membership or only viewer permissions.
+  - **3. Persona: `demo_designer` (UI/UX Designer)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Log in as `demo_designer`. Open Daily Work Log. Choose assigned design project.
+    - *Expected Result*: Sees assigned design projects. Task list reflects tasks belonging strictly to that project.
+    - *Negative Invariants*: Must **NOT** be offered backend-only or non-assigned projects.
+  - **4. Persona: `demo_hr` (HR Administrator)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Log in as `demo_hr`. Open Daily Work Log (`/employee/work-logs`). Inspect project dropdown.
+    - *Expected Result*: If `demo_hr` has no active project memberships, both Project and Task pickers are completely hidden from the entry form.
+    - *Negative Invariants*: HR administrative authority must **NOT** grant project-task work logging on projects where `demo_hr` is not an active project member.
+  - **5. Persona: `demo_viewer` (Read-Only Viewer)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Log in as `demo_viewer`. Open Daily Work Log.
+    - *Expected Result*: If viewer only holds `viewer` project roles, Project and Task pickers are hidden. If inspecting past logs, displays read-only badges.
+    - *Negative Invariants*: Must **NOT** be offered any project where role is `viewer`. Must **NOT** be able to select tasks or save/submit work log entries.
+  - **6. Legacy Free Text Verification (Any Role with Legacy Log)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Load a day containing historical free-text `projectId` or `taskId` (non-UUID strings).
+    - *Expected Result*: Displays the legacy string read-only alongside a `"Legacy text"` badge and helper notice `"This text will be cleared when you save."` with a `"Remove project link"` button.
+    - *Negative Invariants*: Saving or submitting this log must **NEVER** transmit the free-text string in write payloads (must send `null`), preventing backend 400 `invalid_project` or `invalid_task` errors.
+
+### TEST-09A-10: Network Failure Resilience, Timeout Handling & Translation Order
+- **Status**: `NOT RUN`
+- **Description**: Verifies that network failures, request timeouts, and server errors show friendly translated error banners without crashing or displaying unhandled axios error messages or raw code keys.
+- **Role-by-Role Test Steps & Invariants**:
+  - **1. Persona: `demo_dev` (Network Disconnect / Offline Simulation)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Open daily work log, fill entries, disconnect network / stop backend server, click "Save Draft".
+    - *Expected Result*: Banner displays friendly localized error: *"Network error: unable to reach the server. Please check your connection and try again."*
+    - *Negative Invariants*: Must **NOT** display raw Axios string `"Network Error"`, `"ECONNREFUSED"`, or uncaught promise rejection.
+  - **2. Persona: `demo_pm` (Request Timeout)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Simulate high latency exceeding timeout threshold on submit mutation.
+    - *Expected Result*: Shows localized network/timeout error message.
+    - *Negative Invariants*: Must **NOT** display raw `ECONNABORTED` or `"timeout of 10000ms exceeded"`.
+  - **3. Persona: `demo_designer` (Edit Window Expired During Session)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Attempt to patch a submitted log whose operational modification window has closed (`403 edit_window_expired`).
+    - *Expected Result*: Banners display *"The edit window for this submitted work log has closed. Changes can no longer be saved."* The form locks into read-only mode immediately.
+    - *Negative Invariants*: Must **NOT** display generic `"Request failed with status code 403"` and must **NOT** allow further unsaved edits.
+  - **4. Persona: `demo_hr` (Hour Mismatch Policy Enforcement)**
+    - *Status*: `NOT RUN`
+    - *Steps*: When `worklog.mismatchHandling` is `block`, attempt submission with unequal hours (`422 hour_mismatch`).
+    - *Expected Result*: Shows localized *"Hour Mismatch: Logged hours do not match standard shift length"*.
+    - *Negative Invariants*: Must **NOT** show raw 422 JSON payload or unformatted error keys.
+  - **5. Persona: `demo_viewer` (Forbidden Action Rejection)**
+    - *Status*: `NOT RUN`
+    - *Steps*: Attempt any mutation yielding `403 forbidden`.
+    - *Expected Result*: Displays localized *"You do not have permission to modify this work log."*
+    - *Negative Invariants*: Must **NOT** crash or show raw key `forbidden`.
+
 ---
 
 ## 2. Step 12a: Project Screens & Navigation (`apps/web`)

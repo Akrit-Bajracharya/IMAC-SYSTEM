@@ -445,7 +445,8 @@
         "atLeastOneEntry": "At least one entry row is required.",
         "hoursPositive": "Hours must be greater than 0 and in 0.25 increments.",
         "invalidProject": "The selected project is invalid, does not exist, or you are not an active member.",
-        "invalidTask": "The selected task is invalid or does not belong to the selected project."
+        "invalidTask": "The selected task is invalid or does not belong to the selected project.",
+        "networkError": "Network error: unable to reach the server. Please check your connection and try again."
       },
       "projectLabel": "Project",
       "taskLabel": "Task",
@@ -454,7 +455,11 @@
       "selectProjectFirst": "Select a project to choose a task",
       "viewerNoTasks": "Tasks not available for project viewers",
       "legacyProject": "Legacy text:",
+      "legacyBadge": "Legacy text",
+      "legacyClearedOnSave": "This text will be cleared when you save.",
       "removeProjectLink": "Remove project link",
+      "loadError": "Failed to load daily work log",
+      "loadErrorDesc": "An error occurred while communicating with the server. Please check your connection and retry.",
       "title": "Daily Work Log",
       "subtitle": "Record and manage daily shift operations",
       "statusBadge": "Status"

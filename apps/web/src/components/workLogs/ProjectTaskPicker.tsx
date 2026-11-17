@@ -1,73 +1,221 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Select } from '../ui/select.js';
 import { Button } from '../ui/button.js';
-import { fetchProjectById, fetchAllTasksForProject } from '../../api/projects.js';
+import { Badge } from '../ui/badge.js';
+import { fetchAllTasksForProject } from '../../api/projects.js';
+import { isValidUuid, isLegacyText } from '../../lib/dailyWorkLogHelpers.js';
 import type { ProjectListItem } from '../../types/index.js';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const isValidUuid = (val?: string | null): boolean =>
-  typeof val === 'string' && UUID_REGEX.test(val);
+export { isValidUuid, isLegacyText };
 
-interface ProjectTaskPickerProps {
+export interface ProjectPickerProps {
+  projectId: string;
+  memberProjects: ProjectListItem[];
+  isReadOnly: boolean;
+  isSaving?: boolean;
+  onChangeProject: (projectId: string) => void;
+  className?: string;
+}
+
+export function ProjectPicker({
+  projectId,
+  memberProjects,
+  isReadOnly,
+  isSaving = false,
+  onChangeProject,
+  className = 'w-full text-xs',
+}: ProjectPickerProps) {
+  const { t } = useTranslation();
+
+  // 1. Saved entry has legacy free-text that is not a valid UUID
+  if (isLegacyText(projectId)) {
+    return (
+      <div className="flex flex-col gap-1 py-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge
+            variant="secondary"
+            className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300"
+          >
+            {t('workLog.daily.legacyBadge')}
+          </Badge>
+          <span
+            className="text-xs font-mono text-muted-foreground truncate"
+            title={projectId}
+          >
+            {projectId}
+          </span>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {t('workLog.daily.legacyClearedOnSave')}
+        </p>
+        {!isReadOnly && !isSaving && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onChangeProject('')}
+            className="h-5 px-1.5 text-xs text-destructive hover:text-destructive self-start"
+          >
+            {t('workLog.daily.removeProjectLink')}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // 2. Read-only mode
+  if (isReadOnly) {
+    const projectName = memberProjects.find((p) => p.id === projectId)?.name;
+    return (
+      <div className="p-2 rounded bg-muted/30 text-xs font-medium truncate">
+        {projectName || t('workLog.daily.noProject')}
+      </div>
+    );
+  }
+
+  // 3. Interactive Project Select with "No project" option
+  return (
+    <Select
+      value={projectId}
+      onChange={(e) => onChangeProject(e.target.value)}
+      disabled={isReadOnly || isSaving}
+      className={className}
+    >
+      <option value="">{t('workLog.daily.noProject')}</option>
+      {memberProjects.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+export interface TaskPickerProps {
   projectId: string;
   taskId: string;
-  legacyProjectId?: string | null;
-  projectName?: string | null;
-  taskTitle?: string | null;
   isReadOnly: boolean;
-  isSaving: boolean;
+  isSaving?: boolean;
+  onChangeTask: (taskId: string) => void;
+  className?: string;
+}
+
+export function TaskPicker({
+  projectId,
+  taskId,
+  isReadOnly,
+  isSaving = false,
+  onChangeTask,
+  className = 'w-full text-xs',
+}: TaskPickerProps) {
+  const { t } = useTranslation();
+
+  // If saved taskId is legacy free text
+  if (isLegacyText(taskId)) {
+    return (
+      <div className="flex flex-col gap-0.5 py-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge
+            variant="secondary"
+            className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300"
+          >
+            {t('workLog.daily.legacyBadge')}
+          </Badge>
+          <span
+            className="text-xs font-mono text-muted-foreground truncate"
+            title={taskId}
+          >
+            {taskId}
+          </span>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {t('workLog.daily.legacyClearedOnSave')}
+        </p>
+      </div>
+    );
+  }
+
+  const hasChosenProject = Boolean(projectId && isValidUuid(projectId));
+
+  // Requirement 1c: The Task picker appears only after a project is chosen
+  if (!hasChosenProject) {
+    return null;
+  }
+
+  // Fetch tasks for chosen project (cached/deduplicated across rows by TanStack Query)
+  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery({
+    queryKey: ['projectTasks', projectId],
+    queryFn: () => fetchAllTasksForProject(projectId),
+    enabled: hasChosenProject,
+    staleTime: 60 * 1000,
+  });
+
+  if (isReadOnly) {
+    const taskTitle = tasks.find((tk) => tk.id === taskId)?.title;
+    return (
+      <div className="p-2 rounded bg-muted/30 text-xs font-medium truncate">
+        {taskTitle || (taskId ? taskId : t('workLog.daily.noTask'))}
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      value={taskId}
+      onChange={(e) => onChangeTask(e.target.value)}
+      disabled={isReadOnly || isSaving || isLoadingTasks}
+      className={className}
+    >
+      <option value="">{t('workLog.daily.noTask')}</option>
+      {tasks.map((task) => (
+        <option key={task.id} value={task.id}>
+          {task.title} ({task.status})
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+export interface ProjectTaskPickerProps {
+  projectId: string;
+  taskId: string;
+  isReadOnly: boolean;
+  isSaving?: boolean;
   memberProjects: ProjectListItem[];
-  currentUserId?: string;
   onChangeProject: (projectId: string) => void;
   onChangeTask: (taskId: string) => void;
-  onRemoveLegacyProject: () => void;
   variant?: 'inline' | 'stacked';
 }
 
 export function ProjectTaskPicker({
   projectId,
   taskId,
-  legacyProjectId,
-  projectName,
-  taskTitle,
   isReadOnly,
-  isSaving,
+  isSaving = false,
   memberProjects,
-  currentUserId,
   onChangeProject,
   onChangeTask,
-  onRemoveLegacyProject,
   variant = 'inline',
 }: ProjectTaskPickerProps) {
-  const { t } = useTranslation();
+  const hasEligibleProjects = memberProjects.length > 0;
+  const hasLegacyProject = isLegacyText(projectId);
+  const hasLegacyTask = isLegacyText(taskId);
 
-  // 1. Fetch project detail if projectId is selected to check caller's role on project
-  const { data: projectDetail } = useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => fetchProjectById(projectId),
-    enabled: !!projectId && isValidUuid(projectId),
-    staleTime: 60 * 1000,
-  });
+  // Requirement 1d: If the user has no eligible projects, hide both pickers
+  if (!hasEligibleProjects && !hasLegacyProject && !hasLegacyTask) {
+    return null;
+  }
 
-  // Check if current user is viewer on this project
-  const isProjectViewer = useMemo(() => {
-    if (!projectDetail || !currentUserId) return false;
-    const member = projectDetail.members.find((m) => m.userId === currentUserId);
-    return member?.projectRole === 'viewer';
-  }, [projectDetail, currentUserId]);
+  const handleProjectSelect = (newProjectId: string) => {
+    onChangeProject(newProjectId);
+    // Requirement 1c: resets when the project changes
+    onChangeTask('');
+  };
 
-  // 2. Fetch tasks for selected project if not viewer
-  const { data: projectTasks = [], isLoading: isLoadingTasks } = useQuery({
-    queryKey: ['projectTasks', projectId],
-    queryFn: () => fetchAllTasksForProject(projectId),
-    enabled: !!projectId && isValidUuid(projectId) && !isProjectViewer,
-    staleTime: 60 * 1000,
-  });
-
-  // Display project name if read-only or saved
-  const displayProjectName = projectName || projectDetail?.name;
+  const showTaskPicker =
+    hasLegacyTask || (Boolean(projectId) && isValidUuid(projectId));
 
   return (
     <div
@@ -77,80 +225,27 @@ export function ProjectTaskPicker({
           : 'space-y-2 w-full'
       }
     >
-      {/* Project Selection / Display */}
       <div className="space-y-1">
-        {legacyProjectId ? (
-          <div className="p-1.5 rounded border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 text-xs flex flex-col gap-1">
-            <span className="text-amber-800 dark:text-amber-300 font-medium">
-              {t('workLog.daily.legacyProject')}{' '}
-              <span className="font-mono">{legacyProjectId}</span>
-            </span>
-            {!isReadOnly && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onRemoveLegacyProject}
-                className="h-5 px-1.5 text-xs text-destructive hover:text-destructive self-start"
-              >
-                {t('workLog.daily.removeProjectLink')}
-              </Button>
-            )}
-          </div>
-        ) : isReadOnly ? (
-          <div className="p-2 rounded bg-muted/30 text-xs font-medium truncate">
-            {displayProjectName || t('workLog.daily.noProject')}
-          </div>
-        ) : (
-          <Select
-            value={projectId}
-            onChange={(e) => {
-              onChangeProject(e.target.value);
-              onChangeTask('');
-            }}
-            disabled={isReadOnly || isSaving}
-            className="w-full text-xs"
-          >
-            <option value="">{t('workLog.daily.noProject')}</option>
-            {memberProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        )}
+        <ProjectPicker
+          projectId={projectId}
+          memberProjects={memberProjects}
+          isReadOnly={isReadOnly}
+          isSaving={isSaving}
+          onChangeProject={handleProjectSelect}
+        />
       </div>
 
-      {/* Task Selection / Display */}
-      <div className="space-y-1">
-        {isReadOnly ? (
-          <div className="p-2 rounded bg-muted/30 text-xs font-medium truncate">
-            {taskTitle || t('workLog.daily.noTask')}
-          </div>
-        ) : !projectId ? (
-          <div className="p-2 rounded bg-muted/20 text-xs text-muted-foreground italic truncate">
-            {t('workLog.daily.selectProjectFirst')}
-          </div>
-        ) : isProjectViewer ? (
-          <div className="p-2 rounded bg-muted/20 text-xs text-muted-foreground italic truncate">
-            {t('workLog.daily.viewerNoTasks')}
-          </div>
-        ) : (
-          <Select
-            value={taskId}
-            onChange={(e) => onChangeTask(e.target.value)}
-            disabled={isReadOnly || isSaving || isLoadingTasks}
-            className="w-full text-xs"
-          >
-            <option value="">{t('workLog.daily.noTask')}</option>
-            {projectTasks.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title} ({t.status})
-              </option>
-            ))}
-          </Select>
-        )}
-      </div>
+      {showTaskPicker && (
+        <div className="space-y-1">
+          <TaskPicker
+            projectId={projectId}
+            taskId={taskId}
+            isReadOnly={isReadOnly}
+            isSaving={isSaving}
+            onChangeTask={onChangeTask}
+          />
+        </div>
+      )}
     </div>
   );
 }

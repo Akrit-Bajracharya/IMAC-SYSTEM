@@ -1346,3 +1346,46 @@ Across all APIs in the IMAC Operations System:
   - `apps/web`: 14 test files, **282 passed**.
 - `npm run lint`: clean across all workspaces, **0 errors**.
 - `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`), **0 errors**.
+
+---
+
+## Current Milestone: Step 09a Review — Daily Work Log Fixes (`apps/web` only) — COMPLETED
+
+### 1. Correction Note: Step 12a Picker Claim on DailyWorkLogPage.tsx
+Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.tsx`. In reality, that commit created `ProjectTaskPicker.tsx` in isolation without importing or rendering it on `DailyWorkLogPage.tsx`. The page only added an unbounded `memberProjects` query and two error-code mappings, while row entries continued to render raw free-text `<Input>` fields for `projectId` and `taskId`. Any free-text input resulted in backend 400 `invalid_project`. This review step completes the actual picker wiring, active manager/member filtering, legacy free-text badges, error translation ordering, and hydration safeguards.
+
+### 2. What Was Built
+- **Project & Task Pickers (`apps/web/src/components/workLogs/ProjectTaskPicker.tsx` & `DailyWorkLogPage.tsx`)**:
+  - `ProjectPicker`: Selects projects where the caller is an active member with role `manager` or `member`.
+  - `TaskPicker`: Appears only after an eligible project is selected, loads tasks for that project via `fetchAllTasksForProject`, includes "No task" option, and resets selection when the project changes.
+  - Replaced raw text inputs in `DailyWorkLogPage.tsx` desktop table and mobile card views with `ProjectPicker` and `TaskPicker`.
+  - Hides both pickers completely when the user has no eligible projects (unless an existing entry has legacy text).
+  - Displays legacy free-text IDs read-only with a "Legacy text" badge and allows removing/clearing the link.
+  - Removed unused import `fetchAllTasksForProject` from `DailyWorkLogPage.tsx` (now imported and consumed by `ProjectTaskPicker.tsx`).
+- **Project Membership Filtering**:
+  - Noted that `GET /api/projects` list data returns `memberCount` but does not include `members` or current user's role. Detailed requests (`fetchProjectById`) are loaded for the projects to inspect membership.
+  - Implemented `isProjectEligibleForUser` and `filterEligibleProjects` pure helpers in `apps/web/src/lib/dailyWorkLogHelpers.ts`. Ensures viewer-only projects or non-member projects are never offered.
+- **Payload Sanitization**:
+  - Implemented `buildWorkLogEntriesPayload` in `apps/web/src/lib/dailyWorkLogHelpers.ts`. Legacy free-text strings in `projectId` or `taskId` are dropped to `null`, guaranteeing write payloads never trigger backend 400 `invalid_project` or `invalid_task`.
+- **Error Handling & Window Lock (`resolveWorkLogError`)**:
+  - Replaced `err.message || translateErrorCode(err)` with `resolveWorkLogError(err, translateCode, { onWindowExpired })`.
+  - Prioritizes API error codes over axios `err.message` so that `invalid_project`, `invalid_task`, and `edit_window_expired` display friendly translated text and lock the form upon window expiration.
+  - Preserved `err.message` for non-API client errors.
+  - Verified and added i18n keys in `en.json` (`invalidProject`, `invalidTask`, `legacyBadge`, `loadError`, `loadErrorDesc`).
+- **Load Error Resilience**:
+  - When fetching daily work logs encounters an error (other than 404 `profile_not_found`), `DailyWorkLogPage.tsx` renders a dedicated error card with a `Retry` button calling `refetchLog()` instead of an empty page.
+- **Hydration Stabilization**:
+  - Extracted `EMPTY_WORK_ROLES = []` and `EMPTY_MEMBER_PROJECTS = []` stable module constants to prevent array recreation on every render.
+  - Removed `myRoles` from the hydration effect dependency array, using `isRolesSuccess, isLogError, isLoadingRoles, isRolesError`.
+  - Guarded against overwriting user-typed rows while roles are loading, after a failed load, or on re-renders via `hasUserTypedRows`.
+- **Small Fixes**:
+  - Repaired garbled bullet encoding (`â€¢` -> `•`) in server warnings list.
+  - Guarded date change handler against empty strings: cleared date input does not request or send empty dates.
+- **Automated Unit Tests (`apps/web/src/lib/__tests__/dailyWorkLogHelpers.test.ts`)**:
+  - 25 pure unit tests covering project eligibility (including viewer-only negatives), legacy text dropping in payloads (including legacy projectId/taskId negatives), error resolution precedence (axios `err.message` not preferred over known code), window expired lock callback, and hydration row protection.
+
+### 2. Verification Results
+- `npm run test --prefix apps/web`: 15 test files passed, **307 total tests passed (0 failures)** (+25 tests).
+- `npm run lint --prefix apps/web`: clean, **0 errors**.
+- `npm run typecheck --prefix apps/web`: clean, **0 errors**.
+- Zero backend edits, zero new npm packages.

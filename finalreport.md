@@ -2000,3 +2000,55 @@ Documented in `docs/open-policy-questions.md`:
   - Typecheck: clean across all workspaces (0 errors).
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Protected auth/session files untouched; no database connections made; no docker commands executed; no connection strings or passwords logged; no git commits created.
+
+---
+
+### Task Step-09a-Review: Daily Work Log Fixes (Project/Task Pickers, Hydration, Error Handling & Bullet Repair)
+- **Date**: 2026-11-17
+- **Day of week**: Tuesday
+- **Start time**: 14:20:55 +05:45
+- **End time**: 15:35:35 +05:45
+- **Step**: Step 09a Review: Daily Work Log Fixes (apps/web only)
+- **Task performed**:
+  - **Project & Task Picker Integration (`ProjectTaskPicker.tsx` & `DailyWorkLogPage.tsx`)**:
+    - Replaced free-text `projectId` and `taskId` input fields with dedicated `ProjectPicker` and `TaskPicker` components.
+    - Project options come strictly from projects where caller is an active member with role `manager` or `member`.
+    - Integrated "No project" and "No task" options, with dynamic task loading via `fetchAllTasksForProject` and automatic task reset upon project change.
+    - If user has no eligible projects, both pickers are hidden from desktop table and mobile views.
+    - Legacy free-text IDs are rendered read-only with a `"Legacy text"` badge and notice `"This text will be cleared when you save."` with a remove link, and dropped to `null` in write payloads.
+    - Removed unused `fetchAllTasksForProject` import from `DailyWorkLogPage.tsx`.
+  - **Error Translation & Window Expiration Handling (`resolveWorkLogError`)**:
+    - Replaced `err.message || translateErrorCode(err)` with `resolveWorkLogError(err, translateCode, { onWindowExpired })`.
+    - Ensures API error codes take precedence over axios error messages.
+    - Configured strict network error / timeout detection (only missing response or `ECONNABORTED`).
+    - Handled HTTP status codes (403 forbidden, 422 hour_mismatch).
+    - Client-side thrown keys (`atLeastOneEntry`, `hoursPositive`, `validation_error`) are mapped to friendly localized strings and never leak raw keys.
+    - Added fallback guaranteeing a string return in all cases.
+  - **Load Error Resilience**:
+    - When daily work log loading fails with any code other than 404 `profile_not_found`, an error card with a `Retry` button calling `refetchLog()` is displayed instead of an empty page.
+  - **Hydration Stabilization**:
+    - Extracted module constants `EMPTY_WORK_ROLES = []` and `EMPTY_MEMBER_PROJECTS = []` to prevent reference instability.
+    - Removed `myRoles` from the hydration effect dependency array.
+    - Protected user-typed entries via `hasUserTypedRows` against overwrites while roles load or after failed fetches.
+  - **Small Fixes**:
+    - Repaired garbled bullet character (`â€¢` -> `•`) in server warnings list.
+    - Guarded date input change handler against empty strings, preventing invalid fetch calls.
+  - **Documentation & Test Backlog**:
+    - Appended correction note to `docs/PROGRESS.md` regarding Step 12a's previous picker claim on `DailyWorkLogPage.tsx`.
+    - Added manual test cases `TEST-09A-09` and `TEST-09A-10` with comprehensive role-by-role scenarios (`demo_dev`, `demo_pm`, `demo_designer`, `demo_hr`, `demo_viewer`) marked `NOT RUN` to `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `apps/web/src/components/workLogs/ProjectTaskPicker.tsx`
+  - `apps/web/src/pages/workLogs/DailyWorkLogPage.tsx`
+  - `apps/web/src/lib/dailyWorkLogHelpers.ts`
+  - `apps/web/src/lib/__tests__/dailyWorkLogHelpers.test.ts`
+  - `apps/web/src/i18n/locales/en.json`
+  - `docs/PROGRESS.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/web`: 15 test files, 312 passed (0 failed) — +30 new unit tests in `dailyWorkLogHelpers.test.ts`.
+  - Monorepo: 33 test files, 1,091 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created.

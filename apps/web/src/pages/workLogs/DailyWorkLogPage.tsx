@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,6 @@ import {
   saveWorkLogDraft,
   patchWorkLog,
   submitWorkLog,
-  getWorkLogErrorInfo,
 } from '../../api/workLogs.js';
 import {
   getKathmanduToday,
@@ -40,18 +39,22 @@ import { Select } from '../../components/ui/select.js';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.js';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card.js';
 import { WorkLogStatusBadge } from '../../components/common/WorkLogStatusBadge.js';
-import { fetchAllAccessibleProjects, fetchProjectById, fetchAllTasksForProject } from '../../api/projects.js';
+import { fetchAllAccessibleProjects, fetchProjectById } from '../../api/projects.js';
+import { ProjectPicker, TaskPicker } from '../../components/workLogs/ProjectTaskPicker.js';
+import {
+  isProjectEligibleForUser,
+  buildWorkLogEntriesPayload,
+  resolveWorkLogError,
+  hasUserTypedRows,
+  isLegacyText,
+  type WorkLogEntryRow,
+} from '../../lib/dailyWorkLogHelpers.js';
 import type { ProjectListItem } from '../../types/index.js';
 import type { WorkRole } from '../../types/index.js';
 
-interface EditableEntry {
-  id?: string;
-  workRoleId: string;
-  hours: number | string;
-  description: string;
-  projectId: string;
-  taskId: string;
-}
+// Stable constants to prevent unwanted re-renders and hydration thrashing
+const EMPTY_WORK_ROLES: WorkRole[] = [];
+const EMPTY_MEMBER_PROJECTS: ProjectListItem[] = [];
 
 export function DailyWorkLogPage() {
   const { t } = useTranslation();
@@ -66,12 +69,16 @@ export function DailyWorkLogPage() {
   // Sync date with URL params
   useEffect(() => {
     const urlDate = searchParams.get('date');
-    if (urlDate && urlDate !== selectedDate) {
+    if (urlDate && urlDate.trim() && urlDate !== selectedDate) {
       setSelectedDate(urlDate);
     }
   }, [searchParams]);
 
+  // Requirement 5: If the date box is cleared, do not request or send an empty date
   const handleDateChange = (newDate: string) => {
+    if (!newDate || !newDate.trim()) {
+      return;
+    }
     setSelectedDate(newDate);
     setSearchParams({ date: newDate });
     setFormError(null);
@@ -80,7 +87,7 @@ export function DailyWorkLogPage() {
   };
 
   // Editable entry rows state
-  const [entries, setEntries] = useState<EditableEntry[]>([
+  const [entries, setEntries] = useState<WorkLogEntryRow[]>([
     { workRoleId: '', hours: '', description: '', projectId: '', taskId: '' },
   ]);
 
@@ -94,21 +101,23 @@ export function DailyWorkLogPage() {
 
   const isViewer = user?.systemRole === 'viewer';
 
-  // Query all member projects for current user (system_admin only gets projects they belong to)
-  const { data: memberProjects = [] } = useQuery({
+  // Requirement 1a: Query member projects for current user where user is an ACTIVE member
+  // with project role 'manager' or 'member'. Viewer-only projects or projects where user
+  // is not a member must NEVER be offered.
+  // Note: The project list endpoint GET /api/projects does not return members array or the
+  // user's project role. Therefore, detail requests (fetchProjectById) are loaded for the
+  // projects to inspect membership and verify active manager/member role.
+  const { data: memberProjects = EMPTY_MEMBER_PROJECTS } = useQuery({
     queryKey: ['workLog', 'memberProjects', user?.id],
     queryFn: async () => {
+      if (!user?.id) return [];
       const all = await fetchAllAccessibleProjects();
-      if (!user) return [];
-      if (user.systemRole !== 'system_admin') {
-        return all;
-      }
       const detailed = await Promise.all(
         all.map(async (p) => {
           try {
             const detail = await fetchProjectById(p.id);
-            const isMember = detail.members.some((m) => m.userId === user.id);
-            return isMember ? p : null;
+            const eligible = isProjectEligibleForUser(detail, user.id);
+            return eligible ? p : null;
           } catch {
             return null;
           }
@@ -116,16 +125,17 @@ export function DailyWorkLogPage() {
       );
       return detailed.filter((p): p is ProjectListItem => p !== null);
     },
-    enabled: !!user,
+    enabled: !!user?.id,
     staleTime: 60 * 1000,
   });
 
-
   // 1. Fetch user's assigned active work roles
+  // Requirement 4: Stable empty constant EMPTY_WORK_ROLES avoids re-creating arrays on render
   const {
-    data: myRoles = [],
+    data: myRoles = EMPTY_WORK_ROLES,
     isLoading: isLoadingRoles,
-    error: rolesError,
+    isError: isRolesError,
+    isSuccess: isRolesSuccess,
   } = useQuery<WorkRole[]>({
     queryKey: ['work-roles', 'my-roles'],
     queryFn: fetchMyWorkRoles,
@@ -142,6 +152,7 @@ export function DailyWorkLogPage() {
   } = useQuery({
     queryKey: ['work-log', 'by-date', selectedDate],
     queryFn: () => fetchWorkLogByDate(selectedDate),
+    enabled: Boolean(selectedDate && selectedDate.trim()),
     retry: (failureCount, error: any) => {
       // Do not retry 404 (profile not found / no log)
       if (error?.response?.status === 404) return false;
@@ -158,12 +169,15 @@ export function DailyWorkLogPage() {
   const standardShiftHours = logData?.standardShiftHours ?? 8;
   const currentStatus = workLog?.status;
 
-  // Hydrate entries when logData changes or when switching dates
+  // Requirement 4: Hydrate entries when logData changes or when switching dates.
+  // myRoles is removed from the dependency list (uses isRolesSuccess, isLoadingRoles, isRolesError).
+  // Typed rows must never be overwritten while roles are loading or after a failed load.
   useEffect(() => {
     setIsWindowExpired(false);
     setFormError(null);
     setServerWarnings(logData?.warnings ?? []);
 
+    // If server returned entries for this date, hydrate from saved entries
     if (workLog && workLog.entries && workLog.entries.length > 0) {
       setEntries(
         workLog.entries.map((e) => ({
@@ -175,10 +189,21 @@ export function DailyWorkLogPage() {
           taskId: e.taskId || '',
         }))
       );
-    } else {
-      // If no entries, start with one empty row
+      return;
+    }
+
+    // If log fetch errored, or roles are still loading or failed, do NOT overwrite typed rows
+    if (isLogError || isLoadingRoles || isRolesError) {
+      return;
+    }
+
+    // For a blank day: only initialize default empty row if user has not already typed data
+    setEntries((prev) => {
+      if (hasUserTypedRows(prev)) {
+        return prev;
+      }
       const firstRoleId = myRoles.length > 0 ? myRoles[0].id : '';
-      setEntries([
+      return [
         {
           workRoleId: firstRoleId,
           hours: '',
@@ -186,9 +211,17 @@ export function DailyWorkLogPage() {
           projectId: '',
           taskId: '',
         },
-      ]);
-    }
-  }, [logData, workLog?.id, selectedDate, myRoles]);
+      ];
+    });
+  }, [
+    logData,
+    workLog?.id,
+    selectedDate,
+    isRolesSuccess,
+    isLogError,
+    isLoadingRoles,
+    isRolesError,
+  ]);
 
   // Read-only state check
   const isApproved = currentStatus === 'approved';
@@ -197,7 +230,7 @@ export function DailyWorkLogPage() {
   // Calculate live running total
   const runningTotal = useMemo(() => {
     return entries.reduce((acc, row) => {
-      const h = typeof row.hours === 'number' ? row.hours : parseFloat(row.hours);
+      const h = typeof row.hours === 'number' ? row.hours : parseFloat(String(row.hours));
       return acc + (isNaN(h) || h < 0 ? 0 : h);
     }, 0);
   }, [entries]);
@@ -223,7 +256,7 @@ export function DailyWorkLogPage() {
 
   const handleFieldChange = (
     index: number,
-    field: keyof EditableEntry,
+    field: keyof WorkLogEntryRow,
     value: string | number
   ) => {
     if (isReadOnly) return;
@@ -232,86 +265,54 @@ export function DailyWorkLogPage() {
     );
   };
 
-  // Helper to map error response codes to i18n text
-  const translateErrorCode = (err: any): string => {
-    const { code, status } = getWorkLogErrorInfo(err);
-
-    if (code === 'edit_window_expired') {
-      setIsWindowExpired(true);
-      return t('workLog.daily.errors.edit_window_expired');
-    }
-    if (code === 'invalid_project') {
-      return t('workLog.daily.errors.invalidProject');
-    }
-    if (code === 'invalid_task') {
-      return t('workLog.daily.errors.invalidTask');
-    }
-    if (code === 'hour_mismatch' || status === 422) {
-      return t('workLog.daily.errors.hour_mismatch');
-    }
-    if (code === 'validation_error') {
-      return t('workLog.daily.errors.validation_error');
-    }
-    if (code === 'unassigned_work_role') {
-      return t('workLog.daily.errors.unassigned_work_role');
-    }
-    if (code === 'status_conflict') {
-      return t('workLog.daily.errors.status_conflict');
-    }
-    if (code === 'conflict_retry') {
-      return t('workLog.daily.errors.conflict_retry');
-    }
-    if (code === 'already_submitted') {
-      return t('workLog.daily.errors.already_submitted');
-    }
-    if (code === 'log_already_approved') {
-      return t('workLog.daily.errors.log_already_approved');
-    }
-    if (code === 'profile_not_found') {
-      return t('workLog.daily.errors.profile_not_found');
-    }
-    if (code === 'row_limit_exceeded') {
-      return t('workLog.daily.errors.row_limit_exceeded');
-    }
-    if (code === 'forbidden' || status === 403) {
-      return t('workLog.daily.errors.forbidden');
-    }
-
-    return err?.response?.data?.message || t('workLog.daily.errors.generic');
-  };
-
-  // Prepare payload from local state
-  const preparePayloadEntries = () => {
-    if (entries.length === 0) {
-      throw new Error(t('workLog.daily.errors.atLeastOneEntry'));
-    }
-
-    return entries.map((row) => {
-      if (!row.workRoleId) {
-        throw new Error(t('workLog.daily.errors.validation_error'));
-      }
-      const h = typeof row.hours === 'number' ? row.hours : parseFloat(row.hours);
-      if (isNaN(h) || h <= 0) {
-        throw new Error(t('workLog.daily.errors.hoursPositive'));
-      }
-      return {
-        workRoleId: row.workRoleId,
-        hours: h,
-        description: row.description.trim() ? row.description.trim() : null,
-        projectId: row.projectId.trim() ? row.projectId.trim() : null,
-        taskId: row.taskId.trim() ? row.taskId.trim() : null,
+  // Requirement 2: Helper mapping error codes to i18n text
+  const translateCode = useCallback(
+    (code: string): string | undefined => {
+      const errorMap: Record<string, string> = {
+        edit_window_expired: t('workLog.daily.errors.edit_window_expired'),
+        invalid_project: t('workLog.daily.errors.invalidProject'),
+        invalid_task: t('workLog.daily.errors.invalidTask'),
+        hour_mismatch: t('workLog.daily.errors.hour_mismatch'),
+        validation_error: t('workLog.daily.errors.validation_error'),
+        unassigned_work_role: t('workLog.daily.errors.unassigned_work_role'),
+        status_conflict: t('workLog.daily.errors.status_conflict'),
+        conflict_retry: t('workLog.daily.errors.conflict_retry'),
+        already_submitted: t('workLog.daily.errors.already_submitted'),
+        log_already_approved: t('workLog.daily.errors.log_already_approved'),
+        profile_not_found: t('workLog.daily.errors.profile_not_found'),
+        row_limit_exceeded: t('workLog.daily.errors.row_limit_exceeded'),
+        forbidden: t('workLog.daily.errors.forbidden'),
+        atLeastOneEntry: t('workLog.daily.errors.atLeastOneEntry'),
+        hoursPositive: t('workLog.daily.errors.hoursPositive'),
+        networkError: t('workLog.daily.errors.networkError'),
+        generic: t('workLog.daily.errors.generic'),
       };
+      return errorMap[code];
+    },
+    [t]
+  );
+
+  // Helper to handle mutation error with proper code-first resolution
+  const handleMutationError = (err: any) => {
+    const errorMsg = resolveWorkLogError(err, translateCode, {
+      onWindowExpired: () => setIsWindowExpired(true),
     });
+    setFormError(errorMsg);
   };
 
   // 3. Save Draft mutation
   const saveDraftMutation = useMutation({
     mutationFn: async () => {
-      const payloadEntries = preparePayloadEntries();
+      // Requirement 1e: Drops legacy free-text IDs to null
+      const payloadEntries = buildWorkLogEntriesPayload(entries);
 
       if (workLog?.id && currentStatus === 'submitted') {
         // Submitted log being updated within window via PATCH
         return patchWorkLog(workLog.id, { entries: payloadEntries });
+      }
+
+      if (!selectedDate || !selectedDate.trim()) {
+        throw new Error('generic');
       }
 
       // Draft upsert
@@ -331,15 +332,13 @@ export function DailyWorkLogPage() {
       queryClient.invalidateQueries({ queryKey: ['work-log', 'by-date', selectedDate] });
       queryClient.invalidateQueries({ queryKey: ['work-logs'] });
     },
-    onError: (err: any) => {
-      setFormError(err.message || translateErrorCode(err));
-    },
+    onError: handleMutationError,
   });
 
   // 4. Submit mutation
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const payloadEntries = preparePayloadEntries();
+      const payloadEntries = buildWorkLogEntriesPayload(entries);
 
       // First ensure draft is saved/updated
       let targetId = workLog?.id;
@@ -365,12 +364,17 @@ export function DailyWorkLogPage() {
       queryClient.invalidateQueries({ queryKey: ['work-log', 'by-date', selectedDate] });
       queryClient.invalidateQueries({ queryKey: ['work-logs'] });
     },
-    onError: (err: any) => {
-      setFormError(err.message || translateErrorCode(err));
-    },
+    onError: handleMutationError,
   });
 
   const isSaving = saveDraftMutation.isPending || submitMutation.isPending;
+
+  // Requirement 1d: Determine whether to show project and task columns/pickers
+  const hasEligibleProjects = memberProjects.length > 0;
+  const hasLegacyProjectOrTask = entries.some(
+    (e) => isLegacyText(e.projectId) || isLegacyText(e.taskId)
+  );
+  const showProjectPickers = hasEligibleProjects || hasLegacyProjectOrTask;
 
   // Handle No Profile state friendly view
   if (isProfileNotFound) {
@@ -401,6 +405,10 @@ export function DailyWorkLogPage() {
       </div>
     );
   }
+
+  // Requirement 3: If loading a day's entries fails (anything except profile_not_found),
+  // show an error card with a Retry button instead of an empty page.
+  const isDayLoadError = isLogError && !isProfileNotFound;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -475,6 +483,7 @@ export function DailyWorkLogPage() {
         </Alert>
       )}
 
+      {/* Requirement 5: Fixed garbled bullet (â€¢) to proper Unicode bullet • */}
       {serverWarnings.length > 0 && (
         <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -547,8 +556,37 @@ export function DailyWorkLogPage() {
         </CardContent>
       </Card>
 
+      {/* Requirement 3: Error card with Retry button when loading a day's entries fails */}
+      {isDayLoadError && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle className="text-base font-semibold">
+                {t('workLog.daily.loadError')}
+              </CardTitle>
+              <CardDescription className="text-xs max-w-md">
+                {t('workLog.daily.loadErrorDesc')}
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => refetchLog()}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>{t('common.retry')}</span>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Assigned Roles Warning if empty */}
-      {!isLoadingRoles && myRoles.length === 0 && (
+      {!isDayLoadError && !isLoadingRoles && myRoles.length === 0 && (
         <Card className="border-amber-200 bg-amber-50/40 dark:bg-amber-950/20">
           <CardContent className="p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -564,317 +602,341 @@ export function DailyWorkLogPage() {
         </Card>
       )}
 
-      {/* Entries Form Card */}
-      <Card>
-        <CardHeader className="pb-3 border-b">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <CardTitle className="text-base font-semibold">
-                {t('workLog.daily.entriesTitle')}
-              </CardTitle>
-              <CardDescription className="text-xs">
-                {t('workLog.daily.entriesSubtitle')}
-              </CardDescription>
-            </div>
-            {!isReadOnly && myRoles.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddRow}
-                className="gap-1.5 self-start sm:self-auto"
-                disabled={isSaving}
-              >
-                <Plus className="w-4 h-4" />
-                <span>{t('workLog.daily.addEntry')}</span>
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-4 sm:p-6 space-y-4">
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground text-xs font-medium text-left">
-                  <th className="pb-2 pl-1 w-[260px]">{t('workLog.daily.roleColumn')}</th>
-                  <th className="pb-2 w-[120px]">{t('workLog.daily.hoursColumn')}</th>
-                  <th className="pb-2">{t('workLog.daily.descriptionColumn')}</th>
-                  <th className="pb-2 w-[140px]">{t('workLog.daily.projectColumn')}</th>
-                  <th className="pb-2 w-[140px]">{t('workLog.daily.taskColumn')}</th>
-                  {!isReadOnly && <th className="pb-2 pr-1 w-[50px] text-right"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {entries.map((entry, idx) => (
-                  <tr key={idx} className="group">
-                    <td className="py-2.5 pl-1 pr-2 align-top">
-                      <Select
-                        value={entry.workRoleId}
-                        onChange={(e) => handleFieldChange(idx, 'workRoleId', e.target.value)}
-                        disabled={isReadOnly || myRoles.length === 0 || isSaving}
-                        className="w-full text-xs"
-                      >
-                        <option value="" disabled>
-                          {t('workLog.daily.rolePlaceholder')}
-                        </option>
-                        {myRoles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </td>
-                    <td className="py-2.5 px-2 align-top">
-                      <Input
-                        type="number"
-                        step="0.25"
-                        min="0.25"
-                        max="24"
-                        placeholder="0.00"
-                        value={entry.hours}
-                        onChange={(e) => handleFieldChange(idx, 'hours', e.target.value)}
-                        disabled={isReadOnly || isSaving}
-                        className="w-full text-xs font-mono"
-                      />
-                    </td>
-                    <td className="py-2.5 px-2 align-top">
-                      <Input
-                        type="text"
-                        placeholder={t('workLog.daily.descriptionPlaceholder')}
-                        value={entry.description}
-                        onChange={(e) => handleFieldChange(idx, 'description', e.target.value)}
-                        disabled={isReadOnly || isSaving}
-                        className="w-full text-xs"
-                      />
-                    </td>
-                    <td className="py-2.5 px-2 align-top">
-                      <Input
-                        type="text"
-                        placeholder={t('workLog.daily.projectPlaceholder')}
-                        value={entry.projectId}
-                        onChange={(e) => handleFieldChange(idx, 'projectId', e.target.value)}
-                        disabled={isReadOnly || isSaving}
-                        className="w-full text-xs font-mono bg-muted/30"
-                      />
-                    </td>
-                    <td className="py-2.5 px-2 align-top">
-                      <Input
-                        type="text"
-                        placeholder={t('workLog.daily.taskPlaceholder')}
-                        value={entry.taskId}
-                        onChange={(e) => handleFieldChange(idx, 'taskId', e.target.value)}
-                        disabled={isReadOnly || isSaving}
-                        className="w-full text-xs font-mono bg-muted/30"
-                      />
-                    </td>
-                    {!isReadOnly && (
-                      <td className="py-2.5 pr-1 pl-2 text-right align-top">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveRow(idx)}
-                          disabled={entries.length <= 1 || isSaving}
-                          title={t('workLog.daily.removeRow')}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Card View (Phone width) */}
-          <div className="block md:hidden space-y-4">
-            {entries.map((entry, idx) => (
-              <div
-                key={idx}
-                className="border rounded-lg p-3 space-y-3 bg-card/60 relative"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Row #{idx + 1}
-                  </span>
-                  {!isReadOnly && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveRow(idx)}
-                      disabled={entries.length <= 1 || isSaving}
-                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('workLog.daily.roleColumn')}</Label>
-                  <Select
-                    value={entry.workRoleId}
-                    onChange={(e) => handleFieldChange(idx, 'workRoleId', e.target.value)}
-                    disabled={isReadOnly || myRoles.length === 0 || isSaving}
-                    className="w-full text-xs"
-                  >
-                    <option value="" disabled>
-                      {t('workLog.daily.rolePlaceholder')}
-                    </option>
-                    {myRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('workLog.daily.hoursColumn')}</Label>
-                  <Input
-                    type="number"
-                    step="0.25"
-                    min="0.25"
-                    max="24"
-                    placeholder="0.00"
-                    value={entry.hours}
-                    onChange={(e) => handleFieldChange(idx, 'hours', e.target.value)}
-                    disabled={isReadOnly || isSaving}
-                    className="w-full text-xs font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('workLog.daily.descriptionColumn')}</Label>
-                  <Input
-                    type="text"
-                    placeholder={t('workLog.daily.descriptionPlaceholder')}
-                    value={entry.description}
-                    onChange={(e) => handleFieldChange(idx, 'description', e.target.value)}
-                    disabled={isReadOnly || isSaving}
-                    className="w-full text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">{t('workLog.daily.projectColumn')}</Label>
-                    <Input
-                      type="text"
-                      placeholder={t('workLog.daily.projectPlaceholder')}
-                      value={entry.projectId}
-                      onChange={(e) => handleFieldChange(idx, 'projectId', e.target.value)}
-                      disabled={isReadOnly || isSaving}
-                      className="w-full text-xs font-mono bg-muted/30"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">{t('workLog.daily.taskColumn')}</Label>
-                    <Input
-                      type="text"
-                      placeholder={t('workLog.daily.taskPlaceholder')}
-                      value={entry.taskId}
-                      onChange={(e) => handleFieldChange(idx, 'taskId', e.target.value)}
-                      disabled={isReadOnly || isSaving}
-                      className="w-full text-xs font-mono bg-muted/30"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Running Totals & Shift Summary Card */}
-      <Card className="border-border">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="grid grid-cols-3 gap-4 sm:gap-8">
+      {/* Entries Form Card (Rendered when day load has not failed) */}
+      {!isDayLoadError && (
+        <Card>
+          <CardHeader className="pb-3 border-b">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <span className="text-xs text-muted-foreground block">
-                  {t('workLog.daily.expectedHours')}
-                </span>
-                <span className="text-lg font-bold font-mono">
-                  {standardShiftHours.toFixed(2)}h
-                </span>
+                <CardTitle className="text-base font-semibold">
+                  {t('workLog.daily.entriesTitle')}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {t('workLog.daily.entriesSubtitle')}
+                </CardDescription>
               </div>
-
-              <div>
-                <span className="text-xs text-muted-foreground block">
-                  {t('workLog.daily.totalHours')}
-                </span>
-                <span className="text-lg font-bold font-mono text-primary">
-                  {runningTotal.toFixed(2)}h
-                </span>
-              </div>
-
-              <div>
-                <span className="text-xs text-muted-foreground block">
-                  {t('workLog.daily.difference')}
-                </span>
-                <span
-                  className={`text-sm font-semibold font-mono block mt-1 ${
-                    shiftDiff.isBalanced
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : shiftDiff.isOver
-                      ? 'text-sky-600 dark:text-sky-400'
-                      : 'text-amber-600 dark:text-amber-400'
-                  }`}
-                >
-                  {shiftDiff.formatted}
-                </span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            {!isReadOnly && (
-              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 sm:pt-0">
+              {!isReadOnly && myRoles.length > 0 && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => saveDraftMutation.mutate()}
-                  disabled={isSaving || myRoles.length === 0}
-                  className="w-full sm:w-auto gap-2"
+                  size="sm"
+                  onClick={handleAddRow}
+                  className="gap-1.5 self-start sm:self-auto"
+                  disabled={isSaving}
                 >
-                  <Save className="w-4 h-4" />
-                  <span>
-                    {isSaving && saveDraftMutation.isPending
-                      ? currentStatus === 'submitted'
-                        ? t('workLog.daily.savingChanges')
-                        : t('workLog.daily.savingDraft')
-                      : currentStatus === 'submitted'
-                      ? t('workLog.daily.saveChanges')
-                      : t('workLog.daily.saveDraft')}
-                  </span>
+                  <Plus className="w-4 h-4" />
+                  <span>{t('workLog.daily.addEntry')}</span>
                 </Button>
+              )}
+            </div>
+          </CardHeader>
 
-                {currentStatus !== 'submitted' && (
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs font-medium text-left">
+                    <th className="pb-2 pl-1 w-[240px]">{t('workLog.daily.roleColumn')}</th>
+                    <th className="pb-2 w-[110px]">{t('workLog.daily.hoursColumn')}</th>
+                    <th className="pb-2">{t('workLog.daily.descriptionColumn')}</th>
+                    {showProjectPickers && (
+                      <th className="pb-2 w-[160px]">{t('workLog.daily.projectColumn')}</th>
+                    )}
+                    {showProjectPickers && (
+                      <th className="pb-2 w-[160px]">{t('workLog.daily.taskColumn')}</th>
+                    )}
+                    {!isReadOnly && <th className="pb-2 pr-1 w-[50px] text-right"></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {entries.map((entry, idx) => (
+                    <tr key={idx} className="group">
+                      <td className="py-2.5 pl-1 pr-2 align-top">
+                        <Select
+                          value={entry.workRoleId}
+                          onChange={(e) => handleFieldChange(idx, 'workRoleId', e.target.value)}
+                          disabled={isReadOnly || myRoles.length === 0 || isSaving}
+                          className="w-full text-xs"
+                        >
+                          <option value="" disabled>
+                            {t('workLog.daily.rolePlaceholder')}
+                          </option>
+                          {myRoles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </td>
+                      <td className="py-2.5 px-2 align-top">
+                        <Input
+                          type="number"
+                          step="0.25"
+                          min="0.25"
+                          max="24"
+                          placeholder="0.00"
+                          value={entry.hours}
+                          onChange={(e) => handleFieldChange(idx, 'hours', e.target.value)}
+                          disabled={isReadOnly || isSaving}
+                          className="w-full text-xs font-mono"
+                        />
+                      </td>
+                      <td className="py-2.5 px-2 align-top">
+                        <Input
+                          type="text"
+                          placeholder={t('workLog.daily.descriptionPlaceholder')}
+                          value={entry.description}
+                          onChange={(e) => handleFieldChange(idx, 'description', e.target.value)}
+                          disabled={isReadOnly || isSaving}
+                          className="w-full text-xs"
+                        />
+                      </td>
+                      {showProjectPickers && (
+                        <td className="py-2.5 px-2 align-top">
+                          <ProjectPicker
+                            projectId={entry.projectId}
+                            memberProjects={memberProjects}
+                            isReadOnly={isReadOnly}
+                            isSaving={isSaving}
+                            onChangeProject={(newProjectId) => {
+                              handleFieldChange(idx, 'projectId', newProjectId);
+                              // Requirement 1c: resets when the project changes
+                              handleFieldChange(idx, 'taskId', '');
+                            }}
+                          />
+                        </td>
+                      )}
+                      {showProjectPickers && (
+                        <td className="py-2.5 px-2 align-top">
+                          <TaskPicker
+                            projectId={entry.projectId}
+                            taskId={entry.taskId}
+                            isReadOnly={isReadOnly}
+                            isSaving={isSaving}
+                            onChangeTask={(newTaskId) =>
+                              handleFieldChange(idx, 'taskId', newTaskId)
+                            }
+                          />
+                        </td>
+                      )}
+                      {!isReadOnly && (
+                        <td className="py-2.5 pr-1 pl-2 text-right align-top">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveRow(idx)}
+                            disabled={entries.length <= 1 || isSaving}
+                            title={t('workLog.daily.removeRow')}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View (Phone width) */}
+            <div className="block md:hidden space-y-4">
+              {entries.map((entry, idx) => (
+                <div
+                  key={idx}
+                  className="border rounded-lg p-3 space-y-3 bg-card/60 relative"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Row #{idx + 1}
+                    </span>
+                    {!isReadOnly && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveRow(idx)}
+                        disabled={entries.length <= 1 || isSaving}
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t('workLog.daily.roleColumn')}</Label>
+                    <Select
+                      value={entry.workRoleId}
+                      onChange={(e) => handleFieldChange(idx, 'workRoleId', e.target.value)}
+                      disabled={isReadOnly || myRoles.length === 0 || isSaving}
+                      className="w-full text-xs"
+                    >
+                      <option value="" disabled>
+                        {t('workLog.daily.rolePlaceholder')}
+                      </option>
+                      {myRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t('workLog.daily.hoursColumn')}</Label>
+                    <Input
+                      type="number"
+                      step="0.25"
+                      min="0.25"
+                      max="24"
+                      placeholder="0.00"
+                      value={entry.hours}
+                      onChange={(e) => handleFieldChange(idx, 'hours', e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                      className="w-full text-xs font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t('workLog.daily.descriptionColumn')}</Label>
+                    <Input
+                      type="text"
+                      placeholder={t('workLog.daily.descriptionPlaceholder')}
+                      value={entry.description}
+                      onChange={(e) => handleFieldChange(idx, 'description', e.target.value)}
+                      disabled={isReadOnly || isSaving}
+                      className="w-full text-xs"
+                    />
+                  </div>
+
+                  {showProjectPickers && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t('workLog.daily.projectLabel')}</Label>
+                        <ProjectPicker
+                          projectId={entry.projectId}
+                          memberProjects={memberProjects}
+                          isReadOnly={isReadOnly}
+                          isSaving={isSaving}
+                          onChangeProject={(newProjectId) => {
+                            handleFieldChange(idx, 'projectId', newProjectId);
+                            // Requirement 1c: resets when the project changes
+                            handleFieldChange(idx, 'taskId', '');
+                          }}
+                        />
+                      </div>
+                      {(Boolean(entry.projectId) || isLegacyText(entry.taskId)) && (
+                        <div className="space-y-1">
+                          <Label className="text-xs">{t('workLog.daily.taskLabel')}</Label>
+                          <TaskPicker
+                            projectId={entry.projectId}
+                            taskId={entry.taskId}
+                            isReadOnly={isReadOnly}
+                            isSaving={isSaving}
+                            onChangeTask={(newTaskId) =>
+                              handleFieldChange(idx, 'taskId', newTaskId)
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Running Totals & Shift Summary Card */}
+      {!isDayLoadError && (
+        <Card className="border-border">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="grid grid-cols-3 gap-4 sm:gap-8">
+                <div>
+                  <span className="text-xs text-muted-foreground block">
+                    {t('workLog.daily.expectedHours')}
+                  </span>
+                  <span className="text-lg font-bold font-mono">
+                    {standardShiftHours.toFixed(2)}h
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-xs text-muted-foreground block">
+                    {t('workLog.daily.totalHours')}
+                  </span>
+                  <span className="text-lg font-bold font-mono text-primary">
+                    {runningTotal.toFixed(2)}h
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-xs text-muted-foreground block">
+                    {t('workLog.daily.difference')}
+                  </span>
+                  <span
+                    className={`text-sm font-semibold font-mono block mt-1 ${
+                      shiftDiff.isBalanced
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : shiftDiff.isOver
+                        ? 'text-sky-600 dark:text-sky-400'
+                        : 'text-amber-600 dark:text-amber-400'
+                    }`}
+                  >
+                    {shiftDiff.formatted}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              {!isReadOnly && (
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 sm:pt-0">
                   <Button
                     type="button"
-                    variant="default"
-                    onClick={() => submitMutation.mutate()}
+                    variant="outline"
+                    onClick={() => saveDraftMutation.mutate()}
                     disabled={isSaving || myRoles.length === 0}
                     className="w-full sm:w-auto gap-2"
                   >
-                    <Send className="w-4 h-4" />
+                    <Save className="w-4 h-4" />
                     <span>
-                      {isSaving && submitMutation.isPending
-                        ? t('workLog.daily.submitting')
-                        : t('workLog.daily.submit')}
+                      {isSaving && saveDraftMutation.isPending
+                        ? currentStatus === 'submitted'
+                          ? t('workLog.daily.savingChanges')
+                          : t('workLog.daily.savingDraft')
+                        : currentStatus === 'submitted'
+                        ? t('workLog.daily.saveChanges')
+                        : t('workLog.daily.saveDraft')}
                     </span>
                   </Button>
-                )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+
+                  {currentStatus !== 'submitted' && (
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={() => submitMutation.mutate()}
+                      disabled={isSaving || myRoles.length === 0}
+                      className="w-full sm:w-auto gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>
+                        {isSaving && submitMutation.isPending
+                          ? t('workLog.daily.submitting')
+                          : t('workLog.daily.submit')}
+                      </span>
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
