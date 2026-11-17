@@ -8,8 +8,8 @@
  * - Refuses if NODE_ENV=production.
  * - Refuses if ALLOW_DEMO_DATA is not 'yes'.
  * - Refuses if database host is not localhost or 127.0.0.1.
- * - Refuses if database name does not contain 'demo'.
- * - Refuses if DEMO_PASSWORD is missing or shorter than the real policy minimum length.
+ * - Refuses if database name is not exactly "imac_demo".
+ * - DEMO_PASSWORD is required only by demoSeed.ts and must satisfy real password policy length (>= 10).
  * - Never prints passwords or connection strings.
  * - Entire seed is executed inside a single transaction with a 120s timeout.
  */
@@ -25,6 +25,7 @@ import {
   getDemoWorkLogs,
 } from './demoDataDefs.js';
 import {
+  assertConnectedToDemoDatabase,
   getKathmanduOffsetDate,
   resolveOffsetDate,
   validateDemoEnvironment,
@@ -44,7 +45,10 @@ async function main() {
   const prisma = new PrismaClient();
 
   try {
-    // 2. Pre-check: verify no demo data already exists
+    // 2. Assert connected database is strictly 'imac_demo' before any query or write
+    await assertConnectedToDemoDatabase(prisma);
+
+    // 3. Pre-check: verify no demo data already exists
     const existingDemoUser = await prisma.user.findFirst({
       where: { username: { startsWith: 'demo_' } },
     });
@@ -488,7 +492,7 @@ async function main() {
     const code = err?.code ? ` [Code: ${err.code}]` : '';
     const message = err?.message || String(error);
     console.error(`Demo seed failed. Transaction rolled back cleanly: ${name}${code}: ${message}`);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }

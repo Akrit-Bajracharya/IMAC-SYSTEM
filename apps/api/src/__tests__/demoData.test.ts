@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'child_process';
+import { describe, expect, it, vi } from 'vitest';
 import { ProjectRole } from '@prisma/client';
 import {
   DEMO_HOSTILE_TITLE_200,
@@ -13,6 +14,7 @@ import {
   getDemoWorkLogs,
 } from '../../scripts/demoDataDefs.js';
 import {
+  assertConnectedToDemoDatabase,
   DEMO_DELETION_ORDER,
   findDemoRecordIds,
   getKathmanduOffsetDate,
@@ -1312,6 +1314,201 @@ describe('Demo Data Tooling - demoGuard and Data Definitions', () => {
             validProjectRoles.includes(member.role as any),
             `Member role "${member.role}" in project "${project.name}" must be a valid ProjectRole enum value`
           ).toBe(true);
+        }
+      }
+    });
+  });
+
+  describe('Database Connection Assertion (assertConnectedToDemoDatabase)', () => {
+    it('accepts when current_database returns exactly "imac_demo"', async () => {
+      const mockPrisma = {
+        $queryRaw: vi.fn().mockResolvedValue([{ current_database: 'imac_demo' }]),
+      };
+      await expect(assertConnectedToDemoDatabase(mockPrisma)).resolves.toBeUndefined();
+    });
+
+    it('refuses when database is "imac" (not "imac_demo")', async () => {
+      const mockPrisma = {
+        $queryRaw: vi.fn().mockResolvedValue([{ current_database: 'imac' }]),
+      };
+      await expect(assertConnectedToDemoDatabase(mockPrisma)).rejects.toThrow(
+        /connected database must be exactly "imac_demo", but got "imac"/
+      );
+    });
+
+    it('refuses an empty query result', async () => {
+      const mockPrisma = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      };
+      await expect(assertConnectedToDemoDatabase(mockPrisma)).rejects.toThrow(
+        /unexpected current_database query result structure/
+      );
+    });
+
+    it('refuses a thrown query error without leaking credentials or connection strings', async () => {
+      const mockPrisma = {
+        $queryRaw: vi.fn().mockRejectedValue(
+          new Error('FATAL: connection to postgresql://secret_user:super_secret_pw@localhost:5432/imac failed')
+        ),
+      };
+      let errorThrown: any;
+      try {
+        await assertConnectedToDemoDatabase(mockPrisma);
+      } catch (err) {
+        errorThrown = err;
+      }
+      expect(errorThrown).toBeDefined();
+      expect(errorThrown.message).toBe('Database safety check failed: unable to query current database');
+      expect(errorThrown.message).not.toContain('secret_user');
+      expect(errorThrown.message).not.toContain('super_secret_pw');
+      expect(errorThrown.message).not.toContain('postgresql:');
+    });
+
+    it('refuses a result with the wrong key name (e.g. [{ datname: "imac_demo" }])', async () => {
+      const mockPrisma = {
+        $queryRaw: vi.fn().mockResolvedValue([{ datname: 'imac_demo' }]),
+      };
+      await expect(assertConnectedToDemoDatabase(mockPrisma)).rejects.toThrow(
+        /current_database column missing in database query result/
+      );
+    });
+
+    it('refuses a result with more than one row', async () => {
+      const mockPrisma = {
+        $queryRaw: vi.fn().mockResolvedValue([
+          { current_database: 'imac_demo' },
+          { current_database: 'imac_demo' },
+        ]),
+      };
+      await expect(assertConnectedToDemoDatabase(mockPrisma)).rejects.toThrow(
+        /unexpected current_database query result structure \(expected 1 row, got 2\)/
+      );
+    });
+  });
+
+  describe('Schema Model Coverage against DEMO_DELETION_ORDER', () => {
+    const NON_DEMO_MODELS: Record<string, string> = {
+      SystemSetting: 'Stores persistent global operational settings and security policies, not demo data',
+    };
+
+    it('verifies that TaskStatusEvent does not exist in schema.prisma', () => {
+      const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma');
+      const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+      const modelRegex = /^model\s+(\w+)\s+\{/gm;
+      const models: string[] = [];
+      let match;
+      while ((match = modelRegex.exec(schemaContent)) !== null) {
+        models.push(match[1]);
+      }
+      expect(models).not.toContain('TaskStatusEvent');
+    });
+
+    it('fails if any model in schema.prisma is neither in DEMO_DELETION_ORDER nor in NON_DEMO_MODELS', () => {
+      const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma');
+      const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+      const modelRegex = /^model\s+(\w+)\s+\{/gm;
+      const schemaModels: string[] = [];
+      let match;
+      while ((match = modelRegex.exec(schemaContent)) !== null) {
+        schemaModels.push(match[1]);
+      }
+
+      expect(schemaModels.length).toBeGreaterThan(0);
+
+      const unhandledModels: string[] = [];
+      for (const model of schemaModels) {
+        const inDeletionOrder = (DEMO_DELETION_ORDER as readonly string[]).includes(model);
+        const inNonDemo = Object.prototype.hasOwnProperty.call(NON_DEMO_MODELS, model);
+        if (!inDeletionOrder && !inNonDemo) {
+          unhandledModels.push(model);
+        }
+      }
+
+      expect(
+        unhandledModels,
+        `Models found in schema.prisma that are missing from both DEMO_DELETION_ORDER and NON_DEMO_MODELS: ${unhandledModels.join(', ')}`
+      ).toEqual([]);
+    });
+
+    it('verifies all NON_DEMO_MODELS have documented one-line reasons', () => {
+      for (const [model, reason] of Object.entries(NON_DEMO_MODELS)) {
+        expect(reason).toBeTruthy();
+        expect(reason.length).toBeGreaterThan(10);
+      }
+    });
+  });
+
+  describe('CLI Script Execution & Re-export Safety (tsx process execution & static scan)', () => {
+    const tsxCliPath = path.resolve(__dirname, '../../../../node_modules/tsx/dist/cli.mjs');
+    const scriptsDir = path.resolve(__dirname, '../../scripts');
+
+    // Layer 1: Child process execution using tsx
+    // Proves that Node + tsx can load and execute the scripts without ESM syntax errors
+    const targetScripts = ['demoStatus.ts', 'demoRemove.ts', 'demoSeed.ts'];
+
+    for (const script of targetScripts) {
+      it(`spawns tsx on ${script} with scrubbed env and asserts it is REFUSED without SyntaxError`, () => {
+        const scriptPath = path.join(scriptsDir, script);
+        // Build a scrubbed environment where demo execution cannot happen
+        const scrubbedEnv: NodeJS.ProcessEnv = {
+          ...process.env,
+          NODE_ENV: 'test',
+        };
+        delete scrubbedEnv.ALLOW_DEMO_DATA;
+        delete scrubbedEnv.DATABASE_URL;
+        delete scrubbedEnv.DEMO_PASSWORD;
+
+        const result = spawnSync(process.execPath, [tsxCliPath, scriptPath], {
+          env: scrubbedEnv,
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+
+        const combinedOutput = `${result.stdout || ''}\n${result.stderr || ''}`;
+
+        // Guard must refuse execution
+        expect(combinedOutput).toContain('REFUSED');
+        // Must not crash with ESM export or syntax error
+        expect(combinedOutput).not.toContain('SyntaxError');
+        expect(combinedOutput).not.toContain('does not provide an export');
+        expect(result.status).not.toBe(0);
+      });
+    }
+
+    // Layer 2: Static source code scan
+    // Scans apps/api/scripts for any "export { ... } from" statements re-exporting type-only identifiers
+    it('statically scans apps/api/scripts to guarantee type-only declarations are not re-exported as values', () => {
+      const files = fs.readdirSync(scriptsDir).filter((f) => f.endsWith('.ts'));
+
+      for (const file of files) {
+        const filePath = path.join(scriptsDir, file);
+        const content = fs.readFileSync(filePath, 'utf-8');
+
+        // Look for export { A, B } from './...'
+        const exportFromRegex = /export\s+\{([^}]+)\}\s+from\s+['"](\.[^'"]+)['"]/g;
+        let match;
+        while ((match = exportFromRegex.exec(content)) !== null) {
+          const exportedList = match[1].split(',').map((s) => s.trim()).filter(Boolean);
+          const relSource = match[2].replace(/\.js$/, '.ts');
+          const sourcePath = path.resolve(scriptsDir, relSource);
+
+          if (fs.existsSync(sourcePath)) {
+            const sourceContent = fs.readFileSync(sourcePath, 'utf-8');
+            for (const item of exportedList) {
+              // If item is prefixed with 'type ', it is safe
+              if (item.startsWith('type ')) continue;
+
+              const isInterface = new RegExp(`^\\s*export\\s+interface\\s+${item}\\b`, 'm').test(sourceContent);
+              const isTypeAlias = new RegExp(`^\\s*export\\s+type\\s+${item}\\b`, 'm').test(sourceContent);
+              const isValue = new RegExp(`^\\s*export\\s+(const|let|var|function|class|enum)\\s+${item}\\b`, 'm').test(sourceContent);
+
+              if ((isInterface || isTypeAlias) && !isValue) {
+                throw new Error(
+                  `In ${file}: identifier "${item}" re-exported from "${match[2]}" is a type-only declaration in ${path.basename(sourcePath)} but is not marked with 'type'`
+                );
+              }
+            }
+          }
         }
       }
     });

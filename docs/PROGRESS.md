@@ -1310,3 +1310,39 @@ Across all APIs in the IMAC Operations System:
 - `npm run build -w @imac/api`: compiled clean with `tsc -p tsconfig.build.json`. Confirmed 0 demo files in `dist` (`scripts/` and `src/__tests__/` excluded). Zero git tracking of `dist`.
 
 
+
+---
+
+## Current Milestone: Demo-Data Tooling Hardening & Model Coverage — COMPLETED
+
+### 1. Correction Note & Architectural Changes
+- **Type-Safe Re-Export & Import Fix (`apps/api/scripts/demoGuard.ts`)**:
+  - Corrected re-export in `apps/api/scripts/demoGuard.ts`: exported `findDemoRecordIds` as a value export and `DemoRecordIds`, `DemoLookupClient` via `export type`.
+  - Audited all script imports across `apps/api/scripts/`, ensuring no type definitions are re-exported or imported as runtime values.
+  - Eliminated runtime Node ESM `SyntaxError: The requested module './demoLookup.js' does not provide an export named 'DemoLookupClient'`.
+- **Active Database Safety Assertion (`assertConnectedToDemoDatabase`)**:
+  - Implemented `assertConnectedToDemoDatabase(prisma)` in `apps/api/scripts/demoGuard.ts`.
+  - Executes `SELECT current_database()` via `prisma.$queryRaw` and enforces strict invariants:
+    - Must return an array of length exactly 1.
+    - Row must contain the exact column key `current_database`.
+    - Column value must strictly equal `"imac_demo"` (not `"imac"`, not uppercase, not partial).
+    - Refuses unexpected row count, malformed columns (e.g. `datname`), empty results, or wrong database names.
+    - Query rejection throws a sanitized error without leaking connection URLs or credentials.
+  - Mounted immediately after `new PrismaClient()` in `try` block across `demoSeed.ts`, `demoRemove.ts`, and `demoStatus.ts` BEFORE any other query or write.
+  - Configured `try/catch/finally` across all CLI scripts to set `process.exitCode = 1` on error and guarantee `await prisma.$disconnect()` completes in `finally`.
+- **Specification Alignment in Documentation & Header Comments**:
+  - Updated file headers in `demoGuard.ts`, `demoRemove.ts`, `demoStatus.ts`, and `demoSeed.ts` along with `apps/api/scripts/README.md` to state that the connected database name must be exactly `"imac_demo"` (not just contain `"demo"`), and that `DEMO_PASSWORD` is required only by `demoSeed.ts` (not required by `demoRemove.ts` or `demoStatus.ts`).
+- **Prisma Schema Model Coverage**:
+  - Checked `apps/api/prisma/schema.prisma`: verified all 19 models (`User`, `EmployeeProfile`, `WorkRole`, `EmployeeWorkRole`, `Session`, `SystemSetting`, `AuditLog`, `AvailabilityStatus`, `WorkLogDay`, `WorkLogEntry`, `Project`, `ProjectMember`, `ProjectStatusEvent`, `Milestone`, `Task`, `TaskDependency`, `Comment`, `ProjectMessage`, `TimeLog`).
+  - Confirmed `TaskStatusEvent` does **not** exist in `schema.prisma`.
+  - All 18 demo data models are covered in `DEMO_DELETION_ORDER` in reverse child-to-parent order; the 1 non-demo model (`SystemSetting`) is accounted for in `NON_DEMO_MODELS` with explicit documented rationale.
+- **Two-Layer CLI & Re-Export Verification**:
+  - Layer 1: Child process test executing `tsx` on `demoStatus.ts`, `demoRemove.ts`, and `demoSeed.ts` under a scrubbed environment (`NODE_ENV=test`, zero demo env vars), asserting graceful `REFUSED` output without `SyntaxError`.
+  - Layer 2: Static source code scan scanning `apps/api/scripts/*.ts` verifying no type-only declarations are re-exported as runtime values.
+
+### 2. Verification Results
+- `npm run test`: 32 test files passed, **1,061 total tests passed (0 failures)**:
+  - `apps/api`: 18 test files, **779 passed** (+13 new tests).
+  - `apps/web`: 14 test files, **282 passed**.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run typecheck`: clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared`), **0 errors**.

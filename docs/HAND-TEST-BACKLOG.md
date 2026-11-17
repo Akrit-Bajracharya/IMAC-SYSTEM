@@ -634,3 +634,35 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
 - **Negative Invariants (What Role Must NOT Be Able To Do)**:
   - An approved work log must **NOT** allow inline modification or deletion of linked project/task rows.
 
+
+---
+
+## 8. Step Demo Fixes: Demo-Data Tooling Hardening & Active Guard Assertion
+
+### TEST-DEMO-07: Active Database Assertion Refusal on Non-Demo Database
+- **Status**: `NOT RUN`
+- **Role to Log In As**: Developer in PowerShell CLI
+- **Test Steps**:
+  1. Open a terminal and temporarily set `DATABASE_URL` pointing to the primary dev database (e.g. `postgresql://user:pass@localhost:5432/imac`).
+  2. Set `$env:ALLOW_DEMO_DATA = "yes"`.
+  3. Attempt to run `npm run demo:status` or `npm run demo:remove`.
+- **Expected Result**:
+  - The script immediately halts with a clean error message: `DEMO STATUS REFUSED: Database name in DATABASE_URL must be exactly "imac_demo"` or `Database safety guard violation: connected database must be exactly "imac_demo"`.
+  - Process exits with non-zero exit code.
+  - Zero modifications or queries are executed against the non-demo database.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** print credentials, username, or connection URL to stdout/stderr.
+  - Must **NOT** query or delete any table data from the non-demo database.
+
+### TEST-DEMO-08: Type-Safe CLI Execution without ESM SyntaxError
+- **Status**: `NOT RUN`
+- **Role to Log In As**: Developer in PowerShell CLI
+- **Test Steps**:
+  1. In a fresh terminal without demo environment variables, run `npm run demo:status`.
+  2. Run `npm run demo:remove`.
+  3. Run `npm run demo:seed`.
+- **Expected Result**:
+  - All three scripts load cleanly via `tsx` without throwing `SyntaxError: The requested module './demoLookup.js' does not provide an export named 'DemoLookupClient'`.
+  - Each script immediately prints its expected refusal message (e.g. `DEMO STATUS REFUSED: ALLOW_DEMO_DATA environment variable must be explicitly set to "yes"`) and cleanly exits with status code 1.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** crash with unhandled ESM import/export syntax errors.

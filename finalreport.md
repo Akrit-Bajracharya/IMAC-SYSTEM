@@ -1950,3 +1950,53 @@ Documented in `docs/open-policy-questions.md`:
   - Typecheck: clean across all workspaces (0 errors).
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Hard safety invariants strictly respected; no database connections made; no docker commands executed; no connection strings or passwords logged; no production code modified; no commits created.
+
+---
+
+### Task Demo-06: Demo Data Fixes, Active Database Guard Assertion & Model Coverage Verification
+- **Date**: 2026-11-17
+- **Day of week**: Tuesday
+- **Start time**: 09:30
+- **End time**: 09:35
+- **Step**: Demo-Data Fixes (apps/api/scripts and its tests only)
+- **Task performed**:
+  - **Type-Safe Re-Export and Import Correction**:
+    - Separated re-export in `apps/api/scripts/demoGuard.ts` into value export for `findDemoRecordIds` and type-only export `export type { DemoRecordIds, DemoLookupClient } from './demoLookup.js'`.
+    - Audited all imports across `apps/api/scripts/` to ensure type-only declarations are not imported or re-exported as runtime values.
+    - Resolved runtime Node ESM missing-export SyntaxError when executing CLI tools under tsx.
+  - **Active Database Safety Guard (`assertConnectedToDemoDatabase`)**:
+    - Implemented `assertConnectedToDemoDatabase(prisma)` in `apps/api/scripts/demoGuard.ts` executing `SELECT current_database()` via `prisma.$queryRaw`.
+    - Enforced strict invariants: exactly 1 row returned, exact column name `current_database`, exact value `"imac_demo"`, and sanitized error propagation preventing credential/URL exposure.
+    - Integrated call into `demoSeed.ts`, `demoRemove.ts`, and `demoStatus.ts` immediately after `new PrismaClient()` in `try` blocks before any query or write.
+    - Configured error handling in all 3 scripts to set `process.exitCode = 1` and guarantee `finally { await prisma.$disconnect(); }` execution.
+    - Added unit tests covering refusal of non-demo db name `"imac"`, empty array `[]`, thrown query error (sanitized without leaks), wrong key name (e.g. `datname`), multi-row results, and acceptance of `"imac_demo"`.
+  - **Header Comments & README Synchronization**:
+    - Updated file headers in `demoGuard.ts`, `demoRemove.ts`, `demoStatus.ts`, and `demoSeed.ts` and `apps/api/scripts/README.md` to specify that the database name must be exactly `"imac_demo"` (not "contains demo") and that `DEMO_PASSWORD` is required only by `demoSeed.ts`.
+  - **Schema Model Coverage Check**:
+    - Inspected `apps/api/prisma/schema.prisma` verifying all 19 models (`User`, `EmployeeProfile`, `WorkRole`, `EmployeeWorkRole`, `Session`, `SystemSetting`, `AuditLog`, `AvailabilityStatus`, `WorkLogDay`, `WorkLogEntry`, `Project`, `ProjectMember`, `ProjectStatusEvent`, `Milestone`, `Task`, `TaskDependency`, `Comment`, `ProjectMessage`, `TimeLog`).
+    - Confirmed `TaskStatusEvent` does not exist in `schema.prisma`.
+    - Added dynamic test asserting every schema model is in `DEMO_DELETION_ORDER` or `NON_DEMO_MODELS` with documented reasons.
+  - **CLI Process Execution & Static Scan Verification (Amendment B)**:
+    - Layer 1: Child process test executing `tsx` on `demoStatus.ts`, `demoRemove.ts`, and `demoSeed.ts` with scrubbed environment, asserting graceful `REFUSED` output without `SyntaxError` or missing-export failures.
+    - Layer 2: Static source scan checking all script files for export patterns with type-only identifiers.
+  - **Documentation & Backlog**:
+    - Appended correction note to `docs/PROGRESS.md`.
+    - Appended manual test cases `TEST-DEMO-07` and `TEST-DEMO-08` marked `NOT RUN` to `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `apps/api/scripts/demoGuard.ts`
+  - `apps/api/scripts/demoRemove.ts`
+  - `apps/api/scripts/demoStatus.ts`
+  - `apps/api/scripts/demoSeed.ts`
+  - `apps/api/scripts/README.md`
+  - `apps/api/src/__tests__/demoData.test.ts`
+  - `docs/PROGRESS.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 779 passed (0 failed) — +13 new tests in `demoData.test.ts`.
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,061 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Protected auth/session files untouched; no database connections made; no docker commands executed; no connection strings or passwords logged; no git commits created.

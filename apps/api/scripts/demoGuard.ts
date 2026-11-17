@@ -6,8 +6,8 @@
  * - Never runs in production.
  * - Requires explicit ALLOW_DEMO_DATA=yes.
  * - Requires localhost / 127.0.0.1 database host.
- * - Requires the database name to contain 'demo'.
- * - Requires DEMO_PASSWORD to satisfy the real password policy length (>= 10).
+ * - Requires the database name to be exactly "imac_demo".
+ * - DEMO_PASSWORD is required only by demoSeed.ts and must satisfy real password policy length (>= 10).
  * - Never prints or returns connection strings, credentials, or sensitive tokens.
  */
 
@@ -23,7 +23,49 @@ export interface DemoGuardOptions {
   requirePassword?: boolean;
 }
 
-export { findDemoRecordIds, DemoRecordIds, DemoLookupClient } from './demoLookup.js';
+export { findDemoRecordIds } from './demoLookup.js';
+export type { DemoRecordIds, DemoLookupClient } from './demoLookup.js';
+
+export interface DemoDatabaseClient {
+  $queryRaw: (...args: any[]) => Promise<any>;
+}
+
+/**
+ * Asserts that the Prisma client is connected to the exact database 'imac_demo'.
+ * Queries SELECT current_database() via prisma.$queryRaw and throws unless the result
+ * contains exactly one row with the key 'current_database' strictly equal to 'imac_demo'.
+ * Never prints connection strings, passwords, or credentials in error messages.
+ */
+export async function assertConnectedToDemoDatabase(
+  prisma: DemoDatabaseClient
+): Promise<void> {
+  let result: any;
+  try {
+    result = await prisma.$queryRaw`SELECT current_database()`;
+  } catch {
+    throw new Error('Database safety check failed: unable to query current database');
+  }
+
+  if (!Array.isArray(result) || result.length !== 1) {
+    throw new Error(
+      `Database safety guard violation: unexpected current_database query result structure (expected 1 row, got ${Array.isArray(result) ? result.length : typeof result})`
+    );
+  }
+
+  const row = result[0];
+  if (!row || typeof row !== 'object' || !('current_database' in row)) {
+    throw new Error(
+      'Database safety guard violation: current_database column missing in database query result'
+    );
+  }
+
+  const dbName = row.current_database;
+  if (dbName !== 'imac_demo') {
+    throw new Error(
+      `Database safety guard violation: connected database must be exactly "imac_demo", but got "${dbName ?? 'unknown'}"`
+    );
+  }
+}
 
 /**
  * Validates the runtime environment against safety rules before executing any demo operations.

@@ -9,15 +9,19 @@
  * - Refuses if NODE_ENV=production.
  * - Refuses if ALLOW_DEMO_DATA is not 'yes'.
  * - Refuses if database host is not localhost or 127.0.0.1.
- * - Refuses if database name does not contain 'demo'.
- * - Refuses if DEMO_PASSWORD is missing or shorter than the real policy minimum length.
+ * - Refuses if database name is not exactly "imac_demo".
+ * - DEMO_PASSWORD is required only by demoSeed.ts (not required by demoRemove).
  * - Never prints passwords or connection strings.
  */
 
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
-import { validateDemoEnvironment, findDemoRecordIds } from './demoGuard.js';
+import {
+  assertConnectedToDemoDatabase,
+  findDemoRecordIds,
+  validateDemoEnvironment,
+} from './demoGuard.js';
 
 async function main() {
   // 1. Guard check (demoRemove does not require DEMO_PASSWORD)
@@ -30,6 +34,9 @@ async function main() {
   const prisma = new PrismaClient();
 
   try {
+    // 2. Assert connected database is strictly 'imac_demo' before any query or write
+    await assertConnectedToDemoDatabase(prisma);
+
     // Collect demo record IDs via shared helper to scope deletions accurately
     const {
       demoUserIds,
@@ -220,7 +227,7 @@ async function main() {
     const code = err?.code ? ` [Code: ${err.code}]` : '';
     const message = err?.message || String(error);
     console.error(`Demo removal failed. Transaction rolled back cleanly: ${name}${code}: ${message}`);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }

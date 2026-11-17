@@ -4,10 +4,10 @@ This directory contains developer-only tooling to generate and manage realistic 
 
 > [!CAUTION]
 > **HARD SAFETY INVARIANTS**
-> - These scripts **REFUSE** to execute against any production database or any database whose name does not contain `demo`.
+> - These scripts **REFUSE** to execute against any production database or any database whose name is not exactly `imac_demo`.
 > - The database host must strictly be `localhost` or `127.0.0.1`.
 > - The explicit environment variable `ALLOW_DEMO_DATA=yes` must be present.
-> - `DEMO_PASSWORD` must be set and meet the system password policy length requirement (>= 10 characters).
+> - `DEMO_PASSWORD` is required only by `demoSeed.ts` (must meet the system password policy length requirement, >= 10 characters). `demoRemove.ts` and `demoStatus.ts` do not require `DEMO_PASSWORD`.
 > - These scripts will **never** print connection strings, passwords, or credentials.
 
 ---
@@ -22,7 +22,7 @@ $line = Get-Content apps\api\.env | Where-Object { $_ -match '^DATABASE_URL=' } 
 $url = ($line -replace '^DATABASE_URL=', '') -replace '^"|"$', ''
 $env:DATABASE_URL = $url -replace '/[^/?]+(\?|$)', '/imac_demo$1'
 
-# 2. Set the demo password securely (minimum 10 characters)
+# 2. Set the demo password securely (minimum 10 characters, required only for demo:seed)
 $sec = Read-Host "Demo password" -AsSecureString
 $env:DEMO_PASSWORD = [System.Net.NetworkCredential]::new('', $sec).Password
 
