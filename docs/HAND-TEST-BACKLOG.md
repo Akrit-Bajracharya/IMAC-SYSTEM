@@ -526,3 +526,111 @@ The following checks cannot be proven by Vitest in-memory mocks and must be veri
 - **Verification Target**: Under simulated 500ms network latency in Chrome DevTools:
   - Rapid double-click on "Save Draft", "Submit Work Log", "Create Project", "Add Dependency", and "Post Comment".
 - **Expected Result**: Frontend UI buttons immediately disable; mutations are debounced or protected by server-side idempotency / state guards; no duplicate records or unhandled race condition collisions.
+
+---
+
+## 5. Demo Data Tooling & Persona Hand-Testing Scenarios
+
+### Demo User Accounts Table
+The demo seed provisions 6 role-aligned test accounts in the `imac_demo` database:
+
+| Username | System Role | Department | Employee Code | Initial Availability | Primary Work Role |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `demo_admin` | `system_admin` | IT & Infrastructure | `DEMO-ADM` | `available` | None (Admin) |
+| `demo_hr` | `hr_admin` | Human Resources | `DEMO-HR` | `available` | None (HR) |
+| `demo_pm` | `project_manager` | Operations & Projects | `DEMO-PM` | `busy_in_meeting` | `[DEMO] Project Coordination` |
+| `demo_dev` | `employee` | Software Engineering | `DEMO-DEV` | `working_remotely` | `[DEMO] Full Stack Engineering`, `[DEMO] Quality Assurance & Testing` |
+| `demo_designer` | `employee` | Design & UX | `DEMO-DES` | `available` | `[DEMO] UI/UX Design`, `[DEMO] Quality Assurance & Testing` |
+| `demo_viewer` | `viewer` | Executive & Advisory | `DEMO-VW` | `out_of_office` | None (Stakeholder) |
+
+*Credentials Note*: Password for all demo accounts is the value supplied to `$env:DEMO_PASSWORD` during demo seed. All accounts have `isActive: true`, `mustChangePassword: false`, `failedLoginCount: 0`, and `lockedUntil: null`.
+
+---
+
+### TEST-DEMO-01: Direct Login Without Mandatory Password Change
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `demo_dev` (and sequentially all other demo accounts)
+- **Test Steps**:
+  1. Navigate to `/login`.
+  2. Enter username `demo_dev` and the configured demo password.
+  3. Click "Sign In".
+- **Expected Result**: User is authenticated immediately and directed to the home dashboard (`/`). No force password change dialog or redirection to `/change-password` is triggered because `mustChangePassword: false`.
+- **Negative Invariants (What Role Must NOT Be Able To Do)**:
+  - `demo_dev` must **NOT** be able to access administrative user management (`/admin/users`) or work role catalogue configuration (`/admin/work-roles`).
+  - Attempting to load `/admin/users` must return a 403 Access Denied notice or redirect to `/`.
+
+### TEST-DEMO-02: Project Role Hierarchy and Action Boundary Enforcement
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `demo_pm` vs. `demo_designer` vs. `demo_viewer`
+- **Test Steps**:
+  1. Log in as `demo_pm` (Project Manager on `[DEMO] Nepal Disaster Relief Portal`).
+  2. Open the project settings and verify manager controls (e.g. member invitation, project details editing, milestone creation).
+  3. Log out and log in as `demo_designer` (Member on the same project). Inspect the project view.
+  4. Log out and log in as `demo_viewer` (Viewer on the same project). Inspect the project view.
+- **Expected Result**:
+  - `demo_pm` sees full management controls (edit project, add members, create milestones, pin messages).
+  - `demo_designer` sees task boards and message feeds, and can create tasks, log time, and post comments.
+  - `demo_viewer` sees project details, task lists, and messages strictly in read-only mode.
+- **Negative Invariants (What Role Must NOT Be Able To Do)**:
+  - `demo_designer` must **NOT** see project settings forms, member removal buttons, or project status transition dropdowns.
+  - `demo_viewer` must **NOT** see "New Task", "Log Time", "Add Milestone", "Post Message", or "Turn into task" action triggers.
+
+### TEST-DEMO-03: Former Member Historical Contribution Integrity
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `demo_dev` (Former member on `[DEMO] Nepal Disaster Relief Portal`)
+- **Test Steps**:
+  1. Log in as `demo_pm` and open `[DEMO] Nepal Disaster Relief Portal`.
+  2. Inspect the task board and time logs tab. Confirm historical tasks (Task 1 & Task 2) and time logs by `demo_dev` are displayed with `demo_dev`'s display name.
+  3. Log in as `demo_dev` and navigate to projects list.
+  4. Attempt to access `[DEMO] Nepal Disaster Relief Portal` via direct URL `/projects/<disaster-relief-id>`.
+- **Expected Result**:
+  - Historical tasks, comments, time logs, and messages by `demo_dev` remain intact for existing project members.
+  - For `demo_dev`, since their membership was revoked, the project is excluded from their active project list.
+- **Negative Invariants (What Role Must NOT Be Able To Do)**:
+  - `demo_dev` must **NOT** be able to create new tasks, log additional time, or post new messages on `[DEMO] Nepal Disaster Relief Portal`.
+  - Direct navigation to the project page must return 404 Not Found (or 403 Forbidden).
+
+### TEST-DEMO-04: Hostile Script Tag & Boundary Markdown Rendering (XSS Safety)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `demo_pm`
+- **Test Steps**:
+  1. Log in as `demo_pm` and open `[DEMO] Nepal Disaster Relief Portal`.
+  2. Inspect the project description containing `<script>alert(1)</script>` and `<b>bold</b>`.
+  3. Open Task 2 (200-character title with raw `<script>alert(1)</script>` and `<b>bold</b>`).
+  4. Inspect the 5000-character description containing markdown tables, json payloads, and Devanagari text (`नेपाल विपद् व्यवस्थापन पोर्टल`).
+- **Expected Result**:
+  - Browser developer tools console shows **ZERO** JavaScript alert dialog executions. The string `<script>alert(1)</script>` renders safely as text without executing.
+  - The `<b>bold</b>` text renders either sanitized or escaped without altering document layout.
+  - The 200-character task title renders cleanly without visual clipping or overflow outside its container.
+  - The 5000-character markdown description renders with formatted tables, checkboxes, headers, and intact Devanagari characters.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Under NO circumstances may an alert dialog pop up or any XSS vector execute.
+  - Database text must NOT be escaped at write time (must store raw string) and must be escaped safely by React DOM at render time.
+
+### TEST-DEMO-05: Status History Inspection for At-Risk, Completed, and On-Hold Projects
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `demo_pm`
+- **Test Steps**:
+  1. Open `[DEMO] Valley Transit App` (status: `at_risk`).
+  2. Inspect project status badge and status history log.
+  3. Open `[DEMO] Heritage Preservation Archive` (status: `complete`).
+  4. Open `[DEMO] Solar Grid Micro-Management` (status: `on_hold`).
+- **Expected Result**:
+  - Each project displays its current status accurately.
+  - The Status History tab displays the recorded `ProjectStatusEvent` including the previous status (`on_track`), new status, timestamp, author (`Demo Project Manager`), and clear business reason text.
+- **Negative Invariants (What Role Must NOT Be Able To Do)**:
+  - Non-manager members must **NOT** see options to edit or trigger project status transitions.
+
+### TEST-DEMO-06: Work Log to Project and Task Linkage Verification
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `demo_dev`
+- **Test Steps**:
+  1. Log in as `demo_dev` and navigate to Daily Work Log History (`/employee/work-logs/history`).
+  2. Open the work log for 2 days ago (submitted log) and 3 days ago (approved log).
+  3. Inspect the work log entries.
+- **Expected Result**:
+  - Linked entries display their assigned `[DEMO] Full Stack Engineering` role, logged hours, and explicit links to the associated project (`[DEMO] Nepal Disaster Relief Portal` or `[DEMO] Valley Transit App`) and task.
+  - Clicking on a linked task navigates to the relevant task detail view.
+- **Negative Invariants (What Role Must NOT Be Able To Do)**:
+  - An approved work log must **NOT** allow inline modification or deletion of linked project/task rows.
+

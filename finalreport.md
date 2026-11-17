@@ -1657,3 +1657,296 @@ Documented in `docs/open-policy-questions.md`:
   - Typecheck: 0 errors across `@imac/api`, `@imac/web`, `@imac/shared`.
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Strictly test files and documentation modified; no production code modified; no commits created.
+
+
+
+
+### Task DEV-DEMO-DATA-01: Dev-Only Demo Data Tooling for apps/api
+- **Date**: 2026-11-16
+- **Day of week**: Monday
+- **Start time**: 08:50:00
+- **End time**: 08:59:00
+- **Step**: Dev-only demo data tooling for apps/api (Generate realistic fake data for hand testing)
+- **Task performed**:
+  - Built pure environment guard (`apps/api/scripts/demoGuard.ts`) strictly enforcing safety boundaries:
+    - Blocks execution if `NODE_ENV === 'production'`.
+    - Blocks execution if `ALLOW_DEMO_DATA !== 'yes'`.
+    - Blocks execution if database host is not `localhost` or `127.0.0.1`.
+    - Blocks execution if database name does not contain `'demo'`.
+    - Blocks execution if `'demo'` is present only in username, password, or host, but not in database name.
+    - Blocks execution if `DEMO_PASSWORD` is shorter than the real system password policy length (`10` characters, derived from `SystemSetting` key `auth.minPasswordLength` and `apps/api/src/routes/auth.ts:179`).
+    - Guard error messages strictly omit database URLs, usernames, passwords, and hostnames to guarantee zero secret leakage.
+  - Built pure helper validators in `demoGuard.ts`:
+    - Kathmandu date offset calculations across timezone midnight boundaries (`getKathmanduToday`, `getKathmanduOffsetDate`).
+    - Planned time log validator (`validatePlannedTimeLogs`) enforcing Kathmandu `[-90, +1] days` window and $\le 24$h daily total cap per user.
+    - Planned task dependency graph cycle detector (`validateDependencyGraph`) preventing self-dependencies and cyclic dependencies.
+    - Pure deletion order validator (`validateDeletionOrder`) confirming every child entity precedes its parent in the 18-step deletion order `DEMO_DELETION_ORDER`.
+  - Built pure demo data definitions (`apps/api/scripts/demoDataDefs.ts`):
+    - 6 role-aligned demo personas (`demo_admin`, `demo_hr`, `demo_pm`, `demo_dev`, `demo_designer`, `demo_viewer`) with employee profiles, employee codes (`DEMO-ADM` through `DEMO-VW`), departments, standard shifts (8h/day, 5d/week), and availability statuses.
+    - All demo users configured with login invariants: `isActive: true`, `mustChangePassword: false`, `failedLoginCount: 0`, and `lockedUntil: null` to allow direct login without forced password change.
+    - 3 demo work roles prefixed with `[DEMO] `: `[DEMO] Full Stack Engineering`, `[DEMO] UI/UX Design`, `[DEMO] Project Coordination`.
+    - 4 demo projects prefixed with `[DEMO] `:
+      - `[DEMO] Nepal Disaster Relief Portal` (`on_track`) with Devanagari text (`नेपाल विपद् व्यवस्थापन पोर्टल`) and raw hostile text.
+      - `[DEMO] Valley Transit App` (`at_risk`) with `ProjectStatusEvent` record explaining bus syndicate GPS telemetry latency.
+      - `[DEMO] Heritage Preservation Archive` (`complete`) with `ProjectStatusEvent` record for archaeological photogrammetry sign-off.
+      - `[DEMO] Solar Grid Micro-Management` (`on_hold`) with `ProjectStatusEvent` record for AEPC regulatory clearance.
+    - Hostile test strings stored RAW:
+      - `DEMO_HOSTILE_TITLE_200`: Exactly 200 characters containing raw unescaped `<script>alert(1)</script>` and `<b>bold</b>`.
+      - `generateHostileMarkdown5000()`: Structured markdown document $\ge 5000$ characters containing tables, checklists, JSON payloads, and Devanagari Unicode.
+    - "Former member" scenario: `demo_dev` added to `[DEMO] Nepal Disaster Relief Portal`, created tasks, comments, messages, and time logs, then `ProjectMember` row deleted within the transaction to verify historical contribution retention for revoked members.
+    - 4 `WorkLogEntry` records linked to demo projects and tasks (`projectId` and `taskId` populated for valid members).
+  - Built CLI scripts in `apps/api/scripts/`:
+    - `demoSeed.ts`: Guard-validated, verifies no demo records exist, pre-hashes passwords with Argon2id prior to transaction opening, creates all records inside an atomic Prisma transaction with 120s timeout, and writes non-sensitive summary counts and UUIDs to `.demo-manifest.txt`.
+    - `demoRemove.ts`: Guard-validated, deletes all demo records in strict 18-step reverse order inside an atomic Prisma transaction, and cleans up `.demo-manifest.txt`.
+    - `demoStatus.ts`: Guard-validated, queries and displays active demo entity counts per table without logging secrets or IDs.
+  - Added npm scripts to `apps/api/package.json`: `"demo:seed"`, `"demo:remove"`, `"demo:status"`.
+  - Added `.demo-manifest.txt` and `apps/api/.demo-manifest.txt` to `.gitignore` and verified with `git check-ignore -v`.
+  - Authored documentation in `apps/api/scripts/README.md` providing credential-safe PowerShell setup commands using regex extraction without printing passwords or URLs.
+  - Authored comprehensive Vitest test suite in `apps/api/src/__tests__/demoData.test.ts` (27 tests covering guard conditions, date offsets, time log caps, dependency DAGs, deletion order integrity, hostile text length boundaries, and model specifications).
+  - Confirmed `npm run build -w @imac/api` succeeds cleanly: `dist` contains no executable demo runner scripts (`demoSeed`, `demoRemove`, `demoStatus` are completely absent); only imported pure helpers (`demoGuard`, `demoDataDefs`) were emitted, and `dist` remains completely untracked by git.
+  - Updated `docs/HAND-TEST-BACKLOG.md` with Demo Accounts table and 6 manual test procedures marked `NOT RUN` with roles and forbidden actions.
+  - Updated `docs/PROGRESS.md` with full milestone specifications.
+- **Files created or changed**:
+  - `.gitignore` (modified)
+  - `apps/api/package.json` (modified)
+  - `apps/api/scripts/demoGuard.ts` (created)
+  - `apps/api/scripts/demoDataDefs.ts` (created)
+  - `apps/api/scripts/demoSeed.ts` (created)
+  - `apps/api/scripts/demoRemove.ts` (created)
+  - `apps/api/scripts/demoStatus.ts` (created)
+  - `apps/api/scripts/README.md` (created)
+  - `apps/api/src/__tests__/demoData.test.ts` (created)
+  - `docs/HAND-TEST-BACKLOG.md` (modified)
+  - `docs/PROGRESS.md` (modified)
+  - `finalreport.md` (modified)
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 736 passed (0 failed) — +27 new tests.
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,018 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Hard safety invariants strictly respected; no database connections made; no docker commands executed; no connection strings or passwords logged; no production code modified; no commits created.
+
+---
+
+### Task Demo-03: Deletion Order Rebuild, Schema Parser Strengthening, Boundary Lengths & Membership Verification
+- **Date**: 2026-11-16
+- **Day of week**: Monday
+- **Start time**: 09:35
+- **End time**: 09:47
+- **Step**: Dev-Only Demo Data Tooling for apps/api (Safety & Schema Integrity Hardening)
+- **Task performed**:
+  - Rebuilt `DEMO_DELETION_ORDER` strictly from `schema.prisma`:
+    - Removed `SystemSetting` and `WorkRole` (neither has a foreign key to a demo-owned model; `WorkRole` references nothing; `SystemSetting` has no foreign keys).
+    - Included `AvailabilityStatus` with foreign key to `User`.
+    - Corrected model and relation names to real Prisma entities: `EmployeeWorkRole` (not `EmployeeRoleAssignment`) and `WorkLogDay` referencing `EmployeeProfile`.
+    - Documented all 16 models in `schema.prisma` with foreign keys to `User` (directly or through another listed model), showing their exact positions in `DEMO_DELETION_ORDER`.
+  - Strengthened schema-parser test in `apps/api/src/__tests__/demoData.test.ts`:
+    - Fails if any name in `DEMO_DELETION_ORDER` is not an active model in `schema.prisma`.
+    - Fails if any model in `schema.prisma` with a required foreign key to a listed model is missing from `DEMO_DELETION_ORDER`.
+    - Verified and printed all 29 relation pairs in `schema.prisma`, asserting that all children precede parents when both are listed.
+  - Adjusted hostile markdown generator `generateHostileMarkdown5000()` to yield exactly 4,990 characters (at most 5,000, in range [4990, 5000]). Added explicit tests asserting long title is exactly 200 characters and long description is 4,990 to 5,000 characters.
+  - Confirmed project roles across all demo definitions strictly match Prisma enum `ProjectRole` (`manager`, `member`, `viewer`), eliminating "contributor".
+  - Audited and updated the 4 linked `WorkLogEntry` items in `demoDataDefs.ts` so every owner is a current member of the linked project:
+    - Entry 1: `demo_dev` (-3d) -> `[DEMO] Valley Transit App` / `transit-1` (current member: YES)
+    - Entry 2: `demo_dev` (-3d) -> `[DEMO] Valley Transit App` / `transit-2` (current member: YES)
+    - Entry 3: `demo_dev` (-2d) -> `[DEMO] Solar Grid Micro-Management` / `solar-1` (current member: YES)
+    - Entry 4: `demo_designer` (-1d) -> `[DEMO] Nepal Disaster Relief Portal` / `disaster-due-today` (current member: YES)
+  - Verified `demo:remove` deletes strictly demo-scoped rows across all 18 deletion operations using explicit `where` clauses targeting demo IDs only.
+- **Files created or changed**:
+  - `apps/api/scripts/demoGuard.ts`
+  - `apps/api/scripts/demoDataDefs.ts`
+  - `apps/api/src/__tests__/demoData.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 746 passed (0 failed) — +37 demo suite tests.
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,028 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Zero database calls, zero docker executions, zero connection strings or passwords logged, zero git commits.
+
+
+
+---
+
+### Task Demo-02: Demo Data High-Volume Expansion, Prisma Deletion-Order Test & Build Isolation
+- **Date**: 2026-11-16
+- **Day of week**: Monday
+- **Start time**: 09:10
+- **End time**: 09:27
+- **Step**: Dev-Only Demo Data Tooling for apps/api (High-Volume & Integrity Verification)
+- **Task performed**:
+  - Expanded demo dataset volume in `apps/api/scripts/demoDataDefs.ts` to satisfy full UI pagination and audit requirements:
+    - Project 1 (`[DEMO] Nepal Disaster Relief Portal`): expanded to 59 tasks (exceeding >= 55) and 56 messages (exceeding >= 55) to test 50-item pagination ("Load more").
+    - Across all demo projects: 66 tasks total, 64 messages total (with 2 pinned messages).
+    - Fixed task categorization table: confirmed done tasks are not marked overdue (`disaster-1` is `done`); created real overdue incomplete tasks at -30d (`disaster-overdue-30`, `todo`), -7d (`disaster-overdue-7`, `blocked`), and -1d (`disaster-overdue-1`, `in_progress`).
+    - Added due today task (`disaster-due-today`, `in_progress`), due tomorrow task (`disaster-due-tomorrow`, `in_progress`), no due date task (`disaster-nodate-1`, `todo`), member-created task (`disaster-member-created`, creator: `demo_designer`), subtasks, chain of three dependencies, and open prerequisite dependency.
+    - Expanded time logs to 14 consecutive days (offsets -13 to 0) for `demo_dev`, `demo_designer`, and `demo_pm` in 0.25h steps respecting 24h daily cap and Kathmandu [-90, +1] window, including near-24h day (23.0h total) for `demo_dev` on offset -1.
+    - Expanded work logs to exactly 10 days each for `demo_dev` and `demo_designer` across `approved`, `submitted`, `rejected` (with `rejectionReason`), and `draft` statuses, with 4 linked entries.
+    - Updated `apps/api/scripts/demoSeed.ts` to handle `rejectionReason` on `workLogDay` and `completedAt` on `milestone`.
+  - Configured `apps/api/tsconfig.build.json` excluding `scripts/` and `src/__tests__/` from API production build (`npm run build -w @imac/api`), ensuring zero demo scripts or definitions are emitted into `apps/api/dist/`. Confirmed `(Get-ChildItem -Recurse apps\api\dist -Filter '*demo*').Count` is 0.
+  - Included `scripts` in `apps/api/tsconfig.json` so `npm run typecheck` validates `src/`, `prisma/`, and `scripts/`.
+  - Added programmatic `schema.prisma` parser test in `apps/api/src/__tests__/demoData.test.ts` reading relations from the real schema file and verifying every child entity in `DEMO_DELETION_ORDER` precedes its parent.
+  - Added test for empty / malformed database URL in `demoGuard.test.ts`. Total tests in `demoData.test.ts` increased from 27 to 35.
+- **Files created or changed**:
+  - `apps/api/package.json`
+  - `apps/api/tsconfig.json`
+  - `apps/api/tsconfig.build.json`
+  - `apps/api/scripts/demoDataDefs.ts`
+  - `apps/api/scripts/demoSeed.ts`
+  - `apps/api/src/__tests__/demoData.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 744 passed (0 failed) — +35 demo suite tests (+8 new tests in this pass).
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,026 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Hard safety invariants strictly respected; no database connections made; no docker commands executed; no connection strings or passwords logged; no production code modified; no commits created.
+
+---
+
+### Task Demo-03: Deletion Order Rebuild, Schema Parser Strengthening, Boundary Lengths & Membership Verification
+- **Date**: 2026-11-16
+- **Day of week**: Monday
+- **Start time**: 09:35
+- **End time**: 09:47
+- **Step**: Dev-Only Demo Data Tooling for apps/api (Safety & Schema Integrity Hardening)
+- **Task performed**:
+  - Rebuilt `DEMO_DELETION_ORDER` strictly from `schema.prisma`:
+    - Removed `SystemSetting` and `WorkRole` (neither has a foreign key to a demo-owned model; `WorkRole` references nothing; `SystemSetting` has no foreign keys).
+    - Included `AvailabilityStatus` with foreign key to `User`.
+    - Corrected model and relation names to real Prisma entities: `EmployeeWorkRole` (not `EmployeeRoleAssignment`) and `WorkLogDay` referencing `EmployeeProfile`.
+    - Documented all 16 models in `schema.prisma` with foreign keys to `User` (directly or through another listed model), showing their exact positions in `DEMO_DELETION_ORDER`.
+  - Strengthened schema-parser test in `apps/api/src/__tests__/demoData.test.ts`:
+    - Fails if any name in `DEMO_DELETION_ORDER` is not an active model in `schema.prisma`.
+    - Fails if any model in `schema.prisma` with a required foreign key to a listed model is missing from `DEMO_DELETION_ORDER`.
+    - Verified and printed all 29 relation pairs in `schema.prisma`, asserting that all children precede parents when both are listed.
+  - Adjusted hostile markdown generator `generateHostileMarkdown5000()` to yield exactly 4,990 characters (at most 5,000, in range [4990, 5000]). Added explicit tests asserting long title is exactly 200 characters and long description is 4,990 to 5,000 characters.
+  - Confirmed project roles across all demo definitions strictly match Prisma enum `ProjectRole` (`manager`, `member`, `viewer`), eliminating "contributor".
+  - Audited and updated the 4 linked `WorkLogEntry` items in `demoDataDefs.ts` so every owner is a current member of the linked project:
+    - Entry 1: `demo_dev` (-3d) -> `[DEMO] Valley Transit App` / `transit-1` (current member: YES)
+    - Entry 2: `demo_dev` (-3d) -> `[DEMO] Valley Transit App` / `transit-2` (current member: YES)
+    - Entry 3: `demo_dev` (-2d) -> `[DEMO] Solar Grid Micro-Management` / `solar-1` (current member: YES)
+    - Entry 4: `demo_designer` (-1d) -> `[DEMO] Nepal Disaster Relief Portal` / `disaster-due-today` (current member: YES)
+  - Verified `demo:remove` deletes strictly demo-scoped rows across all 18 deletion operations using explicit `where` clauses targeting demo IDs only.
+- **Files created or changed**:
+  - `apps/api/scripts/demoGuard.ts`
+  - `apps/api/scripts/demoDataDefs.ts`
+  - `apps/api/src/__tests__/demoData.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 746 passed (0 failed) — +37 demo suite tests.
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,028 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Zero database calls, zero docker executions, zero connection strings or passwords logged, zero git commits.
+
+
+
+---
+
+### Task Demo-04: Falsy Offset Fix, Work Log Validation, Deletion Order & Guard Tightening
+- **Date**: 2026-11-16
+- **Day of week**: Monday
+- **Start time**: 14:45
+- **End time**: 15:05
+- **Step**: Dev-Only Demo Data Tooling for apps/api (Safety, Bug Fixes & Guard Hardening)
+- **Task performed**:
+  - **Falsy Coercion Bug Fix**: Fixed bug in `demoSeed.ts` where `dueDateOffsetDays ? ... : null` coerced offset `0` (due today) to `null`. Added pure helper `resolveOffsetDate(offsetDays, clockDate)` with explicit `!= null` checks, and audited all other numeric property accesses in `demoDataDefs.ts` and `demoSeed.ts` (`estimatedHours` now checks `!= null`). Added unit tests for `resolveOffsetDate` covering offsets `-30, -1, 0, +1, +30`, `undefined`, and `null`.
+  - **Global Time Log & Planned Work Log Validation**:
+    - Pre-validated aggregated time logs across all projects for the global 24-hour cap per user per day before beginning transaction, matching Kathmandu `[-90, +1]` window and 0.25h steps.
+    - Implemented pure validator `validatePlannedWorkLogs(workLogs, roles, projects)` in `demoGuard.ts` enforcing: (1) max 1 day per user per date, (2) total entry hours $\le 24$ per day, (3) assigned work roles only for the user, and (4) valid project and task links where the user is an active member after former-member revocation. Added unit tests for valid configurations and failing cases for each rule.
+  - **Deletion Order & demoRemove.ts Exact Alignment**:
+    - Aligned `demoRemove.ts` and `DEMO_DELETION_ORDER` to the exact same 18-model list, placing `WorkRole` at index 3 (deleted by `name: { startsWith: '[DEMO] ' }` directly following dependent models `WorkLogEntry` and `EmployeeWorkRole`).
+    - Added automated test reading `demoRemove.ts` source code and asserting that the exact sequence of `tx.<model>.deleteMany` calls matches `DEMO_DELETION_ORDER`.
+    - Executed Prisma schema FK test confirming all 29 schema relations satisfy child-before-parent ordering.
+  - **demoGuard Boundary Hardening**:
+    - Enforced exact database name `imac_demo` (`pathname === 'imac_demo'`), rejecting names containing `demo` as a substring (e.g., `imac_demo_test`).
+    - Refused database URLs containing query parameters that redirect target host: `host`, `hostaddr`, or `socket`.
+    - Allowed missing port and non-5432 numeric ports; refused non-numeric ports.
+    - Added `{ requirePassword: false }` option to `validateDemoEnvironment` so `demo:remove` and `demo:status` execute without requiring `DEMO_PASSWORD`. Added unit tests for all refusal and acceptance rules.
+  - **Sanitized Error Output**:
+    - Updated catch blocks across `demoSeed.ts`, `demoRemove.ts`, and `demoStatus.ts` to output formatted `${name}${code}: ${message}` strings, preventing raw error dump leaks.
+  - **Schema & Datasource Invariant Verification**:
+    - Verified `apps/api/prisma/schema.prisma` datasource block contains only standard PostgreSQL provider with `url = env("DATABASE_URL")` with zero shadow/direct database variables.
+- **Files created or changed**:
+  - `apps/api/scripts/demoGuard.ts`
+  - `apps/api/scripts/demoSeed.ts`
+  - `apps/api/scripts/demoRemove.ts`
+  - `apps/api/scripts/demoStatus.ts`
+  - `apps/api/src/__tests__/demoData.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 760 passed (0 failed) — +51 demo suite tests (+14 new tests in this pass). Strictly above 746 requirement.
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,042 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Zero database calls, zero docker executions, zero connection strings or passwords logged, zero git commits.
+
+
+---
+
+### Task Demo-05: Unified Demo Lookup, Strict URL Decoding, Offset Date Consistency & Full Seed Validation
+- **Date**: 2026-11-16
+- **Day of week**: Monday
+- **Start time**: 15:25
+- **End time**: 15:35
+- **Step**: Dev-Only Demo Data Tooling for apps/api (Unified Lookup & End-to-End Validation)
+- **Task performed**:
+  - **Unified Demo Record Lookup & Task Equality**:
+    - Created `apps/api/scripts/demoLookup.ts` exporting shared function `findDemoRecordIds(client: DemoLookupClient)` and re-exported it from `demoGuard.ts`.
+    - Both `demoStatus.ts` and `demoRemove.ts` now call this single shared function, ensuring demo tasks are identified identically across both scripts:
+      - Tasks belonging to demo projects (`projectId in demoProjectIds`)
+      - Tasks created by demo users (`createdByUserId in demoUserIds`)
+      - Tasks assigned to demo users (`assigneeUserId in demoUserIds`)
+    - Added unit test simulating database state and verifying that `demoStatus.ts` task counts strictly equal the number of tasks deleted by `demoRemove.ts` (including tasks assigned to a demo user on a non-demo project).
+  - **Guard Hardening (URL-Decoding & Whitespace Protection)**:
+    - Added check refusing `DATABASE_URL` with leading or trailing whitespace.
+    - Decoded pathname using `decodeURIComponent` before comparison, ensuring database name is strictly lowercase `imac_demo` without whitespace or encoded spaces.
+    - Added unit tests verifying refusals for:
+      - `DATABASE_URL` with trailing space in URL string
+      - `DATABASE_URL` with `%20` (e.g. `/imac_demo%20`)
+      - Empty `ALLOW_DEMO_DATA` (`''`)
+      - Uppercase database name `"IMAC_DEMO"`
+  - **Offset Date Consistency**:
+    - Aligned `resolveOffsetDate` return type and implementation to return a `Date` object explicitly at UTC midnight for the Kathmandu calendar date (`new Date(Date.UTC(year, month - 1, day))`), or `null` if offset is `undefined`/`null`.
+    - Audited and documented all call sites in `demoSeed.ts` (lines 286 and 314 for root task and subtask `dueDate`).
+    - Added unit tests asserting that returned dates for offsets `-30, -1, 0, +1, +30` have `getUTCHours() === 0` and exact ISO `YYYY-MM-DDT00:00:00.000Z` formatting matching the Kathmandu date.
+  - **End-to-End Full Seed Validation Test**:
+    - Added comprehensive test in `apps/api/src/__tests__/demoData.test.ts` that builds the full real seed definitions and runs them through every validator:
+      - Time logs from all projects aggregated together checked via `validatePlannedTimeLogs`
+      - Planned work logs checked via `validatePlannedWorkLogs`
+      - Dependency graphs across all projects checked via `validateDependencyGraph`
+      - Hostile title length checked for exactly 200 characters
+      - Hostile description length checked for range [4990, 5000]
+      - Project member roles checked against real Prisma `ProjectRole` enum
+- **Files created or changed**:
+  - `apps/api/scripts/demoLookup.ts`
+  - `apps/api/scripts/demoGuard.ts`
+  - `apps/api/scripts/demoDataDefs.ts`
+  - `apps/api/scripts/demoRemove.ts`
+  - `apps/api/scripts/demoStatus.ts`
+  - `apps/api/src/__tests__/demoData.test.ts`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 18 test files, 766 passed (0 failed) — +57 demo suite tests. Strictly above 760 requirement.
+  - `apps/web`: 14 test files, 282 passed (0 failed).
+  - Total: 32 test files, 1,048 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Hard safety invariants strictly respected; no database connections made; no docker commands executed; no connection strings or passwords logged; no production code modified; no commits created.

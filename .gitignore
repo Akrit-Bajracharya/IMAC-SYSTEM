@@ -7,3 +7,5 @@ coverage/
 .DS_Store
 uploads/
 *.tsbuildinfo
+.demo-manifest.txt
+apps/api/.demo-manifest.txt

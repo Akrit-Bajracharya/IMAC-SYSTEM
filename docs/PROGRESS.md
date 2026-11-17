@@ -1252,3 +1252,61 @@ Across all APIs in the IMAC Operations System:
   - Added two explicit midnight boundary tests to `apps/api/src/__tests__/timeLogs.test.ts` proving Asia/Kathmandu timezone (+05:45) is enforced rather than UTC (18:14 UTC evaluates as Nov 13; 18:15 UTC evaluates as Nov 14).
   - Executed 120-day forward time-travel verification using external setup configuration in `$env:TEMP`; confirmed 0 date-related regressions.
 - **Verification**: All 991 automated tests passing (apps/api: 709, apps/web: 282), 0 lint/typecheck errors.
+
+---
+
+## Current Milestone: Dev-Only Demo Data Tooling (apps/api) — COMPLETED
+
+### 1. What Was Built
+- **Environment & Safety Guard (`apps/api/scripts/demoGuard.ts`)**:
+  - Pure function `validateDemoEnvironment(env)` enforcing hard safety boundaries:
+    - Rejection if `NODE_ENV === 'production'`.
+    - Rejection if `ALLOW_DEMO_DATA !== 'yes'`.
+    - Rejection if database host is not `localhost` or `127.0.0.1`.
+    - Rejection if database name in `DATABASE_URL` does not contain `'demo'`.
+    - Rejection if `demo` appears only in username, password, or host, but not in the database name.
+    - Rejection if `DEMO_PASSWORD` is shorter than real system password policy length (`MIN_PASSWORD_LENGTH = 10`, matching `SystemSetting` key `auth.minPasswordLength` and `apps/api/src/routes/auth.ts:179`).
+    - **Security Invariant**: Never prints or leaks database URLs, usernames, passwords, or credentials in refusal error messages.
+  - Pure Kathmandu date helpers: `getKathmanduToday` and `getKathmanduOffsetDate` resolving across timezone boundaries.
+  - Pure planned time log validator `validatePlannedTimeLogs` verifying Kathmandu submission window (`[-90, +1] days`) and daily $\le 24$h user total cap.
+  - Pure dependency graph cycle detector `validateDependencyGraph` ensuring directed acyclic graphs without self-dependencies or cycles.
+  - Defined canonical 18-step reverse child-to-parent deletion order `DEMO_DELETION_ORDER` with pure validator `validateDeletionOrder` confirming every child entity precedes its parent.
+- **Pure Data Definitions (`apps/api/scripts/demoDataDefs.ts`)**:
+  - 6 role-aligned demo personas:
+    - `demo_admin` (`system_admin`, `DEMO-ADM`)
+    - `demo_hr` (`hr_admin`, `DEMO-HR`)
+    - `demo_pm` (`project_manager`, `DEMO-PM`)
+    - `demo_dev` (`employee`, `DEMO-DEV`)
+    - `demo_designer` (`employee`, `DEMO-DES`)
+    - `demo_viewer` (`viewer`, `DEMO-VW`)
+    - All configured with login invariants: `isActive: true`, `mustChangePassword: false`, `failedLoginCount: 0`, `lockedUntil: null`.
+  - 3 demo work roles prefixed with `[DEMO] `: `[DEMO] Full Stack Engineering`, `[DEMO] UI/UX Design`, `[DEMO] Project Coordination`.
+  - 4 realistic demo projects prefixed with `[DEMO] `:
+    - `[DEMO] Nepal Disaster Relief Portal` (`on_track`) with Devanagari text (`नेपाल विपद् व्यवस्थापन पोर्टल`) and raw hostile test text (`<script>alert(1)</script>`, `<b>bold</b>`).
+    - `[DEMO] Valley Transit App` (`at_risk`) with `ProjectStatusEvent` record explaining transit syndicate GPS latency.
+    - `[DEMO] Heritage Preservation Archive` (`complete`) with `ProjectStatusEvent` record for archaeological catalog completion.
+    - `[DEMO] Solar Grid Micro-Management` (`on_hold`) with `ProjectStatusEvent` record for AEPC regulatory clearance.
+  - Hostile test strings stored strictly RAW:
+    - `DEMO_HOSTILE_TITLE_200`: Exactly 200 characters containing raw `<script>alert(1)</script>` and `<b>bold</b>`.
+    - `generateHostileMarkdown5000()`: Structured markdown document $\ge 5000$ characters containing tables, checklists, JSON payloads, and Devanagari Unicode.
+  - Former member scenario: `demo_dev` added as project member on Disaster Relief Portal, creates tasks, comments, messages, and time logs, then membership row is deleted within transaction to test historical contribution retention for revoked members.
+  - 4 WorkLogEntry rows linked to demo projects and tasks (`projectId` and `taskId` populated for valid members).
+- **Seed, Remove, and Status CLI Scripts (`apps/api/scripts/`)**:
+  - `demoSeed.ts`: Guard-validated, pre-checks that no demo data exists, pre-hashes passwords with Argon2id before transaction, writes all records in a single atomic transaction with 120-second timeout, outputs summary counts and IDs (no secrets) to `.demo-manifest.txt`.
+  - `demoRemove.ts`: Guard-validated, deletes demo records in strict 18-step reverse order inside a single transaction, removes manifest.
+  - `demoStatus.ts`: Guard-validated, reports counts of active demo records per entity type without leaking secrets or IDs.
+  - Added npm scripts to `apps/api/package.json`: `demo:seed`, `demo:remove`, `demo:status`.
+  - Added documentation in `apps/api/scripts/README.md` using credential-safe PowerShell pattern.
+  - Added `.demo-manifest.txt` to `.gitignore`.
+- **Automated Test Suite (`apps/api/src/__tests__/demoData.test.ts`)**:
+  - 57 comprehensive tests verifying guard refusal rules (including empty/malformed URLs, host query param redirects, port validations, exact `imac_demo` matching with decoded URL and whitespace rejection, and `requirePassword: false`), Kathmandu date offsets (`resolveOffsetDate` returning UTC midnight Date), shared demo record lookups with task count equality in mocked runs, time log daily 24h cap across all projects, work log validator rules (`validatePlannedWorkLogs`), dependency DAGs, deletion order code extraction against `demoRemove.ts`, schema foreign key relation parser (29 relation pairs), boundary lengths (200-char title, 4990-char description), linked entry current membership, and model specifications.
+
+### 2. Verification Results
+- `npm run test`: 32 test files passed, **1,048 total tests passed (0 failures)**:
+  - `apps/api`: 18 test files, **766 passed** (well above 760 requirement; +57 demo suite tests).
+  - `apps/web`: 14 test files, **282 passed**.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run typecheck`: clean across `@imac/api`, `@imac/web`, `@imac/shared`, **0 errors**.
+- `npm run build -w @imac/api`: compiled clean with `tsc -p tsconfig.build.json`. Confirmed 0 demo files in `dist` (`scripts/` and `src/__tests__/` excluded). Zero git tracking of `dist`.
+
+
