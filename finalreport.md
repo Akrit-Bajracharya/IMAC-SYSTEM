@@ -2052,3 +2052,41 @@ Documented in `docs/open-policy-questions.md`:
   - Typecheck: clean across all workspaces (0 errors).
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created.
+
+---
+
+### Task Step-09a-Review: Fix TaskPicker Hook Crash & Project Change Reset
+- **Date**: 2026-11-19
+- **Day of week**: Thursday
+- **Start time**: 09:41:10 +05:45
+- **End time**: 09:49:30 +05:45
+- **Step**: Step 09a Review: Fix TaskPicker Hook Crash & Project Change Reset (apps/web only)
+- **Task performed**:
+  - **Hook Ordering Repair (`TaskPicker` in `ProjectTaskPicker.tsx`)**:
+    - Hoisted `useQuery` unconditionally right after `useTranslation()`, eliminating the "Rendered more hooks than during the previous render" crash when switching from "No project" to a chosen project.
+    - Pre-computed `hasChosenProject = Boolean(projectId && isValidUuid(projectId))` before the hook call, passing it to `enabled: hasChosenProject`.
+    - Included `projectId` in the query key: `['projectTasks', projectId]`.
+    - Positioned all early returns (`isLegacyText(taskId)`, `!hasChosenProject`, and `isReadOnly`) strictly after the hook invocation.
+  - **Hooks Audit across `apps/web/src`**:
+    - Checked `ProjectPicker` and `DailyWorkLogPage.tsx`: confirmed all hooks are called unconditionally at the top of components before any early returns.
+    - AST-scanned all files across `apps/web/src` for hooks inside branches or following early returns: confirmed clean, noting pre-existing defensive check in `WorkLogSettingsPage.tsx` (left untouched per task scope).
+  - **Project Change Reset & Pure Helper**:
+    - Introduced pure helper `applyProjectChangeToRow` in `apps/web/src/lib/dailyWorkLogHelpers.ts` which sets `projectId` and enforces invariant `taskId = ''`.
+    - Wired `DailyWorkLogPage.tsx` desktop table and mobile card `ProjectPicker.onChangeProject` to use `handleProjectChange`, which invokes `applyProjectChangeToRow`.
+    - Added 5 unit tests for `applyProjectChangeToRow` in `apps/web/src/lib/__tests__/dailyWorkLogHelpers.test.ts`.
+  - **Backlog Documentation**:
+    - Added `TEST-09A-11` marked `NOT RUN` to `docs/HAND-TEST-BACKLOG.md` detailing the manual test steps and invariants for project selection dynamic hook stability and task reset.
+- **Files created or changed**:
+  - `apps/web/src/components/workLogs/ProjectTaskPicker.tsx`
+  - `apps/web/src/pages/workLogs/DailyWorkLogPage.tsx`
+  - `apps/web/src/lib/dailyWorkLogHelpers.ts`
+  - `apps/web/src/lib/__tests__/dailyWorkLogHelpers.test.ts`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/web`: 15 test files, 317 passed (0 failed) — +5 new unit tests in `dailyWorkLogHelpers.test.ts`.
+  - Monorepo: 33 test files, 1,096 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created. Vitest in `apps/web` does not mount DOM/components, so runtime component hook stability is covered via manual test scenario `TEST-09A-11`.

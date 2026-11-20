@@ -154,6 +154,26 @@ Each test is specified in plain language with:
     - *Expected Result*: Displays localized *"You do not have permission to modify this work log."*
     - *Negative Invariants*: Must **NOT** crash or show raw key `forbidden`.
 
+### TEST-09A-11: Project Selection Hook Stability & Task Reset (Crash Fix Verification)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev` or any employee with active project membership)
+- **Test Steps**:
+  1. Log in as an employee with active project memberships (e.g. `demo_dev`).
+  2. Navigate to Daily Work Log (`/employee/work-logs`).
+  3. Ensure a row is present with "No project" selected (default initial state).
+  4. In the Project dropdown, select an assigned project (e.g. `[DEMO] Nepal Disaster Relief Portal`).
+  5. Verify the Task dropdown appears dynamically without crashing or throwing a React error boundary.
+  6. Select a task from the Task dropdown.
+  7. Change the Project dropdown to another project (e.g. `[DEMO] Valley Transit App`) or back to "No project".
+  8. Repeat the same test in a mobile viewport (375px width) in the card view.
+- **Expected Result**:
+  - Selecting a project runs smoothly without the React crash `"Rendered more hooks than during the previous render"`.
+  - The Task dropdown loads tasks for the newly selected project via TanStack Query.
+  - When switching projects or returning to "No project", the task selection is immediately reset to empty (`taskId = ''`) across both desktop and mobile views.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** crash with `"Rendered more hooks than during the previous render"` or trigger a white screen of death.
+  - Must **NOT** retain a task ID from a previously selected project when a new project is chosen.
+
 ---
 
 ## 2. Step 12a: Project Screens & Navigation (`apps/web`)

@@ -47,6 +47,7 @@ import {
   resolveWorkLogError,
   hasUserTypedRows,
   isLegacyText,
+  applyProjectChangeToRow,
   type WorkLogEntryRow,
 } from '../../lib/dailyWorkLogHelpers.js';
 import type { ProjectListItem } from '../../types/index.js';
@@ -262,6 +263,13 @@ export function DailyWorkLogPage() {
     if (isReadOnly) return;
     setEntries((prev) =>
       prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleProjectChange = (index: number, newProjectId: string) => {
+    if (isReadOnly) return;
+    setEntries((prev) =>
+      prev.map((row, i) => (i === index ? applyProjectChangeToRow(row, newProjectId) : row))
     );
   };
 
@@ -699,11 +707,9 @@ export function DailyWorkLogPage() {
                             memberProjects={memberProjects}
                             isReadOnly={isReadOnly}
                             isSaving={isSaving}
-                            onChangeProject={(newProjectId) => {
-                              handleFieldChange(idx, 'projectId', newProjectId);
-                              // Requirement 1c: resets when the project changes
-                              handleFieldChange(idx, 'taskId', '');
-                            }}
+                            onChangeProject={(newProjectId) =>
+                              handleProjectChange(idx, newProjectId)
+                            }
                           />
                         </td>
                       )}
@@ -821,11 +827,9 @@ export function DailyWorkLogPage() {
                           memberProjects={memberProjects}
                           isReadOnly={isReadOnly}
                           isSaving={isSaving}
-                          onChangeProject={(newProjectId) => {
-                            handleFieldChange(idx, 'projectId', newProjectId);
-                            // Requirement 1c: resets when the project changes
-                            handleFieldChange(idx, 'taskId', '');
-                          }}
+                          onChangeProject={(newProjectId) =>
+                            handleProjectChange(idx, newProjectId)
+                          }
                         />
                       </div>
                       {(Boolean(entry.projectId) || isLegacyText(entry.taskId)) && (

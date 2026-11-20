@@ -112,7 +112,18 @@ export function TaskPicker({
 }: TaskPickerProps) {
   const { t } = useTranslation();
 
-  // If saved taskId is legacy free text
+  const hasChosenProject = Boolean(projectId && isValidUuid(projectId));
+
+  // Fetch tasks for chosen project (cached/deduplicated across rows by TanStack Query).
+  // Runs unconditionally right after useTranslation() so the hook call order is stable.
+  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery({
+    queryKey: ['projectTasks', projectId],
+    queryFn: () => fetchAllTasksForProject(projectId),
+    enabled: hasChosenProject,
+    staleTime: 60 * 1000,
+  });
+
+  // 1. If saved taskId is legacy free text
   if (isLegacyText(taskId)) {
     return (
       <div className="flex flex-col gap-0.5 py-1">
@@ -137,21 +148,12 @@ export function TaskPicker({
     );
   }
 
-  const hasChosenProject = Boolean(projectId && isValidUuid(projectId));
-
-  // Requirement 1c: The Task picker appears only after a project is chosen
+  // 2. Requirement 1c: The Task picker appears only after a project is chosen
   if (!hasChosenProject) {
     return null;
   }
 
-  // Fetch tasks for chosen project (cached/deduplicated across rows by TanStack Query)
-  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery({
-    queryKey: ['projectTasks', projectId],
-    queryFn: () => fetchAllTasksForProject(projectId),
-    enabled: hasChosenProject,
-    staleTime: 60 * 1000,
-  });
-
+  // 3. Read-only mode
   if (isReadOnly) {
     const taskTitle = tasks.find((tk) => tk.id === taskId)?.title;
     return (
@@ -161,6 +163,7 @@ export function TaskPicker({
     );
   }
 
+  // 4. Interactive Task Select with "No task" option
   return (
     <Select
       value={taskId}

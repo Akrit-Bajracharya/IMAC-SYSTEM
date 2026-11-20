@@ -7,6 +7,7 @@ import {
   hasUserTypedRows,
   buildWorkLogEntriesPayload,
   resolveWorkLogError,
+  applyProjectChangeToRow,
   type ProjectWithMembers,
   type WorkLogEntryRow,
 } from '../dailyWorkLogHelpers.js';
@@ -449,6 +450,93 @@ describe('dailyWorkLogHelpers', () => {
         { workRoleId: roleUuid, hours: '', description: '', projectId: validUuid1, taskId: '' },
       ];
       expect(hasUserTypedRows(withProject)).toBe(true);
+    });
+  });
+
+  describe('6. Apply project change to row (applyProjectChangeToRow)', () => {
+    it('sets new projectId and resets taskId to empty string when selecting a project', () => {
+      const initialRow: WorkLogEntryRow = {
+        workRoleId: roleUuid,
+        hours: 4,
+        description: 'Frontend work',
+        projectId: '',
+        taskId: '',
+      };
+
+      const updated = applyProjectChangeToRow(initialRow, validUuid1);
+      expect(updated.projectId).toBe(validUuid1);
+      expect(updated.taskId).toBe('');
+      expect(updated.workRoleId).toBe(roleUuid);
+      expect(updated.hours).toBe(4);
+      expect(updated.description).toBe('Frontend work');
+    });
+
+    it('ALWAYS resets taskId to empty string when switching from one project to another with existing taskId', () => {
+      const taskUuid = 'd0000000-0000-4000-8000-000000000004';
+      const initialRow: WorkLogEntryRow = {
+        id: 'entry-123',
+        workRoleId: roleUuid,
+        hours: '2.5',
+        description: 'Investigating issue',
+        projectId: validUuid1,
+        taskId: taskUuid,
+      };
+
+      const updated = applyProjectChangeToRow(initialRow, validUuid2);
+      expect(updated.projectId).toBe(validUuid2);
+      expect(updated.taskId).toBe('');
+      // Preserves existing id and other row attributes
+      expect(updated.id).toBe('entry-123');
+      expect(updated.workRoleId).toBe(roleUuid);
+      expect(updated.hours).toBe('2.5');
+      expect(updated.description).toBe('Investigating issue');
+    });
+
+    it('resets taskId to empty string when user selects "No project" (empty string)', () => {
+      const taskUuid = 'd0000000-0000-4000-8000-000000000004';
+      const initialRow: WorkLogEntryRow = {
+        workRoleId: roleUuid,
+        hours: 3,
+        description: 'General sync',
+        projectId: validUuid1,
+        taskId: taskUuid,
+      };
+
+      const updated = applyProjectChangeToRow(initialRow, '');
+      expect(updated.projectId).toBe('');
+      expect(updated.taskId).toBe('');
+    });
+
+    it('clears legacy free-text taskId when project changes', () => {
+      const initialRow: WorkLogEntryRow = {
+        workRoleId: roleUuid,
+        hours: 5,
+        description: 'Legacy task note',
+        projectId: validUuid1,
+        taskId: 'Old legacy task string from import',
+      };
+
+      const updated = applyProjectChangeToRow(initialRow, validUuid2);
+      expect(updated.projectId).toBe(validUuid2);
+      expect(updated.taskId).toBe('');
+    });
+
+    it('is a pure function and does not mutate the original row object', () => {
+      const initialRow: WorkLogEntryRow = Object.freeze({
+        workRoleId: roleUuid,
+        hours: 6,
+        description: 'Testing immutability',
+        projectId: validUuid1,
+        taskId: 'task-abc',
+      });
+
+      // Calling with Object.freeze ensures mutation would throw in strict mode
+      const updated = applyProjectChangeToRow(initialRow, validUuid2);
+      expect(updated).not.toBe(initialRow);
+      expect(initialRow.projectId).toBe(validUuid1);
+      expect(initialRow.taskId).toBe('task-abc');
+      expect(updated.projectId).toBe(validUuid2);
+      expect(updated.taskId).toBe('');
     });
   });
 });

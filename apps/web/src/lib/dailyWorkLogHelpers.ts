@@ -236,3 +236,18 @@ export function resolveWorkLogError(
   // Last-resort hard-coded English fallback
   return 'An error occurred while saving the work log.';
 }
+
+/**
+ * Pure helper to apply a project change to a work log entry row.
+ * Invariant: changing the project ALWAYS resets taskId to empty string ('').
+ */
+export function applyProjectChangeToRow(
+  row: WorkLogEntryRow,
+  newProjectId: string
+): WorkLogEntryRow {
+  return {
+    ...row,
+    projectId: newProjectId,
+    taskId: '',
+  };
+}
