@@ -174,6 +174,33 @@ Each test is specified in plain language with:
   - Must **NOT** crash with `"Rendered more hooks than during the previous render"` or trigger a white screen of death.
   - Must **NOT** retain a task ID from a previously selected project when a new project is chosen.
 
+### TEST-09A-12: Date-Change Hydration, Discard Confirmation Prompt, Error Card & Warnings List CSS Bullets
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev` or any employee with work roles)
+- **Test Steps**:
+  1. Log in as `demo_dev` and navigate to Daily Work Log (`/employee/work-logs`).
+  2. Select Day A (e.g. Today) and type in an entry row (select a work role, enter 4.5 hours, and enter a description). Do NOT save draft.
+  3. Change the date picker to Day B (e.g. Yesterday or Tomorrow, an unlogged day).
+  4. Observe the confirmation prompt dialog: `"You have unsaved entries on this date. Discard unsaved changes and switch date?"`.
+  5. Click "Cancel". Verify date remains on Day A and typed entries are preserved intact.
+  6. Change date to Day B again and click "OK" (confirm discard).
+  7. Verify Day B loads cleanly: previous day's rows are discarded, and Day B displays a fresh empty row with the default assigned role (or saved server entries if Day B was previously logged).
+  8. Switch back to Day A; verify Day A loads cleanly without retaining stale rows from Day B.
+  9. While on Day B, simulate a network load failure or trigger a server error for that date.
+  10. Verify the screen displays the dedicated error card with "Retry" button calling `refetchLog()`; verify the old day's rows are completely hidden.
+  11. Submit a log with hours that differ from the standard shift length when mismatch handling is set to "warn" (or trigger server warnings).
+  12. Inspect the submission warnings alert box.
+- **Expected Result**:
+  - Switching calendar dates always discards previous day's rows and initializes or hydrates the newly selected date cleanly.
+  - Typing unsaved rows on a date prompts a browser confirmation warning before switching dates. Cancelling preserves the typed rows.
+  - While roles or new date data are loading, user-typed rows on the SAME date are never overwritten.
+  - When loading a new date encounters a server error, the existing error card with Retry button is rendered, and no rows from the previous date are displayed.
+  - Server warnings render using a plain CSS list marker (`list-disc`), cleanly aligned without any mojibake or garbled bullet symbols (`â€¢`).
+- **Negative Invariants (What Must NOT Happen)**:
+  - Rows typed on Day A must **NOT** carry over to Day B or block Day B from initializing fresh rows.
+  - Must **NOT** show a garbled symbol (such as `â€¢` or `Ã¢â‚¬Â¢`) in the server warnings list.
+  - A failed load on a new date must **NOT** display the previous day's rows.
+
 ---
 
 ## 2. Step 12a: Project Screens & Navigation (`apps/web`)

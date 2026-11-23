@@ -2090,3 +2090,48 @@ Documented in `docs/open-policy-questions.md`:
   - Typecheck: clean across all workspaces (0 errors).
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created. Vitest in `apps/web` does not mount DOM/components, so runtime component hook stability is covered via manual test scenario `TEST-09A-11`.
+
+---
+
+### Task Step-09a-Review: Daily Work Log Date-Change Hydration & Warnings List Bullet Fixes
+- **Date**: 2026-11-20
+- **Day of week**: Friday
+- **Start time**: 09:44:15 +05:45
+- **End time**: 09:56:45 +05:45
+- **Step**: Step 09a Review: Daily Work Log Date-Change Hydration & Warnings List Bullet Fixes (apps/web only)
+- **Task performed**:
+  - **Date Change Hydration Bug Fix**:
+    - Identified exact cause: hydration effect checked `hasUserTypedRows(prev)` without checking which date the rows belonged to. When switching from Date A to Date B (especially a blank unlogged day), the effect returned `prev` unchanged, preventing Date B from initializing a blank row or loading.
+    - Implemented pure helper `shouldHydrateForDate(selectedDate, hydratedForDate, hasTypedRowsForThisDate)` in `apps/web/src/lib/dailyWorkLogHelpers.ts`. Enforced invariants: clearing date never hydrates (`false`); date change (`selectedDate !== hydratedForDate`) always permits hydration (`true`), so typed rows from another date do NOT block hydration; same date with typed rows blocks overwrite (`false`); same date without typed rows allows fresh data (`true`).
+    - Added `hydratedForDate` state in `DailyWorkLogPage.tsx`. When `selectedDate !== hydratedForDate`, the previous day's rows are ALWAYS discarded and replaced with a fresh empty row for the new date (or server entries if already fetched), while still preserving user-typed rows on the SAME date while roles or the load are pending.
+    - Added native `window.confirm(t('workLog.daily.discardPrompt'))` in `handleDateChange` to warn the user before discarding unsaved typed rows when switching dates.
+    - Verified query key `['work-log', 'by-date', selectedDate]` includes the date; a failed load renders the dedicated error card with Retry and does NOT display the previous day's rows.
+  - **Warnings List CSS Bullet Repair**:
+    - Located real characters in `DailyWorkLogPage.tsx`: literal `•` (U+2022) at line 504 and encoding artifact comment `â€¢` at line 494.
+    - Confirmed `en.json` contains NO bullet characters.
+    - Replaced with standard HTML `<ul>` and `<li>` using Tailwind's `list-disc pl-4 space-y-0.5`.
+    - Removed non-ASCII characters from `DailyWorkLogPage.tsx`, leaving 0 non-ASCII characters in the file.
+  - **Non-ASCII Garble Audit**:
+    - Scanned all files across `apps/web/src` for non-ASCII characters: reported all 25 hits across 11 files (box-drawing in comments, em-dashes `—`, times symbol `✕`, and bullets `•` in other pages).
+    - Fixed only the files touched in this step (`DailyWorkLogPage.tsx`).
+  - **Unit Testing**:
+    - Added 7 unit tests in `apps/web/src/lib/__tests__/dailyWorkLogHelpers.test.ts` for `shouldHydrateForDate`.
+  - **Backlog & Progress Updates**:
+    - Updated `docs/PROGRESS.md` and root `PROGRESS.md` (including note for previous hook crash fix and current hydration fix).
+    - Added manual test case `TEST-09A-12` marked `NOT RUN` to `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `apps/web/src/lib/dailyWorkLogHelpers.ts`
+  - `apps/web/src/lib/__tests__/dailyWorkLogHelpers.test.ts`
+  - `apps/web/src/pages/workLogs/DailyWorkLogPage.tsx`
+  - `apps/web/src/i18n/locales/en.json`
+  - `docs/PROGRESS.md`
+  - `PROGRESS.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/web`: 15 test files, 324 passed (0 failed) — +7 new unit tests in `dailyWorkLogHelpers.test.ts`.
+  - Monorepo: 33 test files, 1,103 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created. Honest disclaimer: Vitest in `@imac/web` runs in a Node environment without DOM/component rendering capabilities, so items 1-3 (date-change hydration, unsaved changes confirmation dialog, and CSS list bullet rendering) are verified via the manual hand-test scenario `TEST-09A-12`.

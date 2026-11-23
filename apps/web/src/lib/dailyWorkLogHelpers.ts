@@ -251,3 +251,26 @@ export function applyProjectChangeToRow(
     taskId: '',
   };
 }
+
+/**
+ * Determines whether the daily work log entries form should hydrate.
+ * Invariants:
+ * 1. Clearing or empty date never hydrates (returns false).
+ * 2. Changing the date (selectedDate !== hydratedForDate) ALWAYS allows hydration / fresh init;
+ *    typed rows from another date do NOT block hydration.
+ * 3. On the SAME date (selectedDate === hydratedForDate), user-typed rows DO block overwrite.
+ *    If user has not typed rows (!hasTypedRowsForThisDate), hydration is allowed.
+ */
+export function shouldHydrateForDate(
+  selectedDate: string | null | undefined,
+  hydratedForDate: string | null | undefined,
+  hasTypedRowsForThisDate: boolean
+): boolean {
+  if (!selectedDate || !selectedDate.trim()) {
+    return false;
+  }
+  if (selectedDate !== hydratedForDate) {
+    return true;
+  }
+  return !hasTypedRowsForThisDate;
+}

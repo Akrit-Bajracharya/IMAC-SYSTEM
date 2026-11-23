@@ -8,6 +8,7 @@ import {
   buildWorkLogEntriesPayload,
   resolveWorkLogError,
   applyProjectChangeToRow,
+  shouldHydrateForDate,
   type ProjectWithMembers,
   type WorkLogEntryRow,
 } from '../dailyWorkLogHelpers.js';
@@ -537,6 +538,48 @@ describe('dailyWorkLogHelpers', () => {
       expect(initialRow.taskId).toBe('task-abc');
       expect(updated.projectId).toBe(validUuid2);
       expect(updated.taskId).toBe('');
+    });
+  });
+
+  describe('8. Date-change hydration decision (shouldHydrateForDate)', () => {
+    it('allows hydration when switching to a new date even if user typed rows on previous date', () => {
+      // Typed rows from another date do NOT block hydration
+      const result = shouldHydrateForDate('2026-11-21', '2026-11-20', true);
+      expect(result).toBe(true);
+    });
+
+    it('allows hydration when switching backwards to an earlier date with typed rows', () => {
+      const result = shouldHydrateForDate('2026-11-19', '2026-11-20', true);
+      expect(result).toBe(true);
+    });
+
+    it('BLOCKS overwrite when user has typed rows on the SAME date', () => {
+      // Typed rows on the same date DO block overwrite
+      const result = shouldHydrateForDate('2026-11-20', '2026-11-20', true);
+      expect(result).toBe(false);
+    });
+
+    it('allows hydration on the same date when user has NOT typed rows', () => {
+      // Same date with no user edits: server data or defaults can hydrate
+      const result = shouldHydrateForDate('2026-11-20', '2026-11-20', false);
+      expect(result).toBe(true);
+    });
+
+    it('NEGATIVE: clearing the date does not hydrate', () => {
+      expect(shouldHydrateForDate('', '2026-11-20', false)).toBe(false);
+      expect(shouldHydrateForDate('', '2026-11-20', true)).toBe(false);
+      expect(shouldHydrateForDate('', null, false)).toBe(false);
+    });
+
+    it('NEGATIVE: whitespace, null, or undefined date does not hydrate', () => {
+      expect(shouldHydrateForDate('   ', '2026-11-20', false)).toBe(false);
+      expect(shouldHydrateForDate(null, '2026-11-20', false)).toBe(false);
+      expect(shouldHydrateForDate(undefined, '2026-11-20', false)).toBe(false);
+    });
+
+    it('allows initial hydration on mount when hydratedForDate is null or undefined', () => {
+      expect(shouldHydrateForDate('2026-11-20', null, false)).toBe(true);
+      expect(shouldHydrateForDate('2026-11-20', undefined, false)).toBe(true);
     });
   });
 });

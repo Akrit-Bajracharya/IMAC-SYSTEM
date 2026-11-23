@@ -1389,3 +1389,66 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
 - `npm run lint --prefix apps/web`: clean, **0 errors**.
 - `npm run typecheck --prefix apps/web`: clean, **0 errors**.
 - Zero backend edits, zero new npm packages.
+
+---
+
+## Current Milestone: Step 09a Review (Part 2) — TaskPicker Hook Crash & Project Change Reset — COMPLETED
+
+### 1. What Was Built
+- **Hook Ordering Repair (`TaskPicker` in `ProjectTaskPicker.tsx`)**:
+  - Hoisted `useQuery` unconditionally to top level of `TaskPicker`, eliminating the React crash "Rendered more hooks than during the previous render" when switching from "No project" to a chosen project.
+  - Enabled query with precomputed `hasChosenProject = Boolean(projectId && isValidUuid(projectId))`.
+  - Positioned early returns (`isLegacyText(taskId)`, `!hasChosenProject`, and `isReadOnly`) strictly after all hook declarations.
+- **Project Change Reset (`applyProjectChangeToRow` in `dailyWorkLogHelpers.ts`)**:
+  - Implemented pure helper `applyProjectChangeToRow(row, newProjectId)` enforcing invariant that changing project ALWAYS resets `taskId = ''`.
+  - Wired `DailyWorkLogPage.tsx` desktop and mobile project change handlers through `applyProjectChangeToRow`.
+  - Added 5 pure unit tests for `applyProjectChangeToRow`.
+- **Hooks Audit**: Scanned all files across `apps/web/src` confirming unconditional hook calls.
+
+### 2. Verification Results
+- `npm run test`: 33 test files passed, **1,096 total tests passed (0 failures)**.
+- `npm run lint`: clean, **0 errors**.
+- `npm run typecheck`: clean, **0 errors**.
+- Zero backend edits, zero new npm packages.
+
+---
+
+## Current Milestone: Step 09a Review (Part 3) — Daily Work Log Date-Change Hydration & Bullet Fixes — COMPLETED
+
+### 1. Root Cause Analysis
+- **(A) Date Change Rows Blocking**:
+  - In `DailyWorkLogPage.tsx`, the hydration effect previously checked `if (hasUserTypedRows(prev)) return prev;` without tracking which calendar date those entries belonged to.
+  - When a user typed rows on Date A and switched to Date B (especially a blank unlogged date), `hasUserTypedRows(prev)` was `true` because `prev` still contained Date A's rows.
+  - Consequently, the effect returned `prev` unchanged, blocking Date B from hydrating or initializing fresh blank rows.
+- **(B) Garbled Bullet Character**:
+  - `DailyWorkLogPage.tsx` previously rendered literal Unicode character `•` (U+2022) at line 504 and contained an encoding artifact `â€¢` in a comment at line 494.
+  - `en.json` contains no bullet characters.
+  - Rendering literal non-ASCII bytes in JSX caused encoding misinterpretation (`â€¢`) in browsers lacking explicit UTF-8 document parsing headers.
+
+### 2. What Was Built
+- **Pure Hydration Helper (`shouldHydrateForDate` in `dailyWorkLogHelpers.ts`)**:
+  - Implemented pure helper `shouldHydrateForDate(selectedDate, hydratedForDate, hasTypedRowsForThisDate)`.
+  - Enforces three key invariants:
+    1. Clearing the date (`!selectedDate || !selectedDate.trim()`) never hydrates (`false`).
+    2. Changing date (`selectedDate !== hydratedForDate`) ALWAYS permits hydration (`true`); typed rows from another date do NOT block hydration.
+    3. On the SAME date (`selectedDate === hydratedForDate`), user-typed rows block overwrite (`false`), while an unedited form allows fresh data to hydrate (`true`).
+  - Added 7 unit tests covering all branch combinations in `dailyWorkLogHelpers.test.ts`.
+- **Hydration Marker & Unsaved Changes Warning (`DailyWorkLogPage.tsx`)**:
+  - Introduced `hydratedForDate` state tracker.
+  - In `handleDateChange`, if user has typed rows (`hasUserTypedRows(entries)`), prompts native confirmation `window.confirm(t('workLog.daily.discardPrompt'))` before discarding unsaved rows.
+  - In the hydration effect, when `selectedDate !== hydratedForDate`, previous day's rows are ALWAYS discarded and replaced with a fresh empty row (or saved server entries if already fetched), setting `hydratedForDate = selectedDate`.
+  - While roles or new date query is pending, user-typed rows on the SAME date are strictly preserved from overwrite.
+  - The query key `['work-log', 'by-date', selectedDate]` includes the date; a failed load shows the existing error card with `Retry` without rendering the previous day's rows.
+- **CSS List Bullet Fix**:
+  - Replaced literal `•` and `â€¢` with standard HTML `<ul>` and `<li>` using Tailwind's `list-disc pl-4 space-y-0.5`.
+  - Zero non-ASCII characters remain in `DailyWorkLogPage.tsx`.
+- **i18n Key**: Added `workLog.daily.discardPrompt` to `apps/web/src/i18n/locales/en.json`.
+
+### 3. Verification Results
+- `npm run test`: 33 test files passed, **1,103 total tests passed (0 failures)** (+7 new tests in `dailyWorkLogHelpers.test.ts`).
+  - `apps/api`: 18 test files, **779 passed**.
+  - `apps/web`: 15 test files, **324 passed**.
+- `npm run lint`: clean across all workspaces, **0 errors**.
+- `npm run typecheck`: clean across all workspaces, **0 errors**.
+- Zero backend edits, zero new npm packages.
+- Note: Vitest in `apps/web` does not render DOM/React components; component behavior is verified via manual hand test.

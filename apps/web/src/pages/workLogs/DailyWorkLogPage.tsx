@@ -48,6 +48,7 @@ import {
   hasUserTypedRows,
   isLegacyText,
   applyProjectChangeToRow,
+  shouldHydrateForDate,
   type WorkLogEntryRow,
 } from '../../lib/dailyWorkLogHelpers.js';
 import type { ProjectListItem } from '../../types/index.js';
@@ -75,10 +76,29 @@ export function DailyWorkLogPage() {
     }
   }, [searchParams]);
 
-  // Requirement 5: If the date box is cleared, do not request or send an empty date
+  // Track which calendar date the current entries state is hydrated / active for
+  const [hydratedForDate, setHydratedForDate] = useState<string | null>(null);
+
+  // Requirement 5 & Step 09a-review: Date change handling.
+  // If the date box is cleared, do not request or send an empty date.
+  // If the user has unsaved typed rows, warn them before discarding.
   const handleDateChange = (newDate: string) => {
     if (!newDate || !newDate.trim()) {
       return;
+    }
+    if (newDate === selectedDate) {
+      return;
+    }
+    if (hasUserTypedRows(entries)) {
+      const confirmDiscard = window.confirm(
+        t(
+          'workLog.daily.discardPrompt',
+          'You have unsaved entries on this date. Discard unsaved changes and switch date?'
+        )
+      );
+      if (!confirmDiscard) {
+        return;
+      }
     }
     setSelectedDate(newDate);
     setSearchParams({ date: newDate });
@@ -170,15 +190,23 @@ export function DailyWorkLogPage() {
   const standardShiftHours = logData?.standardShiftHours ?? 8;
   const currentStatus = workLog?.status;
 
-  // Requirement 4: Hydrate entries when logData changes or when switching dates.
-  // myRoles is removed from the dependency list (uses isRolesSuccess, isLoadingRoles, isRolesError).
-  // Typed rows must never be overwritten while roles are loading or after a failed load.
+  // Requirement 4 & Step 09a-review: Hydrate entries when logData changes or when switching dates.
+  // Changing selected date ALWAYS discards the previous day's rows and hydrates the new day (or starts
+  // an empty row for it), while never overwriting rows the user types on the SAME day while roles or
+  // the log query are still pending.
   useEffect(() => {
     setIsWindowExpired(false);
     setFormError(null);
     setServerWarnings(logData?.warnings ?? []);
 
-    // If server returned entries for this date, hydrate from saved entries
+    const hasTyped = hasUserTypedRows(entries);
+    const canHydrate = shouldHydrateForDate(selectedDate, hydratedForDate, hasTyped);
+
+    if (!canHydrate) {
+      return;
+    }
+
+    // 1. If server returned entries for this date, hydrate from saved entries
     if (workLog && workLog.entries && workLog.entries.length > 0) {
       setEntries(
         workLog.entries.map((e) => ({
@@ -190,15 +218,33 @@ export function DailyWorkLogPage() {
           taskId: e.taskId || '',
         }))
       );
+      setHydratedForDate(selectedDate);
       return;
     }
 
-    // If log fetch errored, or roles are still loading or failed, do NOT overwrite typed rows
+    // 2. If changing to a different date: ALWAYS discard previous day's rows and
+    // initialize fresh default row for the newly selected date
+    if (selectedDate !== hydratedForDate) {
+      const firstRoleId = myRoles.length > 0 ? myRoles[0].id : '';
+      setEntries([
+        {
+          workRoleId: firstRoleId,
+          hours: '',
+          description: '',
+          projectId: '',
+          taskId: '',
+        },
+      ]);
+      setHydratedForDate(selectedDate);
+      return;
+    }
+
+    // 3. Same date: if log fetch errored, or roles are still loading or failed, do NOT overwrite typed rows
     if (isLogError || isLoadingRoles || isRolesError) {
       return;
     }
 
-    // For a blank day: only initialize default empty row if user has not already typed data
+    // 4. For a blank day on the same date: initialize default empty row if user has not typed data
     setEntries((prev) => {
       if (hasUserTypedRows(prev)) {
         return prev;
@@ -214,10 +260,12 @@ export function DailyWorkLogPage() {
         },
       ];
     });
+    setHydratedForDate(selectedDate);
   }, [
     logData,
     workLog?.id,
     selectedDate,
+    hydratedForDate,
     isRolesSuccess,
     isLogError,
     isLoadingRoles,
@@ -491,7 +539,7 @@ export function DailyWorkLogPage() {
         </Alert>
       )}
 
-      {/* Requirement 5: Fixed garbled bullet (â€¢) to proper Unicode bullet • */}
+      {/* Server Warnings List with plain CSS list-disc marker */}
       {serverWarnings.length > 0 && (
         <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -499,10 +547,12 @@ export function DailyWorkLogPage() {
             <AlertTitle className="text-xs font-semibold">
               {t('workLog.daily.warningsTitle')}
             </AlertTitle>
-            <AlertDescription className="text-xs mt-1 space-y-0.5">
-              {serverWarnings.map((warning, idx) => (
-                <div key={idx}>• {warning}</div>
-              ))}
+            <AlertDescription className="text-xs mt-1">
+              <ul className="list-disc pl-4 space-y-0.5">
+                {serverWarnings.map((warning, idx) => (
+                  <li key={idx}>{warning}</li>
+                ))}
+              </ul>
             </AlertDescription>
           </div>
         </Alert>

@@ -428,6 +428,7 @@
         "changesSaved": "Work log changes saved successfully.",
         "submitted": "Work log submitted successfully."
       },
+      "discardPrompt": "You have unsaved entries on this date. Discard unsaved changes and switch date?",
       "warningsTitle": "Submission Warnings",
       "errors": {
         "generic": "An error occurred while saving the work log.",
