@@ -201,6 +201,60 @@ Each test is specified in plain language with:
   - Must **NOT** show a garbled symbol (such as `â€¢` or `Ã¢â‚¬Â¢`) in the server warnings list.
   - A failed load on a new date must **NOT** display the previous day's rows.
 
+### TEST-09A-13: WorkLogHistoryPage Failed Query Error Handling & Empty Week Start Date
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Navigate to `/employee/work-log/history`.
+  2. Disconnect network or simulate a 500 error on `GET /api/work-logs/by-month`.
+  3. Observe whether the page renders an error alert / card with a Retry button, or if it misleadingly displays "0 work logs recorded in this month".
+  4. Reconnect network, switch to "Week Summary" tab.
+  5. Clear the "Week start date" date input box completely.
+  6. Observe whether `GET /api/work-logs/by-week?startDate=` is fired with an invalid query parameter, and whether day table links navigate to invalid `?date=` parameters.
+- **Expected Result**:
+  - Failed month/week loads must display a prominent error state with a retry option.
+  - Clearing the week start date must not trigger invalid API calls or break relative day calculations.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** silently mask server load errors as "0 hours logged / no logs recorded".
+  - Must **NOT** produce unhandled promise rejections on empty week start dates.
+
+### TEST-09A-14: WorkLogSettingsPage Non-Admin Render Safety & Failed Settings Load Recovery
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `hr_admin` (`demo_hr`) and `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in as `demo_hr` (non-`system_admin`) and attempt direct URL navigation to `/admin/settings`.
+  2. Verify that `ProtectedRoute` blocks access without triggering React's `"Rendered fewer hooks than expected"` crash.
+  3. Log in as `system_admin` (`boss`) and navigate to `/admin/settings`.
+  4. Simulate a network failure on `GET /api/admin/settings`.
+  5. Verify whether the screen displays a dedicated load error message with a Retry button or silently falls back to uninitialized default form values (`true`, `warn`, `24`).
+  6. Attempt to submit an invalid edit window value (e.g. `0` or negative number or non-integer) and verify client-side validation prevents submission.
+  7. Simulate a server error on save (e.g. 500 or network drop) and verify that a friendly, translated message is displayed rather than raw Axios `err.message`.
+- **Expected Result**:
+  - Non-admins are blocked cleanly without hook-count mismatch crashes.
+  - Failed settings loads show an error card with Retry and do not allow saving uninitialized defaults.
+  - Save errors display translated, actionable alerts.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** crash with React hook ordering errors.
+  - Must **NOT** display raw `AxiosError: Request failed with status code ...` text.
+
+### TEST-09A-15: WorkLogExportPage Large Export, Date Parsing & Malformed Error Blob Handling
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`) and `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in as `demo_dev` and navigate to `/employee/work-log/export`.
+  2. Enter an invalid manual date string in `startDate` (e.g. `2026-02-31`) and verify client-side date range validation rejects it before making a network request.
+  3. Submit an export with 366 days and inspect the downloaded `.xlsx` filename (`work-logs-export-YYYY-MM-DD-to-YYYY-MM-DD.xlsx`).
+  4. Rapidly double-click "Download Export" and verify only one network request is dispatched (`disabled={isExporting}`).
+  5. Simulate an API error where the server returns a JSON error body with `responseType: 'blob'` (e.g. 400 `row_limit_exceeded`).
+  6. Verify the error message is correctly parsed from the blob and displayed as a localized banner: `"Maximum row limit exceeded"`.
+- **Expected Result**:
+  - Malformed dates are rejected by client validation.
+  - Blob error payloads are parsed and rendered as friendly translated alerts.
+  - Double-click protection prevents duplicate download requests.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** download a corrupted `.xlsx` file containing a JSON error response.
+  - Must **NOT** freeze the UI or allow concurrent un-throttled export requests.
+
 ---
 
 ## 2. Step 12a: Project Screens & Navigation (`apps/web`)

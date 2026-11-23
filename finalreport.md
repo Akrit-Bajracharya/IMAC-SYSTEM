@@ -2135,3 +2135,48 @@ Documented in `docs/open-policy-questions.md`:
   - Typecheck: clean across all workspaces (0 errors).
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created. Honest disclaimer: Vitest in `@imac/web` runs in a Node environment without DOM/component rendering capabilities, so items 1-3 (date-change hydration, unsaved changes confirmation dialog, and CSS list bullet rendering) are verified via the manual hand-test scenario `TEST-09A-12`.
+
+---
+
+### Task Step-09a-Review: Comprehensive Review of Remaining Step 9a Screens (REPORT ONLY)
+- **Date**: 2026-11-23
+- **Day of week**: Monday
+- **Start time**: 12:54:00 +05:45
+- **End time**: 13:06:00 +05:45
+- **Step**: Step 09a Review: Comprehensive Review of Remaining Step 9a Screens (apps/web only, REPORT ONLY)
+- **Task performed**:
+  - **Full Static Code Review**: Conducted complete code review across all remaining Step 9a screens and support modules:
+    - `apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`
+    - `apps/web/src/pages/workLogs/WorkLogExportPage.tsx`
+    - `apps/web/src/pages/admin/WorkLogSettingsPage.tsx`
+    - `apps/web/src/api/workLogs.ts`
+    - `apps/web/src/api/settings.ts`
+    - `apps/web/src/components/common/WorkLogStatusBadge.tsx`
+    - `apps/web/src/lib/dateUtils.ts`
+    - `apps/web/src/components/layout/AdminLayout.tsx`
+    - `apps/web/src/components/layout/EmployeeLayout.tsx`
+    - `apps/web/src/router/index.tsx`
+  - **10 Inspection Categories Evaluated**:
+    1. *Hooks Called Conditionally / After Early Returns*: Identified critical early return in `WorkLogSettingsPage.tsx:33-35` returning `<UnauthorizedPage />` prior to `useState`, `useQuery`, `useEffect`, `useMutation`.
+    2. *Error Handling & Translation*: Identified raw `err.message` usage in `WorkLogSettingsPage.tsx:109` and missing error handling in `WorkLogHistoryPage.tsx:87`.
+    3. *Silent Failed Loads Without Retry*: Identified `WorkLogHistoryPage.tsx` ignoring `isMonthError` and `isWeekError` (falsely rendering 0 hours / no logs), and `WorkLogSettingsPage.tsx` ignoring `isError` on `fetchSettings` (silently falling back to default form values).
+    4. *Stale State on Filter Change*: Identified unvalidated `weekStartDate` input in `WorkLogHistoryPage.tsx:635` and background overwrite risk in `WorkLogSettingsPage.tsx:58-78`.
+    5. *Date Handling & Timezones*: Verified `dateUtils.ts` Kathmandu today and UTC date arithmetic; identified `new Date()` parsing in `WorkLogExportPage.tsx:78-80` producing `NaN` on invalid manual input.
+    6. *Default Value Hook Dependencies*: Found `data: settings = []` inline instantiation in `WorkLogSettingsPage.tsx:47, 78` dependency array.
+    7. *Export File Downloads*: Evaluated blob error parsing, double-click protection (`disabled={isExporting}`), memory footprint, and filename safety (dates only, no user text).
+    8. *Settings Administration*: Verified `system_admin` route guard, demo database 0-row default fallback, integer validation for edit window, and error alert rendering.
+    9. *XSS, HTML Injection & Garble*: Verified zero occurrences of `dangerouslySetInnerHTML` or unescaped HTML; confirmed 100% i18n key existence in `en.json`; identified 3 literal em-dashes `—` (U+2014) in `WorkLogHistoryPage.tsx`.
+    10. *Role-Based Refusal & Invariants*: Confirmed `hr_admin` cannot view administrative export filters, `system_admin` with no profile receives graceful empty profile card on daily work log, and `viewer` is read-only.
+  - **Documentation & Backlog Updates**:
+    - Appended review milestone summary to `docs/PROGRESS.md`.
+    - Added test scenarios `TEST-09A-13`, `TEST-09A-14`, and `TEST-09A-15` marked `NOT RUN` to `docs/HAND-TEST-BACKLOG.md`.
+- **Files created or changed**:
+  - `docs/PROGRESS.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - Monorepo: 33 test files, 1,103 passed (0 failed).
+  - Linter: clean across all workspaces (0 errors).
+  - Typecheck: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**: None. REPORT ONLY mode strictly observed; zero code files modified; zero backend edits made; zero new npm packages added; no database connections made; no docker commands executed; no git commits created. Vitest in `apps/web` does not mount DOM components, so component hook violations, visual error card states, and file downloads are verified via manual test scenarios `TEST-09A-13`, `TEST-09A-14`, and `TEST-09A-15`.

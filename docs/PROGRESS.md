@@ -1452,3 +1452,41 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
 - `npm run typecheck`: clean across all workspaces, **0 errors**.
 - Zero backend edits, zero new npm packages.
 - Note: Vitest in `apps/web` does not render DOM/React components; component behavior is verified via manual hand test.
+
+---
+
+## Current Milestone: Step 09a Review (Part 4) — Review of Remaining Step 9a Screens (`apps/web` only) — COMPLETED
+
+### 1. Scope & Execution Mode
+- Report-only static review of remaining Step 9a screens and dependencies:
+  - `apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogExportPage.tsx`
+  - `apps/web/src/pages/admin/WorkLogSettingsPage.tsx`
+  - `apps/web/src/api/workLogs.ts`
+  - `apps/web/src/api/settings.ts`
+  - `apps/web/src/components/common/WorkLogStatusBadge.tsx`
+  - `apps/web/src/lib/dateUtils.ts`
+  - `apps/web/src/components/layout/AdminLayout.tsx`
+  - `apps/web/src/components/layout/EmployeeLayout.tsx`
+  - `apps/web/src/router/index.tsx`
+- Zero code modifications made; zero backend edits; zero new npm packages; no database connections made; application server not run.
+
+### 2. Summary of Identified Issues
+- **Hook Violation (`WorkLogSettingsPage.tsx:33-35`)**: Early return `<UnauthorizedPage />` precedes hook invocations (`useState`, `useQuery`, `useEffect`, `useMutation`), risking React runtime crashes if rendered by non-admins or during auth state hydration.
+- **Silent Query Failures (`WorkLogHistoryPage.tsx:84-103`, `WorkLogSettingsPage.tsx:46-55`)**:
+  - `WorkLogHistoryPage`: `isMonthError` and `isWeekError` are ignored in the UI, misleading users by rendering 0 hours and "No work logs recorded" on server 500 / network outage instead of an error card with Retry.
+  - `WorkLogSettingsPage`: `isError` is ignored in JSX, allowing uninitialized forms with default values (`true`, `warn`, `24`) to render and potentially overwrite custom server settings if saved.
+- **Raw Axios Error Strings (`WorkLogSettingsPage.tsx:109`)**: `err.message` is rendered directly in form alerts instead of resolving API error envelopes `{ error: "code", message: "..." }`.
+- **Date Inputs & Boundary Handling**:
+  - `WorkLogHistoryPage.tsx:635`: Clearing week start date input sends `?startDate=` to the API and generates invalid date calculations (`addDays("", i) => ""`).
+  - `WorkLogExportPage.tsx:78-80`: `new Date()` date span comparison yields `NaN` on invalid manual date inputs, bypassing the 366-day range guard.
+- **Inline Array Instantiations in Dependencies (`WorkLogSettingsPage.tsx:47, 78`)**: `data: settings = []` creates new array references in the `useEffect` dependency array, risking re-render thrashing.
+- **Export Mime-Type & Blob Error Parsing**:
+  - `WorkLogExportPage.tsx:109-120`: Parses blob error responses on HTTP >= 400, but lacks specific network error branching (`!err?.response`).
+  - `api/workLogs.ts:107`: Unconditionally downloads response as `.xlsx` without verifying `content-type`.
+- **Non-ASCII Characters**: Literal em-dashes `—` (U+2014) in `WorkLogHistoryPage.tsx` (lines 487, 505, 766).
+- **Role Permissions & Layout Guards**: `AdminLayout` and `router/index.tsx` enforce strict RBAC (`system_admin` for settings, `worklog:readOwn` for exports, `viewer` read-only work log).
+
+### 3. Verification Results
+- All 1,103 automated tests across 33 test files continue to pass (0 failures).
+- Component-level render paths and interactive error cards rely on hand-test backlog scenarios.
