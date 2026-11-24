@@ -2247,3 +2247,101 @@ Documented in `docs/open-policy-questions.md`:
   - Production build: `npm run build --workspace=apps/web` passed in 8.07s.
 - **Status**: COMPLETED
 - **Decisions or problems**: None. Apps/web only; zero backend edits made; zero new npm packages added; no database connections made; Daily Work Log files untouched; em-dashes left alone; no git commits created. Honest disclaimer: Vitest in `apps/web` runs in Node and tests pure logic/helpers; React component lifecycle ordering, visual error cards, and interactive form behaviors are verified via manual test scenarios `TEST-09A-FIX-01` through `TEST-09A-FIX-04`.
+
+---
+
+## Step 19a: Audit Log Read API (apps/api only, no screen)
+
+### Task 19a-01: Audit Log Read API Implementation, Permissions, Snapshot Sanitization, and Tests
+- **Date**: 2026-11-24
+- **Day of week**: Tuesday
+- **Start time**: 12:05:00 +05:45
+- **End time**: 12:31:00 +05:45
+- **Step**: Step 19a (Audit Log Read API in apps/api, no screen)
+- **Task performed**:
+  - Researched existing models, snapshots, entityTypes, and actions in schema and routes. Reported in plan:
+    - Real `AuditLog` fields: `id`, `createdAt`, `action`, `entityType`, `entityId`, `actorUserId`, `beforeSnapshot`, `afterSnapshot`.
+    - Real snapshot contents for `time_log.created` (contains `projectId`), `time_log.updated` (does not contain `projectId`, mapped by live `TimeLog.id` join), and `time_log.removed` (deleted row without `projectId`, classified as `ADMIN_ONLY_ACTIONS`).
+    - Normalized casing for `task` and `Task`.
+    - Identified that `project_member` entityId is `projectId`, `task_dependency` entityId is `taskId`, `comment` entityId is `commentId`.
+  - Added new action `auditlog:readProject` to `Action` in `apps/api/src/lib/permissions.ts`, allowed for `system_admin` and `project_manager`. Kept `auditlog:read` untouched (`system_admin` only). Denied to `hr_admin`, `employee`, and `viewer`.
+  - Implemented `GET /api/audit-logs` in `apps/api/src/routes/auditLogs.ts` mounted at `/api/audit-logs` in `apps/api/src/app.ts`:
+    - Strict `can(user, 'auditlog:readProject')` guard. Identity solely from session.
+    - Zod query parameter validation: `from` and `to` (Asia/Kathmandu calendar dates, default 30 days, exclusive upper bound `createdAt < startOfDay(to + 1)`), `actorUserId` (uuid), `action` (known list), `entityType` (known list), `projectId` (uuid; for `project_manager`, must be an actively managed project, otherwise returns 404 `not_found`), `limit` (default 50, max 100), `offset` (default 0; non-negative int, 0 accepted).
+    - Empty strings strictly rejected with HTTP 400 `validation_error`.
+    - Database-level project scoping for `project_manager` using `Prisma.sql` and `Prisma.join` on project IDs where `userId = caller.id AND isActive = true AND projectRole = 'manager'`.
+    - Amendment F: if `project_manager` filters by an `entityType` or `action` outside project entities, returns `{ items: [], total: 0, limit, offset }` with HTTP 200 without throwing 403 or leaking data.
+    - Privacy & Sanitization (Amendment C): Created `SYSTEM_ADMIN_ALLOW_LIST` (excludes `reason`, `body`, `note`, `description`, `comment`, `message`, `password`, `token`, `hash`, `secret`, `ip`, `userAgent`) and `PROJECT_MANAGER_ALLOW_LIST` (narrow project allow-list, stripping administrative fields `employeeCode`, `department`, `jobTitle`, `systemRole`, `lockedUntil`, `failedLoginCount`, and `reason`).
+    - Actor mapped strictly to `{ id, displayName, username }` (placeholder `{ id, displayName: "Deleted User", username: "deleted" }` for null/deleted actors).
+    - Read-only invariant: no `POST`, `PUT`, `PATCH`, `DELETE` routes on `/api/audit-logs` (return 404). Reading the audit log does NOT create any audit log entries.
+  - Created read-only check script in `docs/audit-log-manager-project-check.sql` for static evaluation on `imac_demo` (read-only, not executed against live DB).
+  - Wrote 26 automated integration and security tests in `apps/api/src/__tests__/auditLogs.test.ts` (including static scan tests for Amendment D verifying no `$queryRawUnsafe` or string interpolation, and Amendment G verifying every written entityType is classified).
+  - Added 2 policy matrix tests in `apps/api/src/__tests__/permissions.test.ts` covering all 5 roles for `auditlog:read` and `auditlog:readProject`.
+  - Updated documentation: added policy Question 38 to `docs/open-policy-questions.md`, appended manual test steps `TEST-19A-01` to `TEST-19A-05` marked `NOT RUN` in `docs/HAND-TEST-BACKLOG.md`, and appended milestone to `docs/PROGRESS.md`.
+- **Files created or changed**:
+  - `apps/api/src/lib/permissions.ts`
+  - `apps/api/src/routes/auditLogs.ts`
+  - `apps/api/src/app.ts`
+  - `docs/audit-log-manager-project-check.sql`
+  - `apps/api/src/__tests__/auditLogs.test.ts`
+  - `apps/api/src/__tests__/permissions.test.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 19 test files passed, **807 tests passed (0 failures)** (+26 new tests in `auditLogs.test.ts`, +2 new tests in `permissions.test.ts`).
+  - `apps/web`: 16 test files passed, **346 tests passed (0 failures)**.
+  - Full suite (`npm run test`): **35 test files passed, 1,153 tests passed (0 failures)**.
+  - Linter (`npm run lint`): Passed across all workspaces (0 errors).
+  - Typecheck (`npm run typecheck`): Passed across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - Time log mapping: `TimeLog.taskId` is optional in the schema. In `time_log.created`, snapshot contains `projectId`. In `time_log.updated`, snapshot lacks `projectId`, so it is mapped via live join on `TimeLog.id`. In `time_log.removed`, the row is physically deleted and the snapshot does not contain `projectId`, so it cannot be mapped reliably to a project and is classified as admin-only.
+  - Free-text `reason`: Removed from both `SYSTEM_ADMIN_ALLOW_LIST` and `PROJECT_MANAGER_ALLOW_LIST` to prevent leaking unvetted user input.
+  - Mock limitations: Database operations are mocked using Vitest spies. PostgreSQL JSON extraction performance (e.g. `beforeSnapshot->>'projectId'`) and engine-level timezone conversions cannot be verified via in-memory mocks.
+  - Protected files (`password.ts`, `session.ts`, `auth.ts`, `routes/auth.ts`, and `prisma/*`) were untouched; no schema changes; no migrations run; no new npm packages installed; no git commits executed.
+
+---
+
+## Step 19a-fix: Corrections to Audit Log Router (apps/api only)
+
+### Task 19a-fix-01: Audit Log Router Hardening, Parameter Validation, Fail-Closed Security, and Guard Tests
+- **Date**: 2026-11-24
+- **Day of week**: Tuesday
+- **Start time**: 12:45:00 +05:45
+- **End time**: 12:59:00 +05:45
+- **Step**: Step 19a-fix (Corrections to apps/api/src/routes/auditLogs.ts)
+- **Task performed**:
+  - Item 1 (Project Manager Leak Boundary): Added outer SQL condition joined with `AND` to the project-scope block for `project_manager`: `a."entityType" IN (PROJECT_MAPPABLE_ENTITY_TYPES) AND a."action" IN (PROJECT_ACTIONS)` as bound parameters. Guaranteed that generic beforeSnapshot/afterSnapshot projectId clauses never match `work_log.*`, `user.*`, `auth.*`, `settings.*`, `work_role.*`, or `employee_profile.*` rows. Added test asserting bound conditions in `$queryRaw` query strings and values, and unit test proving `work_log.edited_after_submit` with a snapshot `projectId` is strictly excluded from the project_manager scope definition.
+  - Item 2 (`time_log.removed` Decision): Inspected `apps/api/src/routes/timeLogs.ts` line 559. Confirmed `beforeSnapshot` records only `{ taskId, workDate, hours }` and lacks `projectId`. Because the row is deleted and `taskId` is optional, it cannot be mapped to a project. Kept `time_log.removed` strictly in `ADMIN_ONLY_ACTIONS` and excluded from `PROJECT_ACTIONS`.
+  - Item 3 (Query Parameters): Enforced that every query parameter must be a plain string. Arrays (`?from=a&from=b`) and objects return HTTP 400 `validation_error`. Guaranteed `.trim()` is never called on non-strings. Added tests for all 8 parameters (`from`, `to`, `actorUserId`, `action`, `entityType`, `projectId`, `limit`, `offset`).
+  - Item 4 (Fail Closed): Added explicit `else` branch returning HTTP 403 `forbidden` after role branches, preventing unexpected or unrecognized caller roles from executing unscoped database queries. Added test verifying fail-closed defense.
+  - Item 5 (UUID & ASCII): Replaced local `UUID_REGEX` with `isValidUuid` imported from `apps/api/src/services/projectAccess.ts` (accepting any RFC UUID). Replaced all Unicode box-drawing characters with plain ASCII `--` comments in `auditLogs.ts` and `auditLogs.test.ts`.
+  - Item 6 (Answers & Guard Tests):
+    - Answered 6a with file and line numbers for `time_log.created`, `.updated`, and `.removed`.
+    - Answered 6b with file and line numbers for `project_member.added`/`.removed` and `task_dependency.*`.
+    - Answered 6c explaining why `routeInventory.test.ts` (scoped to 37 `/api/projects/*` routes) and `projectRoutePermissions.test.ts` (scoped to mutating project routes) did not originally cover `GET /api/audit-logs`. Added `GET /api/audit-logs` guard tests to both test suites.
+  - Item 7 (SQL Check File): Added query 4 to `docs/audit-log-manager-project-check.sql` (read-only, `imac_demo` only) counting AuditLog rows whose entityType is NOT project-mappable but whose snapshot projectId matches a target project.
+  - Verification: Ran full test suite, lint, and typecheck. Appended `TEST-19A-FIX-01` to `TEST-19A-FIX-03` to `docs/HAND-TEST-BACKLOG.md` and appended milestone to `docs/PROGRESS.md`.
+- **Files created or changed**:
+  - `apps/api/src/routes/auditLogs.ts`
+  - `apps/api/src/__tests__/auditLogs.test.ts`
+  - `apps/api/src/__tests__/routeInventory.test.ts`
+  - `apps/api/src/__tests__/projectRoutePermissions.test.ts`
+  - `docs/audit-log-manager-project-check.sql`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 19 test files passed, **819 tests passed (0 failures)** (+5 new tests in `auditLogs.test.ts`, +2 in `routeInventory.test.ts`, +5 in `projectRoutePermissions.test.ts`).
+  - `apps/web`: 16 test files passed, **346 tests passed (0 failures)**.
+  - Monorepo total: **35 test files passed, 1,165 tests passed (0 failures)**.
+  - `npm run lint`: clean across all workspaces (0 errors).
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - `time_log.removed` has no `projectId` in its snapshot and the DB row is deleted, so it remains strictly in `ADMIN_ONLY_ACTIONS`.
+  - Zero database connections or scripts executed; no schema changes; protected files untouched; no git commits.
+
+

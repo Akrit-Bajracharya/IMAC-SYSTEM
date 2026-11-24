@@ -407,4 +407,23 @@ describe('Step 10d: Route Inventory Test Suite', () => {
       });
     }
   });
+
+  describe('Audit Log Route Inventory & Security Guards (Step 19a-fix Item 6c)', () => {
+    it('returns 401 for unauthenticated request to GET /api/audit-logs', async () => {
+      const res = await request(app).get('/api/audit-logs');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+
+    it('returns 404 for project_manager querying a project they do not manage on GET /api/audit-logs?projectId=:id', async () => {
+      const cookie = setupAuth(pmUser);
+      (db.projectMember.findMany as any).mockResolvedValue([]); // manages 0 projects or does not manage validProjectId
+
+      const res = await request(app)
+        .get(`/api/audit-logs?projectId=${validProjectId}`)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+    });
+  });
 });

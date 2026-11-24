@@ -913,3 +913,115 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
   - Failed work log query on dashboard renders an informative error notice rather than false "not started" state.
 - **Negative Invariants (What Must NOT Happen)**:
   - Network or server outages must **NOT** be disguised as zero hours logged or unstarted shift.
+
+### TEST-19A-01: Audit Log Read API - RBAC Role Access & 401/403 Invariants
+- **Status**: `NOT RUN`
+- **Role to Log In As**: Unauthenticated, `hr_admin` (`demo_hr`), `employee` (`demo_dev`), `viewer` (`demo_viewer`), `system_admin` (`boss`), `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Send `GET /api/audit-logs` without session cookie. Verify response is HTTP 401 `{"error": "unauthenticated"}`.
+  2. Log in as `hr_admin` and send `GET /api/audit-logs`. Verify response is HTTP 403 `{"error": "forbidden"}`.
+  3. Log in as `employee` and send `GET /api/audit-logs`. Verify response is HTTP 403 `{"error": "forbidden"}`.
+  4. Log in as `viewer` and send `GET /api/audit-logs`. Verify response is HTTP 403 `{"error": "forbidden"}`.
+  5. Log in as `system_admin` and send `GET /api/audit-logs`. Verify response is HTTP 200 with `{ items, total, limit, offset }`.
+  6. Log in as `project_manager` with managed projects and send `GET /api/audit-logs`. Verify response is HTTP 200 with items scoped only to their managed projects.
+- **Expected Result**: Only `system_admin` and `project_manager` can access `GET /api/audit-logs`.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Unauthenticated callers must **NOT** receive audit data (401).
+  - `hr_admin`, `employee`, and `viewer` must **NOT** access audit logs under any circumstances (403 forbidden).
+
+### TEST-19A-02: Audit Log Read API - Project Manager Project Scoping & Isolation
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`), `system_admin` (`boss`)
+- **Test Steps**:
+  1. As `project_manager`, send `GET /api/audit-logs`.
+  2. Inspect all returned entries: verify every item corresponds to an entity (`project`, `task`, `milestone`, `comment`, `ProjectMessage`, `time_log`) belonging to a project where caller has `projectRole = 'manager'`.
+  3. Verify that zero entries regarding `User`, `Session`, `SystemSetting`, `WorkLogDay`, `WorkRole`, or `EmployeeProfile` appear in the response.
+  4. Pass `projectId=<non-managed-project-uuid>`. Verify response is HTTP 404 `{"error": "not_found"}` (identical to non-member project 404).
+  5. Pass non-project filter `entityType=User` or `action=user.created`. Verify response returns `{ items: [], total: 0 }` with HTTP 200 (no 403, no leakage).
+  6. Log in as `system_admin` and query `entityType=User`. Verify system admin sees all organization-wide user audit records.
+- **Expected Result**: Project managers are strictly bounded to their active managed projects in SQL query without data leakage.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Project managers must **NOT** see audit entries of projects where they are not managers.
+  - Project managers must **NOT** see system administration, HR, session, or work log audit logs.
+  - Querying non-managed project must **NOT** reveal whether the project exists (must return 404).
+
+### TEST-19A-03: Audit Log Read API - Query Parameter Validation & Date Bounds
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. Send `GET /api/audit-logs?offset=0&limit=50`. Verify HTTP 200 with offset 0 accepted.
+  2. Send `GET /api/audit-logs?limit=101`. Verify HTTP 400 validation error (limit capped at 100).
+  3. Send `GET /api/audit-logs?from=2026-02-31&to=2026-03-05`. Verify HTTP 400 validation error for non-existent calendar date.
+  4. Send `GET /api/audit-logs?from=2026-05-10&to=2026-05-01`. Verify HTTP 400 validation error for `to` before `from`.
+  5. Send `GET /api/audit-logs?from=2025-01-01&to=2026-06-01` (>366 days). Verify HTTP 400 validation error.
+  6. Send `GET /api/audit-logs?action=`. Verify empty string is rejected with HTTP 400 validation error.
+  7. Send `GET /api/audit-logs?projectId=not-a-uuid`. Verify HTTP 400 validation error.
+  8. Send `GET /api/audit-logs` without dates. Verify it defaults to the last 30 days in Asia/Kathmandu.
+- **Expected Result**: Strict Zod validation and calendar date logic reject invalid inputs cleanly with HTTP 400.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Empty strings must **NOT** be treated as absent parameters.
+  - Invalid calendar dates must **NOT** cause unhandled errors or produce invalid SQL queries.
+
+### TEST-19A-04: Audit Log Read API - Privacy & Snapshot Sanitization Allow-Lists
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`) and `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Inspect returned audit log item snapshots for both roles.
+  2. Verify that sensitive fields are stripped: `body`, `note`, `description`, `comment`, `message`, `password`, `token`, `hash`, `secret`, `ip`, `userAgent`, and `reason` (free text).
+  3. For `project_manager`, verify that administrative attributes are stripped: `employeeCode`, `department`, `jobTitle`, `systemRole`, `lockedUntil`, `failedLoginCount`.
+  4. Inspect the `actor` object of each item: verify it only contains `{ id, displayName, username }`.
+  5. Verify that if an actor user has been deleted or is null, placeholder `{ id, displayName: "Deleted User", username: "deleted" }` is returned.
+- **Expected Result**: Sanitized snapshots adhere strictly to role-specific allow-lists.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Private notes, message bodies, passwords, password hashes, or free-text reasons must **NOT** be exposed in snapshots.
+  - Deleted actors must **NOT** cause null pointer exceptions.
+
+### TEST-19A-05: Audit Log Read API - Read-Only Invariant Enforcement
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. Send `POST /api/audit-logs`. Verify HTTP 404 or 405.
+  2. Send `PUT /api/audit-logs`. Verify HTTP 404 or 405.
+  3. Send `PATCH /api/audit-logs`. Verify HTTP 404 or 405.
+  4. Send `DELETE /api/audit-logs`. Verify HTTP 404 or 405.
+  5. Send `GET /api/audit-logs`. Verify that reading the audit log does NOT create any new audit log record.
+- **Expected Result**: Audit log is strictly read-only and reading does not generate recursive audit entries.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Audit log entries must **NOT** be editable, creatable via API, or deletable via API.
+
+### TEST-19A-FIX-01: Audit Log Query Array and Object Parameter Rejection
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. Send `GET /api/audit-logs?from=2026-01-01&from=2026-01-02`. Verify HTTP 400 validation error ("Query parameter \"from\" must be a plain string").
+  2. Test duplicate array params for `to`, `actorUserId`, `action`, `entityType`, `projectId`, `limit`, and `offset`. Verify each returns HTTP 400 validation error.
+  3. Send `GET /api/audit-logs?from[nested]=2026-01-01`. Verify HTTP 400 validation error.
+- **Expected Result**: Array and object query parameters are rejected with HTTP 400 before any trimming or date calculation.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Server must **NOT** crash with `TypeError: val.trim is not a function` when arrays or objects are sent in query strings.
+
+### TEST-19A-FIX-02: Project Manager Isolation from Non-Project Snapshot Project ID Rows (e.g. work_log.*)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Log in as `project_manager`.
+  2. Query `GET /api/audit-logs`.
+  3. Verify that zero entries with `entityType = 'WorkLogDay'` or action `work_log.*` (e.g. `work_log.edited_after_submit`) appear in the response, even if the work log entry referenced the manager's project ID.
+  4. Query `GET /api/audit-logs?entityType=WorkLogDay`. Verify HTTP 200 with `{ items: [], total: 0 }`.
+  5. Query `GET /api/audit-logs?action=work_log.edited_after_submit`. Verify HTTP 200 with `{ items: [], total: 0 }`.
+- **Expected Result**: Outer SQL condition `a."entityType" IN (...) AND a."action" IN (...)` strictly guarantees that non-project rows referencing project IDs in their snapshots are never returned to project managers.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Project managers must **NOT** see employee work log edits, user account changes, password resets, or system setting modifications under any circumstances.
+
+### TEST-19A-FIX-03: Fail-Closed Security Guard on Unexpected Caller Role
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `hr_admin` (`demo_hr`), `viewer` (`demo_viewer`)
+- **Test Steps**:
+  1. Attempt to send `GET /api/audit-logs` as any role other than `system_admin` or `project_manager`.
+  2. Verify response is HTTP 403 Forbidden.
+  3. Verify that if a caller role is neither `system_admin` nor `project_manager`, the handler terminates immediately and never executes an unscoped SQL query.
+- **Expected Result**: Route fails closed with HTTP 403.
+- **Negative Invariants (What Must NOT Happen)**:
+  - An unauthorized or unrecognized caller must **NOT** trigger an unscoped database query.
+
+

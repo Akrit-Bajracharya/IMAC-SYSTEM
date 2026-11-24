@@ -11,6 +11,7 @@ export type Action =
   | 'settings:read'
   | 'settings:update'
   | 'auditlog:read'
+  | 'auditlog:readProject'
   | 'workrole:create'
   | 'workrole:read'
   | 'workrole:update'
@@ -100,6 +101,9 @@ export function can(user: AuthUser, action: Action): boolean {
     case 'workrole:remove':
     case 'workrole:readEmployee':
       return role === 'system_admin';
+
+    case 'auditlog:readProject':
+      return role === 'system_admin' || role === 'project_manager';
 
     case 'user:read':
     case 'user:update':

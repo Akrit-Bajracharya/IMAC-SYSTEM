@@ -859,4 +859,60 @@ describe('Step 12b-1: Project Mutating Routes Permission Matrix Test Suite', () 
       });
     }
   });
+
+  // ── 9. Audit Log Read Route RBAC and Scoping Guards (Step 19a-fix Item 6c) ──
+  describe('Audit Log Read Route RBAC and Scoping Guards (Step 19a-fix Item 6c)', () => {
+    it('returns 401 for unauthenticated request to GET /api/audit-logs', async () => {
+      const res = await request(app).get('/api/audit-logs');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+
+    it('returns 403 forbidden for viewer role on GET /api/audit-logs', async () => {
+      const sessionCookie = setupAuth(viewerUser);
+      const res = await request(app).get('/api/audit-logs').set('Cookie', sessionCookie);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('forbidden');
+    });
+
+    it('returns 404 not_found for project_manager on non-managed project via GET /api/audit-logs?projectId=:id', async () => {
+      const sessionCookie = setupAuth(managerUser);
+      (db.projectMember.findMany as any).mockResolvedValue([]); // does not manage validProjectId
+
+      const res = await request(app)
+        .get(`/api/audit-logs?projectId=${validProjectId}`)
+        .set('Cookie', sessionCookie);
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('not_found');
+    });
+
+    it('allows system_admin universal access on GET /api/audit-logs', async () => {
+      const sessionCookie = setupAuth(adminUser);
+      (db.$queryRaw as any).mockImplementation(async (query: any) => {
+        const queryStr = String(query?.strings ? query.strings.join('') : query);
+        if (queryStr.includes('COUNT(*)')) return [{ count: 0 }];
+        return [];
+      });
+
+      const res = await request(app).get('/api/audit-logs').set('Cookie', sessionCookie);
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('items');
+    });
+
+    it('allows project_manager on managed project via GET /api/audit-logs?projectId=:id', async () => {
+      const sessionCookie = setupAuth(managerUser);
+      (db.projectMember.findMany as any).mockResolvedValue([{ projectId: validProjectId }]);
+      (db.$queryRaw as any).mockImplementation(async (query: any) => {
+        const queryStr = String(query?.strings ? query.strings.join('') : query);
+        if (queryStr.includes('COUNT(*)')) return [{ count: 0 }];
+        return [];
+      });
+
+      const res = await request(app)
+        .get(`/api/audit-logs?projectId=${validProjectId}`)
+        .set('Cookie', sessionCookie);
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('items');
+    });
+  });
 });

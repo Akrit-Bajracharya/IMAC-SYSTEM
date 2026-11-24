@@ -264,7 +264,31 @@ describe('Permissions - can() policy matrix', () => {
     });
   });
 
-  describe('unrecognized action fallback', () => {
+  describe('audit log permissions across all 5 system roles (Step 19a)', () => {
+    it('auditlog:read is granted ONLY to system_admin', () => {
+      const admin = createUserWithRole('system_admin');
+      expect(can(admin, 'auditlog:read')).toBe(true);
+
+      for (const role of ['hr_admin', 'project_manager', 'employee', 'viewer'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'auditlog:read'), role + ' must NOT have auditlog:read').toBe(false);
+      }
+    });
+
+    it('auditlog:readProject is granted to system_admin and project_manager, but DENIED to hr_admin, employee, viewer', () => {
+      const admin = createUserWithRole('system_admin');
+      const pm = createUserWithRole('project_manager');
+      expect(can(admin, 'auditlog:readProject')).toBe(true);
+      expect(can(pm, 'auditlog:readProject')).toBe(true);
+
+      for (const role of ['hr_admin', 'employee', 'viewer'] as const) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'auditlog:readProject'), role + ' must NOT have auditlog:readProject').toBe(false);
+      }
+    });
+  });
+
+    describe('unrecognized action fallback', () => {
     const admin = createUserWithRole('system_admin');
 
     it('denies unrecognized actions', () => {

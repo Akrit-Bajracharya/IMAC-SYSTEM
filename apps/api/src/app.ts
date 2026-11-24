@@ -17,6 +17,7 @@ import { workRolesRouter } from './routes/workRoles.js';
 import { workLogsRouter } from './routes/workLogs.js';
 import { employeesRouter } from './routes/employees.js';
 import { projectsRouter } from './routes/projects.js';
+import { auditLogsRouter } from './routes/auditLogs.js';
 
 export interface AppOptions {
   /** Disable CSRF protection entirely (use only in automated tests). */
@@ -153,6 +154,7 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api/employees', employeesRouter);
   app.use('/api/directory', employeesRouter);
   app.use('/api/projects', csrfMiddleware, projectsRouter);
+  app.use('/api/audit-logs', auditLogsRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
