@@ -94,7 +94,7 @@ export function AdminLayout() {
       label: t('nav.auditLog'),
       icon: FileText,
       end: false,
-      visible: false, // Audit log viewer not yet implemented
+      visible: isSystemAdmin,
     },
   ].filter((item) => item.visible);
 
@@ -191,4 +191,5 @@ export const getAdminNavItems = (isSystemAdmin = true) => [
   { to: '/admin/work-log/history', end: false, visible: true },
   { to: '/admin/work-log/export', end: false, visible: true },
   { to: '/admin/settings', end: false, visible: isSystemAdmin },
+  { to: '/admin/audit-log', end: false, visible: isSystemAdmin },
 ];

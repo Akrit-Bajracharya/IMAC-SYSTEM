@@ -14,6 +14,7 @@ import { UsersListPage } from '../pages/admin/UsersListPage.js';
 import { WorkRolesPage } from '../pages/admin/WorkRolesPage.js';
 import { EmployeeWorkRolesPage } from '../pages/admin/EmployeeWorkRolesPage.js';
 import { WorkLogSettingsPage } from '../pages/admin/WorkLogSettingsPage.js';
+import { AuditLogPage } from '../pages/admin/AuditLogPage.js';
 import { DirectoryPage } from '../pages/directory/DirectoryPage.js';
 import { ProjectListPage } from '../pages/projects/ProjectListPage.js';
 import { ProjectDetailPage } from '../pages/projects/ProjectDetailPage.js';
@@ -194,6 +195,16 @@ export const routes: RouteObject[] = [
                   {
                     index: true,
                     element: <WorkLogSettingsPage />,
+                  },
+                ],
+              },
+              {
+                path: 'audit-log',
+                element: <ProtectedRoute allowedRoles={['system_admin']} />,
+                children: [
+                  {
+                    index: true,
+                    element: <AuditLogPage />,
                   },
                 ],
               },

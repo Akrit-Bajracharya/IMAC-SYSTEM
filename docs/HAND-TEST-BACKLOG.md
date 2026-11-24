@@ -1096,3 +1096,101 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
 
 
 
+
+## Step 19b: System Audit Log Screen (Admin-Only)
+
+### TEST-19B-01: System Admin Audit Log Access, Filters & Snapshot Inspector
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in as `boss`.
+  2. Observe the sidebar navigation: verify the "Audit Log" item is visible with its `FileText` icon.
+  3. Click "Audit Log" (navigates to `/admin/audit-log`).
+  4. Verify default filters:
+     - "From Date" is set to Kathmandu today minus 30 days (`addDays(getKathmanduToday(), -30)`).
+     - "To Date" is set to Kathmandu today (`getKathmanduToday()`).
+     - "Action" is set to "All Actions".
+     - "Entity Type" is set to "All Entity Types".
+     - "Actor" is set to "All Actors".
+     - Note below Actor dropdown indicates: "Showing all system users (active and inactive)."
+  5. Inspect the loaded table:
+     - Entries show formatted timestamp (Asia/Kathmandu), actor displayName with username, action badge, entity type, entity ID, and details toggle button.
+  6. Filter by Action (e.g. `auth.login.success`): verify only login entries are displayed and pagination resets to offset 0.
+  7. Filter by Entity Type (e.g. `User`): verify only user entity events are shown.
+  8. Filter by Actor: select a user; verify table updates and pagination resets to offset 0.
+  9. Click on a table row or its details expand button (`ChevronDown`):
+     - Expands row displaying "Before Snapshot" and "After Snapshot" in scrollable `<pre>` blocks.
+     - Strings longer than 2000 characters are truncated with ` ... [truncated]`.
+     - Raw JSON is formatted and rendered as strict plain text (no HTML tags or scripts executed).
+  10. Enter an invalid date range (e.g. To Date earlier than From Date, or impossible date like `2026-02-31`):
+      - Alert warning is displayed with translated error text.
+      - Query is paused without triggering invalid backend requests.
+  11. Click "Reset Filters": verify default 30-day date range and all dropdowns are restored to defaults.
+- **Expected Result**:
+  - Audit trail is completely browsable, filterable, and paginated for system admin.
+  - Snapshots display cleanly in formatted JSON without layout distortion or script execution.
+- **Negative Invariants (What Must NOT Happen)**:
+  - System admin must **NOT** be blocked or redirected to 403.
+  - Snapshot text must **NOT** overflow screen bounds or execute HTML/scripts.
+
+### TEST-19B-02: Non-Admin RBAC Invariants (Sidebar Hidden & Direct URL 403)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`), `hr_admin` (`demo_hr`), `employee` (`demo_dev`), `viewer` (`demo_viewer`)
+- **Test Steps**:
+  1. Log in as `demo_hr`:
+     - Inspect sidebar navigation: verify "Audit Log" link is **NOT** present.
+     - Manually navigate to `http://localhost:5173/admin/audit-log` in browser.
+     - Verify immediate 403 `UnauthorizedPage` is displayed: "Unauthorized Access - You do not have permission to view this page."
+  2. Log in as `demo_pm`:
+     - Inspect sidebar navigation: verify "Audit Log" link is **NOT** present.
+     - Manually navigate to `http://localhost:5173/admin/audit-log`.
+     - Verify immediate 403 `UnauthorizedPage` is displayed.
+  3. Log in as `demo_dev` (`employee`):
+     - Inspect sidebar navigation: verify "Audit Log" link is **NOT** present.
+     - Manually navigate to `http://localhost:5173/admin/audit-log`.
+     - Verify immediate 403 `UnauthorizedPage` is displayed.
+  4. Log in as `demo_viewer` (`viewer`):
+     - Inspect sidebar navigation: verify "Audit Log" link is **NOT** present.
+     - Manually navigate to `http://localhost:5173/admin/audit-log`.
+     - Verify immediate 403 `UnauthorizedPage` is displayed.
+- **Expected Result**:
+  - The audit log screen is strictly admin-only.
+  - Non-admins are prevented from seeing the navigation item and are blocked by route guards with 403 Unauthorized.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Neither `hr_admin`, `project_manager`, `employee`, nor `viewer` may see the sidebar link or access the screen via direct URL.
+
+### TEST-19B-03: Error Card with Retry Button on Network / Backend Failure
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. As `boss`, navigate to `/admin/audit-log`.
+  2. Stop the API server or disconnect network connection.
+  3. Change a filter (e.g. select different Action) to trigger a request.
+  4. Verify the error card is displayed:
+     - Shows translated audit error text: *"Network connection error. Please check your connection and try again."* (not raw Axios error, JSON, or work-log review error wording).
+     - Displays a "Retry" button.
+  5. Restart the API server / restore network connection.
+  6. Click "Retry": verify the query refetches and populates the table successfully.
+- **Expected Result**:
+  - Graceful error boundary displaying user-friendly translated error message and functional retry mechanism.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** crash the page, dump raw stack traces, or display work-log review wording.
+
+### TEST-19B-04: Mobile Responsiveness Below 640px Viewport
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. As `boss`, open `/admin/audit-log`.
+  2. Open browser Developer Tools and set viewport width to 375px (mobile).
+  3. Verify the layout adapts responsively:
+     - Filters stack vertically.
+     - Desktop `<table>` is hidden and replaced by a stacked card list.
+     - Each card displays timestamp, action badge, actor, and entity type/ID without horizontal scrolling.
+  4. Tap "View Details" on a card:
+     - Card expands to reveal Before and After snapshots formatted inside max-h-48 `<pre>` blocks.
+     - Snapshot blocks wrap long strings and scroll vertically within card boundaries.
+  5. Tap "Hide Details": card collapses back to summary view.
+- **Expected Result**:
+  - Flawless mobile layout without horizontal overflow or clipped text.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Page must **NOT** create horizontal page-level scrollbars on mobile viewports.

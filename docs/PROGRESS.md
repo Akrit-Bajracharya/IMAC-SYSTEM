@@ -1692,3 +1692,61 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
 
 
 
+
+---
+
+## Current Milestone: Step 19b — System Audit Log Screen (apps/web only, Admin-Only) — COMPLETED
+
+### 1. What Was Built
+- **Audit Log Constants & Cross-Validation (`apps/web/src/constants/auditLogs.ts`)**:
+  - Synced constant arrays directly matching `apps/api/src/routes/auditLogs.ts`:
+    - `PROJECT_ACTIONS`: 24 items
+    - `ADMIN_ONLY_ACTIONS`: 21 items
+    - `ALL_KNOWN_ACTIONS`: 45 items total
+    - `PROJECT_MAPPABLE_ENTITY_TYPES`: 7 items
+    - `ADMIN_ONLY_ENTITY_TYPES`: 7 items
+    - `ALL_KNOWN_ENTITY_TYPES`: 14 items total
+- **Audit Log Helper Functions (`apps/web/src/lib/auditLogHelpers.ts`)**:
+  - `buildAuditLogQueryParams`: strips empty/null/undefined params while strictly preserving `offset: 0` (never dropped via falsy check).
+  - `validateAuditDateRange`: validates calendar dates (rejects impossible dates like `2026-02-31`) and enforces `to >= from`.
+  - `formatPaginationSummary`: calculates boundaries (`start`, `end`, `total`) and flags (`hasPrev`, `hasNext`) with friendly summary string.
+  - `truncateSnapshotValue` & `formatSnapshotText`: string fields exceeding 2000 characters are safely truncated with ` ... [truncated]`; formats snapshot JSON for display; renders safely as strict plain text inside `<pre>` without script execution or layout distortion.
+  - `resolveAuditLogError`: maps backend and network error states to audit-specific translation keys under `admin.auditLog.errors.*` (avoiding any work-log review wording, Amendment C).
+- **Audit Log API Client (`apps/web/src/api/auditLogs.ts`)**:
+  - Implements `fetchAuditLogs(params)` targeting `GET /api/audit-logs` with typed `AuditLogsResponse` (`items`, `total`, `limit`, `offset`) and `AuditLogItem`.
+- **System Audit Log Screen (`apps/web/src/pages/admin/AuditLogPage.tsx`)**:
+  - Strict system admin RBAC gate: renders `<UnauthorizedPage />` if `user.systemRole !== 'system_admin'`.
+  - Kathmandu calendar defaults: From Date set to 30 days prior (`addDays(getKathmanduToday(), -30)`), To Date set to today (`getKathmanduToday()`).
+  - Comprehensive filters: From/To date pickers, Action dropdown (45 actions), Entity Type dropdown (14 types), Actor dropdown (all active and inactive users from `fetchAdminUsers()`, with `(inactive)` indicator and explanatory note).
+  - Reset filters button returning all values to neutral defaults and resetting pagination offset to 0.
+  - Changing any filter resets `offset` to 0 and collapses expanded rows.
+  - Dual responsive presentation:
+    - Desktop/tablet view (>=640px): full `<table>` with Timestamp, Actor, Action badge, Entity Type, Entity ID, and details toggle button.
+    - Mobile view (<640px): stacked card list without horizontal scrolling.
+  - Snapshot viewer: expandable row/card with Before and After snapshot JSON rendered in styled, scrollable `<pre>` blocks (`overflow-auto max-h-60 border font-mono whitespace-pre-wrap break-all`).
+  - Error and loading boundaries: spinner for loading state; friendly error card with "Retry" button on query failure; empty state notice when no entries match filters.
+  - Full pagination controls with "Previous", "Next", and "Showing X-Y of Z".
+- **Navigation & Router Integration (`AdminLayout.tsx` & `router/index.tsx`)**:
+  - Updated `AdminLayout.tsx`: enabled Audit Log navigation item with `visible: isSystemAdmin` (hidden for `hr_admin` and all non-admin roles).
+  - Updated `router/index.tsx`: registered `/admin/audit-log` under `<ProtectedRoute allowedRoles={['system_admin']} />` rendering `<AuditLogPage />`.
+- **Automated Unit & Integration Tests**:
+  - `apps/web/src/lib/__tests__/auditLogHelpers.test.ts` (25 tests):
+    - Amendment A & B: Reads `apps/api/src/routes/auditLogs.ts` as text, extracts `ALL_KNOWN_ACTIONS` (45) and `ALL_KNOWN_ENTITY_TYPES` (14), and verifies bidirectional synchronization with web constants.
+    - Tests `buildAuditLogQueryParams`, `validateAuditDateRange`, `formatPaginationSummary`, `truncateSnapshotValue` (including 5000-character truncation and `<script>` sanitization), and `resolveAuditLogError` (asserting audit wording and rejecting work log wording).
+  - `apps/web/src/router/__tests__/routes.test.ts` (17 tests):
+    - Verifies `/admin/audit-log` resolves to a concrete registered route.
+    - Verifies `allowedRoles` for `/admin/audit-log` is strictly `['system_admin']`, denying `hr_admin`, `project_manager`, `employee`, and `viewer`.
+    - Verifies `getAdminNavItems(true)` shows Audit Log link, while `getAdminNavItems(false)` hides it.
+- **Localization (`apps/web/src/i18n/locales/en.json`)**:
+  - Added complete dictionary under `"admin.auditLog"` covering titles, filters, table headers, details labels, and error messages.
+
+### 2. Verification & Test Results
+- **Automated Tests**:
+  - `apps/web`: 17 test files, **373 tests passed (0 failures)**.
+  - `apps/api`: 19 test files, **819 tests passed (0 failures)**.
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+- **Production Build**:
+  - `npm run build --workspace=apps/web` compiled cleanly with zero errors in 17.25s.

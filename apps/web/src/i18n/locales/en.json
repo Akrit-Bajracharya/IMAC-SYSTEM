@@ -375,6 +375,46 @@
         "invalidEditWindow": "Edit window must be a positive whole number greater than 0.",
         "saveFailed": "Failed to save settings. Please try again."
       }
+    },
+    "auditLog": {
+      "title": "Audit Log",
+      "subtitle": "System-wide activity and security audit trail",
+      "filters": {
+        "from": "From Date",
+        "to": "To Date",
+        "action": "Action",
+        "allActions": "All Actions",
+        "entityType": "Entity Type",
+        "allEntities": "All Entity Types",
+        "actor": "Actor",
+        "allActors": "All Actors",
+        "inactiveUserSuffix": "(inactive)",
+        "reset": "Reset Filters"
+      },
+      "table": {
+        "timestamp": "Timestamp",
+        "actor": "Actor",
+        "action": "Action",
+        "entityType": "Entity Type",
+        "entityId": "Entity ID",
+        "details": "Details",
+        "deletedUser": "Deleted user"
+      },
+      "details": {
+        "before": "Before Snapshot",
+        "after": "After Snapshot",
+        "noSnapshots": "No snapshot data available"
+      },
+      "empty": "No audit entries match these filters",
+      "loading": "Loading audit logs...",
+      "errors": {
+        "forbidden": "You are not authorized to view the system audit logs.",
+        "validation": "Invalid query parameters provided for audit logs.",
+        "notFound": "Requested audit log resource not found.",
+        "generic": "An error occurred while loading audit log entries. Please try again.",
+        "invalidDate": "Both Start Date and End Date must be valid calendar dates (YYYY-MM-DD).",
+        "dateOrder": "End Date cannot be earlier than Start Date."
+      }
     }
   },
   "workLog": {

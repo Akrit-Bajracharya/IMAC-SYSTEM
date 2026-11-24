@@ -53,6 +53,7 @@ describe('Web App Route Table and Navigation Integrity Tests', () => {
       matchConcreteRoute('/admin/work-log/history');
       matchConcreteRoute('/admin/work-log/export');
       matchConcreteRoute('/admin/settings');
+      matchConcreteRoute('/admin/audit-log');
     });
 
     it('resolves Daily Log, History and Export links under Employee', () => {
@@ -120,6 +121,37 @@ describe('Web App Route Table and Navigation Integrity Tests', () => {
       expect(allowedRoles.includes('viewer')).toBe(false);
     });
 
+    it('strictly restricts /admin/audit-log route to system_admin only', () => {
+      const rootRoute = routes.find((r) => r.path === '/');
+      const adminRoute = rootRoute?.children?.find((r) => r.path === 'admin');
+      const adminLayout = adminRoute?.children?.find((r) => !r.path); // AdminLayout wrapper
+      const auditLogRoute = adminLayout?.children?.find((r) => r.path === 'audit-log');
+      expect(auditLogRoute).toBeDefined();
+
+      const element = auditLogRoute?.element as any;
+      const allowedRoles = element.props.allowedRoles;
+
+      // Only system_admin is permitted
+      expect(allowedRoles).toEqual(['system_admin']);
+
+      // hr_admin, project_manager, employee, viewer are excluded
+      expect(allowedRoles.includes('hr_admin')).toBe(false);
+      expect(allowedRoles.includes('project_manager')).toBe(false);
+      expect(allowedRoles.includes('employee')).toBe(false);
+      expect(allowedRoles.includes('viewer')).toBe(false);
+    });
+
+    it('hides audit-log sidebar item from non-system_admin users in AdminLayout', () => {
+      const adminNavItems = getAdminNavItems(true);
+      const auditItemAdmin = adminNavItems.find((item) => item.to === '/admin/audit-log');
+      expect(auditItemAdmin).toBeDefined();
+      expect(auditItemAdmin?.visible).toBe(true);
+
+      const hrNavItems = getAdminNavItems(false);
+      const auditItemHr = hrNavItems.find((item) => item.to === '/admin/audit-log');
+      expect(auditItemHr).toBeDefined();
+      expect(auditItemHr?.visible).toBe(false);
+    });
 
     it('enforces allowedRoles on /employee route branch', () => {
       const rootRoute = routes.find((r) => r.path === '/');
