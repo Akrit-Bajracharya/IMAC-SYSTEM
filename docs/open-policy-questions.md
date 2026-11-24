@@ -238,4 +238,38 @@ This document tracks unresolved policy, organizational, and operational decision
       - Unmappable project actions: `time_log.removed` entries physically delete the record and do not capture `projectId` in their snapshot, so they cannot be mapped reliably to a project and remain visible only to `system_admin`.
       - Future Policy Decision: Leadership may consider whether HR administrators should receive scoped audit log visibility over employee profile and work role assignments.
 
+39. **Time Log Audit Log Scoping: Deletion and Taskless Updates**
+    - **Question**: Why is `time_log.removed` admin-only, and why are `time_log.updated` entries for taskless time logs only visible to project managers while the time log still exists?
+    - **Current Implementation (Step 19a-fix)**:
+      - `time_log.removed` is admin-only: In `apps/api/src/routes/timeLogs.ts`, the deletion snapshot records only `{ taskId, workDate, hours }` and lacks `projectId`. Because the `TimeLog` row is physically deleted in the transaction, it cannot be joined on `TimeLog.id`. Since `taskId` is optional in the IMAC schema, it cannot be joined via `Task` either. Thus, `time_log.removed` cannot be reliably mapped to a project and is strictly admin-only.
+      - `time_log.updated` entries for taskless time logs: In `apps/api/src/routes/timeLogs.ts`, the update snapshot records `{ taskId, workDate, hours }` and does not record `projectId`. When `taskId` is null (a time log logged directly against a project without a task), mapping relies on a live SQL subquery join on `TimeLog.id` (`SELECT tl.id FROM "TimeLog" tl WHERE tl."projectId" = ANY(...)`). Consequently, `time_log.updated` entries for time logs with no task are only visible to managers while the time log still exists. If that time log is later deleted, past `time_log.updated` entries for it become unmappable to the project and are no longer visible to the manager (visible to `system_admin` only).
+      - Future Policy Decision: Leadership may consider modifying `timeLogs.ts` to record `projectId` directly in all time log snapshots (`created`, `updated`, `removed`) so historical audit entries remain permanently visible to project managers regardless of row deletion.
+
+---
+
+## 4. QA Session Backlog & Audit Log API Test Verification
+
+### Automated Playwright Tests to Write
+1. **Manager Access & Parameter Array Binding (`LIVE-19A-01`)**:
+   - Log in as `demo_pm`, navigate to or fetch `/api/audit-logs`, and assert HTTP 200 with `{ items, total, limit, offset }` and no 500 error (proves PostgreSQL ANY array parameter binding).
+2. **Project Filter & Query Validation (`LIVE-19A-02`)**:
+   - Query `?projectId=<MANAGED_PROJECT_ID>` as `demo_pm` and assert HTTP 200 with scoped JSON.
+   - Query `?projectId=<UNMANAGED_PROJECT_ID>` as `demo_pm` and assert HTTP 404 `not_found`.
+   - Query `?from=2026-01-01&from=2026-01-02` (duplicate array parameter) and assert HTTP 400 `validation_error`.
+3. **Work Log Leak Boundary (`LIVE-19A-03`)**:
+   - As `demo_dev`, edit a submitted work log entry linked to a managed project, creating a `work_log.edited_after_submit` audit row.
+   - As `demo_pm`, call `/api/audit-logs` and assert the work log edit is **NOT** present.
+   - As `system_admin` (`boss`), call `/api/audit-logs?action=work_log.edited_after_submit` and assert the entry is visible.
+4. **RBAC Denials (`LIVE-19A-04`)**:
+   - As `demo_dev` and `demo_hr`, call `/api/audit-logs` and assert HTTP 403 `forbidden`.
+5. **Snapshot Privacy & Free Text Redaction (`LIVE-19A-05`)**:
+   - As `demo_pm`, create a task with a description and a project message with body text.
+   - Call `/api/audit-logs` and assert snapshots contain no `description`, `body`, `message`, or `note` keys.
+
+### EntityType Casing Check
+- Verify that `project`, `milestone`, and `comment` entityTypes are consistently written in lowercase across all route files (`entityType: 'project'`, `entityType: 'milestone'`, `entityType: 'comment'`), matching the manager filter SQL (`LOWER(a."entityType") = 'project'`, `LOWER(a."entityType") = 'milestone'`, `LOWER(a."entityType") = 'comment'`).
+- Verify that `task` and `Task` casing variations are normalized via `LOWER(a."entityType") = 'task'`.
+- Verify that `ProjectMessage` is matched as exact PascalCase (`a."entityType" = 'ProjectMessage'`).
+
+
 

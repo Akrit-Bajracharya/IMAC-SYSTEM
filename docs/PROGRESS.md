@@ -1675,4 +1675,20 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
   - `npm run lint`: clean across all workspaces (0 errors).
   - `npm run typecheck`: clean across all workspaces (0 errors).
 
+### 3. Open Policy Additions & Scoping Decisions
+- **Time Log Audit Log Scoping: Deletion and Taskless Updates**:
+  - `time_log.removed` is strictly admin-only. Its snapshot records only `{ taskId, workDate, hours }` without `projectId`, and because the DB row is physically deleted and `taskId` is optional, it cannot be mapped to a project.
+  - `time_log.updated` entries for time logs with no task (taskless time logs) rely on a live SQL subquery join on `TimeLog.id` (`SELECT tl.id FROM "TimeLog" tl WHERE tl."projectId" = ANY(...)`). Therefore, they are only visible to managers while the time log still exists in the database. If that time log is subsequently deleted, past `time_log.updated` entries for it become unmappable to the project and are no longer visible to managers (visible to `system_admin` only).
+
+### 4. QA Session Section
+- **Automated Playwright Tests to Write**:
+  1. `LIVE-19A-01`: Log in as `demo_pm`, open `/api/audit-logs`, verify HTTP 200 with `{ items, total, limit, offset }` and no 500 error (proves PostgreSQL array binding).
+  2. `LIVE-19A-02`: Log in as `demo_pm`, test `?projectId=` with a managed project (200 JSON), an unmanaged project (404 not_found), and `?from=a&from=b` (400 validation_error).
+  3. `LIVE-19A-03`: Leak test: As `demo_dev`, edit a submitted work log linked to a managed project; verify `demo_pm` does NOT see that `work_log.edited_after_submit` row, while `system_admin` does.
+  4. `LIVE-19A-04`: Verify `demo_dev` and `demo_hr` receive 403 forbidden on `/api/audit-logs`.
+  5. `LIVE-19A-05`: As `demo_pm`, create a task with a description and a project message with body text; verify audit snapshots contain no description or message text.
+- **EntityType Casing Check**:
+  - Verify that `project`, `milestone`, and `comment` entityTypes are written in the lowercase spelling (`project`, `milestone`, `comment`) expected by the manager project filter SQL (`LOWER(a."entityType") = 'project'`, `LOWER(a."entityType") = 'milestone'`, `LOWER(a."entityType") = 'comment'`), while `Task`/`task` is normalized with lowercase comparison, and `ProjectMessage` is exact casing.
+
+
 

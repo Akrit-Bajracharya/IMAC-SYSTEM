@@ -1024,4 +1024,75 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
 - **Negative Invariants (What Must NOT Happen)**:
   - An unauthorized or unrecognized caller must **NOT** trigger an unscoped database query.
 
+### LIVE-19A-01: Audit Log Project Manager Scoped Read & Array Binding Proof
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Log in as `demo_pm`.
+  2. Send `GET /api/audit-logs`.
+- **Expected Result**:
+  - Response returns HTTP 200 with valid JSON structure `{ items, total, limit, offset }`.
+  - Proves PostgreSQL parameterized ANY($1) array binding succeeds cleanly without throwing an unhandled 500 error.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Must **NOT** throw HTTP 500 or PostgreSQL syntax/binding errors when expanding project ID arrays.
+
+### LIVE-19A-02: Audit Log Project Filter & Query Parameter Array Rejection
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Send `GET /api/audit-logs?projectId=<MANAGED_PROJECT_ID>` (using a project where `demo_pm` is an active manager).
+  2. Verify response returns HTTP 200 with valid JSON `{ items, total, limit, offset }` scoped to that project.
+  3. Send `GET /api/audit-logs?projectId=<UNMANAGED_PROJECT_ID>` (using a valid UUID for a project `demo_pm` does not manage).
+  4. Verify response returns HTTP 404 `not_found` (uniform rejection, preventing existence enumeration).
+  5. Send `GET /api/audit-logs?from=2026-01-01&from=2026-01-02` (duplicate array query parameter).
+  6. Verify response returns HTTP 400 `validation_error` ("Query parameter \"from\" must be a plain string").
+- **Expected Result**: Valid JSON for managed project, 404 for unmanaged project, and 400 for array query parameters.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Project managers must **NOT** see audit entries of projects they do not manage (must return 404).
+  - Server must **NOT** crash on duplicate query parameter keys.
+
+### LIVE-19A-03: Leak Test - Work Log Edits Linked to Project Never Exposed to Project Manager
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `project_manager` (`demo_pm`), `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in as `demo_dev`.
+  2. Edit a submitted daily work log entry linked to a project managed by `demo_pm` (within edit window, modifying hours or description), creating a `work_log.edited_after_submit` audit log entry with `projectId` in its snapshot.
+  3. Log in as `demo_pm` and call `GET /api/audit-logs`. Inspect all returned items.
+  4. Verify the `work_log.edited_after_submit` entry is **NOT** present in the results returned to `demo_pm`.
+  5. Log in as `system_admin` (`boss`) and call `GET /api/audit-logs?action=work_log.edited_after_submit`.
+  6. Verify `boss` **DOES** see the `work_log.edited_after_submit` audit log entry.
+- **Expected Result**:
+  - The outer SQL filter `a."entityType" IN (PROJECT_MAPPABLE_ENTITY_TYPES) AND a."action" IN (PROJECT_ACTIONS)` prevents `work_log.*` rows from leaking to project managers even if their snapshots reference the manager's project.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Project managers must **NOT** see any work log audit entries.
+  - Note on seed data: The 3 seeded `work_log.edited_after_submit` rows have a null `projectId`, so they prove nothing about the leak fix; this live test verifies a fresh post-submission work log edit linked to an actual managed project ID.
+
+### LIVE-19A-04: Non-Manager & Non-Admin Role Audit Log Access Rejection
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `hr_admin` (`demo_hr`), `viewer` (`demo_viewer`)
+- **Test Steps**:
+  1. Log in as `demo_dev` and call `GET /api/audit-logs`. Verify HTTP 403 `forbidden`.
+  2. Log in as `demo_hr` and call `GET /api/audit-logs`. Verify HTTP 403 `forbidden`.
+  3. Log in as `demo_viewer` and call `GET /api/audit-logs`. Verify HTTP 403 `forbidden`.
+- **Expected Result**: All three roles receive HTTP 403 Forbidden with `{ "error": "forbidden" }`.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Neither `employee`, `hr_admin`, nor `viewer` may access any audit log entries under any circumstances.
+
+### LIVE-19A-05: Task & Message Creation Audit Snapshot Privacy
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Log in as `demo_pm`.
+  2. Create a new task with a sensitive description (e.g. "Confidential task body with sensitive implementation notes").
+  3. Create a project message with sensitive body text.
+  4. Call `GET /api/audit-logs`.
+  5. Locate the resulting audit log entries (`task.created` and any related entries).
+  6. Inspect `beforeSnapshot` and `afterSnapshot`.
+- **Expected Result**:
+  - Audit log entries contain only allowed fields (`id`, `title`, `status`, `projectId`, etc.).
+  - Snapshots contain **NO** `description`, `body`, `message`, or `note` field.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Free-form task descriptions and message body text must **NOT** appear in audit log snapshots.
+
+
 

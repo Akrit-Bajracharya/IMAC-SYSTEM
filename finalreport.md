@@ -2344,4 +2344,40 @@ Documented in `docs/open-policy-questions.md`:
   - `time_log.removed` has no `projectId` in its snapshot and the DB row is deleted, so it remains strictly in `ADMIN_ONLY_ACTIONS`.
   - Zero database connections or scripts executed; no schema changes; protected files untouched; no git commits.
 
+---
+
+## Step 19a Docs & QA Backlog: Live Test Procedures & Scoping Decisions (Docs Only)
+
+### Task 19a-doc-01: Documentation of Live Tests, Scoping Policies & QA Session Backlog
+- **Date**: 2026-11-24
+- **Day of week**: Tuesday
+- **Start time**: 13:26:00 +05:45
+- **End time**: 13:30:00 +05:45
+- **Step**: Step 19a Documentation & QA Session Backlog (Docs Only)
+- **Task performed**:
+  - Appended live manual test scenarios to `docs/HAND-TEST-BACKLOG.md` (all marked `NOT RUN`):
+    - `LIVE-19A-01`: `demo_pm` opens `/api/audit-logs`, expecting HTTP 200 with `{ items, total, limit, offset }` and no 500 (proving PostgreSQL ANY array binding).
+    - `LIVE-19A-02`: `demo_pm` queries `?projectId=` on managed project (200 JSON), unmanaged project (404 `not_found`), and duplicate array query `?from=a&from=b` (400 `validation_error`).
+    - `LIVE-19A-03`: Leak test: `demo_dev` edits a submitted work log linked to a managed project; `demo_pm` must NOT see that `work_log.edited_after_submit` row, while `system_admin` (`boss`) must see it. Documented note that the 3 seeded `work_log.edited_after_submit` rows have a null `projectId` and prove nothing about the leak fix.
+    - `LIVE-19A-04`: Verification that `demo_dev` and `demo_hr` receive HTTP 403 `forbidden`.
+    - `LIVE-19A-05`: As `demo_pm`, create a task with a description and a project message with body text; verify audit snapshots contain no description or message text.
+  - Appended policy decisions to `docs/open-policy-questions.md` (Item 39) and `docs/PROGRESS.md`:
+    - Documented that `time_log.removed` is admin-only because the DB row is deleted, snapshot lacks `projectId`, and `taskId` is optional.
+    - Documented that `time_log.updated` entries for taskless time logs rely on a live SQL subquery join on `TimeLog.id` and are thus only visible to managers while the time log still exists in the database.
+  - Added QA Session Section to `docs/open-policy-questions.md` and `docs/PROGRESS.md`:
+    - Detailed list of automated Playwright tests to write.
+    - Casing check for `project`, `milestone`, and `comment` entityTypes ensuring they are written in lowercase as expected by manager filter SQL.
+  - Strictly docs only: zero code edited, zero scripts run, zero database connections made, and no git commits executed.
+- **Files created or changed**:
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/open-policy-questions.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - Pure documentation updates; no code changes. Previous test run: 35 test files passed, 1,165 passed (0 failures).
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - The 3 seeded `work_log.edited_after_submit` rows in `prisma/seed.ts` have `projectId = null`, so testing the leak boundary requires editing a submitted work log that is actually linked to a project ID.
+
+
 
