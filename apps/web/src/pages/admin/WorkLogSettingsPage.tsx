@@ -14,6 +14,10 @@ import {
 
 import { useAuth } from '../../hooks/useAuth.js';
 import { fetchSettings, updateSetting } from '../../api/settings.js';
+import {
+  resolveWorkLogErrorInfo,
+  shouldHydrateSettings,
+} from '../../lib/workLogReviewHelpers.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { Label } from '../../components/ui/label.js';
@@ -24,58 +28,68 @@ import { Spinner } from '../../components/layout/Spinner.js';
 import { UnauthorizedPage } from '../errors/UnauthorizedPage.js';
 import type { SystemSettingItem } from '../../types/index.js';
 
+// Stable module-level empty constant to prevent recreation in dependency arrays
+const EMPTY_SETTINGS: SystemSettingItem[] = [];
+
 export function WorkLogSettingsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Defense-in-depth: only system_admin can view or configure system settings
-  if (user?.systemRole !== 'system_admin') {
-    return <UnauthorizedPage />;
-  }
+  const isSystemAdmin = user?.systemRole === 'system_admin';
 
   // Form field states
   const [requiresApproval, setRequiresApproval] = useState<string>('true');
   const [mismatchHandling, setMismatchHandling] = useState<'block' | 'warn' | 'allow'>('warn');
   const [editWindowHours, setEditWindowHours] = useState<string>('24');
 
+  // Hydration and user modification tracking
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+  const [isDirty, setIsDirty] = useState<boolean>(false);
+
   const [formError, setFormError] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // Fetch settings from API
+  // Fetch settings from API - query enabled only for system_admin
   const {
-    data: settings = [],
+    data: settings = EMPTY_SETTINGS,
     isLoading,
+    isSuccess,
     isError,
-    error,
     refetch,
   } = useQuery<SystemSettingItem[]>({
     queryKey: ['admin', 'settings'],
     queryFn: fetchSettings,
+    enabled: isSystemAdmin,
   });
 
   // Populate form state when settings load
+  // Hydrates only once per load or when user has not edited (never overwrites typed input on background refetches)
   useEffect(() => {
-    if (settings && settings.length > 0) {
-      const approvalItem = settings.find((s) => s.key === 'worklog.requiresApproval');
-      if (approvalItem) {
-        setRequiresApproval(approvalItem.value === 'true' ? 'true' : 'false');
-      }
+    if (isSuccess && shouldHydrateSettings(isHydrated, isDirty)) {
+      if (settings && settings.length > 0) {
+        const approvalItem = settings.find((s) => s.key === 'worklog.requiresApproval');
+        if (approvalItem) {
+          setRequiresApproval(approvalItem.value === 'true' ? 'true' : 'false');
+        }
 
-      const mismatchItem = settings.find((s) => s.key === 'worklog.mismatchHandling');
-      if (
-        mismatchItem &&
-        ['block', 'warn', 'allow'].includes(mismatchItem.value.toLowerCase())
-      ) {
-        setMismatchHandling(mismatchItem.value.toLowerCase() as 'block' | 'warn' | 'allow');
-      }
+        const mismatchItem = settings.find((s) => s.key === 'worklog.mismatchHandling');
+        if (
+          mismatchItem &&
+          ['block', 'warn', 'allow'].includes(mismatchItem.value.toLowerCase())
+        ) {
+          setMismatchHandling(mismatchItem.value.toLowerCase() as 'block' | 'warn' | 'allow');
+        }
 
-      const windowItem = settings.find((s) => s.key === 'worklog.editWindowHours');
-      if (windowItem) {
-        setEditWindowHours(windowItem.value);
+        const windowItem = settings.find((s) => s.key === 'worklog.editWindowHours');
+        if (windowItem) {
+          setEditWindowHours(windowItem.value);
+        }
       }
+      setIsHydrated(true);
+      setIsDirty(false);
     }
-  }, [settings]);
+  }, [isSuccess, settings, isHydrated, isDirty]);
 
   // Save mutation
   const saveMutation = useMutation({
@@ -89,7 +103,7 @@ export function WorkLogSettingsPage() {
         numHours <= 0 ||
         numHours > 8760
       ) {
-        throw new Error(t('admin.settings.errors.invalidEditWindow'));
+        throw new Error('invalid_edit_window');
       }
 
       // Execute all setting updates
@@ -102,11 +116,31 @@ export function WorkLogSettingsPage() {
     onSuccess: () => {
       setFormError(null);
       setSuccessBanner(t('admin.settings.notifications.saved'));
+      // isDirty and isHydrated reset after successful save
+      setIsDirty(false);
+      setIsHydrated(false);
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
       setTimeout(() => setSuccessBanner(null), 5000);
     },
     onError: (err: any) => {
-      setFormError(err.message || t('admin.settings.errors.saveFailed'));
+      // Resolve error code and use translated message
+      if (err instanceof Error && err.message === 'invalid_edit_window') {
+        setFormError(t('admin.settings.errors.invalidEditWindow'));
+        return;
+      }
+      const errInfo = resolveWorkLogErrorInfo(err);
+      if (errInfo.isNetworkError) {
+        setFormError(t('common.networkError'));
+      } else if (errInfo.code === 'forbidden') {
+        setFormError(t('common.forbidden'));
+      } else if (errInfo.code === 'unauthorized') {
+        setFormError(t('common.unauthorized'));
+      } else {
+        const translated = t(`admin.settings.errors.${errInfo.code}`, {
+          defaultValue: t('admin.settings.errors.saveFailed'),
+        });
+        setFormError(translated);
+      }
     },
   });
 
@@ -117,12 +151,75 @@ export function WorkLogSettingsPage() {
     saveMutation.mutate();
   };
 
+  const handleRetry = () => {
+    // Reset dirty and hydrated markers on retry
+    setIsDirty(false);
+    setIsHydrated(false);
+    setFormError(null);
+    refetch();
+  };
+
+  // Defense-in-depth: only system_admin can view or configure system settings
+  // Checked after all hooks are invoked
+  if (!isSystemAdmin) {
+    return <UnauthorizedPage />;
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
         <Spinner />
       </div>
     );
+  }
+
+  // Error card with Retry when settings load fails - do NOT render the form
+  if (isError) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {t('admin.settings.pageTitle')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('admin.settings.pageSubtitle')}
+            </p>
+          </div>
+        </div>
+
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle className="text-base font-semibold">
+                {t('admin.settings.loadErrorTitle')}
+              </CardTitle>
+              <CardDescription className="text-xs max-w-md">
+                {t('admin.settings.loadErrorDesc')}
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>{t('common.retry')}</span>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render form only when query succeeded (isSuccess)
+  if (!isSuccess) {
+    return null;
   }
 
   return (
@@ -142,7 +239,7 @@ export function WorkLogSettingsPage() {
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => refetch()}
+          onClick={handleRetry}
           className="gap-2 self-start sm:self-auto"
         >
           <RefreshCw className="w-3.5 h-3.5" />
@@ -196,7 +293,10 @@ export function WorkLogSettingsPage() {
                   name="requiresApproval"
                   value="true"
                   checked={requiresApproval === 'true'}
-                  onChange={(e) => setRequiresApproval(e.target.value)}
+                  onChange={(e) => {
+                    setRequiresApproval(e.target.value);
+                    setIsDirty(true);
+                  }}
                   className="w-4 h-4 text-primary"
                   disabled={saveMutation.isPending}
                 />
@@ -222,7 +322,10 @@ export function WorkLogSettingsPage() {
                   name="requiresApproval"
                   value="false"
                   checked={requiresApproval === 'false'}
-                  onChange={(e) => setRequiresApproval(e.target.value)}
+                  onChange={(e) => {
+                    setRequiresApproval(e.target.value);
+                    setIsDirty(true);
+                  }}
                   className="w-4 h-4 text-primary"
                   disabled={saveMutation.isPending}
                 />
@@ -268,7 +371,10 @@ export function WorkLogSettingsPage() {
                   name="mismatchHandling"
                   value="block"
                   checked={mismatchHandling === 'block'}
-                  onChange={() => setMismatchHandling('block')}
+                  onChange={() => {
+                    setMismatchHandling('block');
+                    setIsDirty(true);
+                  }}
                   className="w-4 h-4 text-primary mt-0.5"
                   disabled={saveMutation.isPending}
                 />
@@ -294,7 +400,10 @@ export function WorkLogSettingsPage() {
                   name="mismatchHandling"
                   value="warn"
                   checked={mismatchHandling === 'warn'}
-                  onChange={() => setMismatchHandling('warn')}
+                  onChange={() => {
+                    setMismatchHandling('warn');
+                    setIsDirty(true);
+                  }}
                   className="w-4 h-4 text-primary mt-0.5"
                   disabled={saveMutation.isPending}
                 />
@@ -320,7 +429,10 @@ export function WorkLogSettingsPage() {
                   name="mismatchHandling"
                   value="allow"
                   checked={mismatchHandling === 'allow'}
-                  onChange={() => setMismatchHandling('allow')}
+                  onChange={() => {
+                    setMismatchHandling('allow');
+                    setIsDirty(true);
+                  }}
                   className="w-4 h-4 text-primary mt-0.5"
                   disabled={saveMutation.isPending}
                 />
@@ -364,7 +476,10 @@ export function WorkLogSettingsPage() {
                   min="1"
                   step="1"
                   value={editWindowHours}
-                  onChange={(e) => setEditWindowHours(e.target.value)}
+                  onChange={(e) => {
+                    setEditWindowHours(e.target.value);
+                    setIsDirty(true);
+                  }}
                   placeholder={t('admin.settings.editWindowPlaceholder')}
                   disabled={saveMutation.isPending}
                   className="w-full text-xs font-mono pr-14"

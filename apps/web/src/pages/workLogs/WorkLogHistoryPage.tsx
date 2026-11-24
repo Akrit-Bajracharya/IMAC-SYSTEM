@@ -29,6 +29,7 @@ import {
   addDays,
   calculateShiftDifference,
 } from '../../lib/dateUtils.js';
+import { shouldUpdateWeekStartDate } from '../../lib/workLogReviewHelpers.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { Label } from '../../components/ui/label.js';
@@ -95,11 +96,12 @@ export function WorkLogHistoryPage() {
   const {
     data: weekData,
     isLoading: isLoadingWeek,
+    isError: isWeekError,
     refetch: refetchWeek,
   } = useQuery({
     queryKey: ['work-logs', 'by-week', weekStartDate],
     queryFn: () => fetchWorkLogsByWeek(weekStartDate),
-    enabled: activeTab === 'week',
+    enabled: activeTab === 'week' && Boolean(weekStartDate && weekStartDate.trim().length > 0),
   });
 
   const monthLogs = useMemo(() => monthData?.workLogs ?? [], [monthData]);
@@ -358,7 +360,35 @@ export function WorkLogHistoryPage() {
             </CardContent>
           </Card>
 
-          {/* Monthly Shift Summary Cards */}
+          {isMonthError ? (
+            <Card className="border-destructive/30 bg-destructive/5">
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <CardTitle className="text-base font-semibold">
+                    {t('workLog.history.monthLoadError')}
+                  </CardTitle>
+                  <CardDescription className="text-xs max-w-md">
+                    {t('workLog.history.monthLoadErrorDesc')}
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchMonth()}
+                  className="gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>{t('common.retry')}</span>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Monthly Shift Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4 sm:p-5">
@@ -615,6 +645,8 @@ export function WorkLogHistoryPage() {
               </CardContent>
             </Card>
           )}
+            </>
+          )}
         </div>
       )}
 
@@ -632,7 +664,11 @@ export function WorkLogHistoryPage() {
                   id="week-start-date"
                   type="date"
                   value={weekStartDate}
-                  onChange={(e) => setWeekStartDate(e.target.value)}
+                  onChange={(e) => {
+                    if (shouldUpdateWeekStartDate(e.target.value)) {
+                      setWeekStartDate(e.target.value);
+                    }
+                  }}
                   className="w-full sm:w-auto"
                 />
                 <span className="text-xs text-muted-foreground">
@@ -679,7 +715,35 @@ export function WorkLogHistoryPage() {
             </CardContent>
           </Card>
 
-          {/* Weekly Summary Metrics */}
+          {isWeekError ? (
+            <Card className="border-destructive/30 bg-destructive/5">
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <CardTitle className="text-base font-semibold">
+                    {t('workLog.history.weekLoadError')}
+                  </CardTitle>
+                  <CardDescription className="text-xs max-w-md">
+                    {t('workLog.history.weekLoadErrorDesc')}
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchWeek()}
+                  className="gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>{t('common.retry')}</span>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Weekly Summary Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4 sm:p-5">
@@ -828,6 +892,8 @@ export function WorkLogHistoryPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+            </>
           )}
         </div>
       )}

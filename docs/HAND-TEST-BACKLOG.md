@@ -832,3 +832,84 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
   - Each script immediately prints its expected refusal message (e.g. `DEMO STATUS REFUSED: ALLOW_DEMO_DATA environment variable must be explicitly set to "yes"`) and cleanly exits with status code 1.
 - **Negative Invariants (What Must NOT Happen)**:
   - Must **NOT** crash with unhandled ESM import/export syntax errors.
+
+---
+
+## 9. Step 09a Files Review Fixes (`apps/web` only)
+
+### TEST-09A-FIX-01: WorkLogSettingsPage Hook Order, Failed Load Error Card & Hydration Protection
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`) and non-admin (`employee` / `hr_admin`)
+- **Test Steps**:
+  1. Log in as `employee` or `hr_admin` and navigate to `/admin/settings`.
+  2. Verify access is denied and `<UnauthorizedPage />` renders with zero React hook count warnings or crashes.
+  3. Log in as `system_admin` (`boss`) and navigate to `/admin/settings`.
+  4. Block network request to `GET /api/admin/settings` (simulate 500 error or network drop).
+  5. Verify the screen renders the dedicated Error Card with a Retry button, and does NOT render the settings form.
+  6. Re-enable network and click "Retry". Verify the form renders with server values, and `isDirty` / `isHydrated` resets.
+  7. Type edits in the form (e.g. change Edit Window to 48 hours). Simulate a background refetch. Verify typed edits are strictly preserved and never overwritten by background refetches.
+  8. Disconnect network and click "Save Policy Settings". Verify a friendly translated network error message is displayed (`"Network connection error. Please check your connection and try again."`) and NOT raw `err.message` or `AxiosError`.
+- **Expected Result**:
+  - Hooks run unconditionally; non-admins see unauthorized page without React lifecycle crashes.
+  - Failed query shows error card with Retry and blocks form render.
+  - Form hydration never clobbers typed edits.
+  - Network save errors show translated user-friendly alert.
+- **Negative Invariants (What Roles Must NOT Be Able To Do)**:
+  - Non-admins must **NOT** be able to view or edit system settings.
+  - A failed load must **NOT** render uninitialized default form values that could accidentally be saved.
+  - Must **NOT** overwrite user-typed input on background refetch.
+  - Must **NOT** show raw `err.message` or unhandled promise rejection.
+
+### TEST-09A-FIX-02: WorkLogHistoryPage Failed Month/Week Query Error Cards & Empty Week Start Date Guard
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`) and `hr_admin` (`demo_hr`)
+- **Test Steps**:
+  1. Log in as `employee` and navigate to `/employee/work-log/history`.
+  2. In Month tab, simulate network failure on `GET /api/work-logs/by-month`.
+  3. Verify the screen displays an error card with a Retry button, instead of 0 hours and "No work logs recorded".
+  4. Click "Retry" after reconnecting to verify the month logs and summary cards reload cleanly.
+  5. Switch to "Week Summary" tab. Simulate network failure on `GET /api/work-logs/by-week`.
+  6. Verify the screen displays an error card with a Retry button instead of 0 hours and an empty table.
+  7. In the "Week start date" date picker, select the text and delete it completely (`""`).
+  8. Check Network tab in devtools. Verify that no network request with `?startDate=` or `""` is dispatched.
+  9. Verify the week start date maintains its previous valid date and relative day calculations continue functioning without error.
+- **Expected Result**:
+  - Month and Week query failures display prominent error cards with Retry.
+  - Clearing the week start date is ignored and never stored or sent to the backend.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Failed month/week queries must **NOT** silently mask server errors as "0 hours logged / no logs recorded".
+  - Empty string date must **NOT** be dispatched to the API.
+
+### TEST-09A-FIX-03: WorkLogExportPage Calendar Date Validity, 366-Day Range & Roles Query Retry
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Navigate to `/employee/work-log/export`.
+  2. Simulate a failure on `GET /api/work-roles/my-roles`.
+  3. Verify the Work Role dropdown shows an error notice with a Retry button.
+  4. Click Retry to reload work roles.
+  5. Enter an impossible calendar date in Start Date: `2026-02-31`. Click "Download Spreadsheet".
+  6. Verify client validation blocks the request with translated error: "Both Start Date and End Date must be valid calendar dates (YYYY-MM-DD)."
+  7. Enter `2026-02-29` (non-leap year). Verify validation rejects it.
+  8. Enter `2026-01-01` to `2027-01-15` (>366 days). Verify date range max error is displayed.
+  9. Enter valid date range `2026-01-01` to `2026-01-31`. Submit export and verify download succeeds.
+- **Expected Result**:
+  - Work roles load error displays inline Retry control.
+  - Impossible calendar dates are strictly rejected before order and 366-day calculations.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Non-existent dates must **NOT** pass validation or produce `NaN` timestamp comparisons.
+  - Work role failure must **NOT** leave the filter permanently disabled without a retry mechanism.
+
+### TEST-09A-FIX-04: Dashboard Today Work Log Load Error Handling (Network and Server Outage)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`) and `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in and open Dashboard (`/employee/dashboard` or `/admin/dashboard`).
+  2. Disconnect network or simulate 500 error on `GET /api/work-logs/by-date`.
+  3. Inspect "Today's Work Log" card.
+  4. Verify the card displays a localized error notification ("Failed to load today's work log" / "Network connection error") rather than displaying "Not started yet / 0h logged".
+  5. Reconnect network and refresh dashboard to confirm normal status returns.
+- **Expected Result**:
+  - Failed work log query on dashboard renders an informative error notice rather than false "not started" state.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Network or server outages must **NOT** be disguised as zero hours logged or unstarted shift.

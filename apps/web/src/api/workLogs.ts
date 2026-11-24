@@ -1,4 +1,5 @@
 import { apiClient } from './client.js';
+import { resolveWorkLogErrorInfo } from '../lib/workLogReviewHelpers.js';
 import type {
   WorkRole,
   WorkLogDayResponse,
@@ -119,15 +120,24 @@ export async function downloadWorkLogsExport(params: WorkLogExportParams): Promi
 
 /**
  * Extracts error code and human-readable message from API error response.
+ * Delegates to resolveWorkLogErrorInfo to ensure single authoritative error resolution.
  */
 export function getWorkLogErrorInfo(error: any): {
   code: string;
   message?: string;
   status?: number;
+  isNetworkError?: boolean;
 } {
-  const status = error?.response?.status;
-  const data = error?.response?.data;
-  const code = data?.error || (status === 403 ? 'forbidden' : status === 404 ? 'not_found' : 'unknown_error');
-  const message = data?.message;
-  return { code, message, status };
+  const resolved = resolveWorkLogErrorInfo(error);
+  const rawMessage = error?.response?.data?.message;
+  const message =
+    typeof rawMessage === 'string' && rawMessage.trim().length > 0
+      ? rawMessage.trim()
+      : resolved.defaultMessage;
+  return {
+    code: resolved.code,
+    message,
+    status: resolved.status,
+    isNetworkError: resolved.isNetworkError,
+  };
 }

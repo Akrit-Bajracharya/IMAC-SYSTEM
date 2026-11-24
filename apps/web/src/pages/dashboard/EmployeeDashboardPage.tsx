@@ -11,6 +11,7 @@ import {
   Clock,
   ChevronRight,
   ShieldAlert,
+  AlertCircle,
   ArrowRight,
   RefreshCw,
 } from 'lucide-react';
@@ -135,6 +136,20 @@ export function EmployeeDashboardPage() {
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
                   {t('dashboard.noProfileDesc')}
+                </p>
+              </div>
+            ) : logError ? (
+              <div className="rounded-lg p-4 bg-destructive/10 border border-destructive/20 text-xs space-y-1.5">
+                <div className="font-semibold flex items-center gap-1.5 text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  {getWorkLogErrorInfo(logError).code === 'network_error'
+                    ? t('common.networkError')
+                    : t('dashboard.logLoadError')}
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  {getWorkLogErrorInfo(logError).code === 'network_error'
+                    ? t('common.networkErrorDesc')
+                    : t('dashboard.logLoadErrorDesc')}
                 </p>
               </div>
             ) : (

@@ -88,6 +88,9 @@
     "reset": "Reset",
     "unassigned": "Unassigned",
     "unknownError": "An unexpected error occurred.",
+    "networkError": "Network connection error. Please check your connection and try again.",
+    "networkErrorDesc": "Unable to connect to the server. Please check your network connection and try again.",
+    "forbidden": "You do not have permission to perform this action.",
     "info": "Notice",
     "loadingMore": "Loading older items..."
   },
@@ -116,6 +119,8 @@
     "openWorkLog": "Open Today's Log",
     "noProfileTitle": "Administrative Account",
     "noProfileDesc": "No employee profile is assigned to this account. Shift hour tracking and work logging apply to active staff profiles.",
+    "logLoadError": "Failed to load today's work log",
+    "logLoadErrorDesc": "Could not retrieve today's work log. Please check your connection or refresh the page.",
     "myProjects": "My Projects",
     "viewAllProjects": "View All Projects",
     "noProjects": "No projects found.",
@@ -345,6 +350,8 @@
     "settings": {
       "pageTitle": "System Settings — Work Log Policies",
       "pageSubtitle": "Configure organizational shift validation, approval workflows, and employee edit windows.",
+      "loadErrorTitle": "Failed to Load Settings",
+      "loadErrorDesc": "Could not load work log policy settings. Please check your connection and try again.",
       "requiresApprovalTitle": "Require Manager Approval (worklog.requiresApproval)",
       "requiresApprovalDesc": "When enabled, employee submitted logs must be approved by a designated manager.",
       "enabled": "Enabled (Approval Required)",
@@ -492,6 +499,10 @@
       "overallTotal": "Overall Total Hours",
       "expectedTotal": "Expected Shift Hours",
       "balance": "Net Difference",
+      "monthLoadError": "Failed to Load Monthly Work Logs",
+      "monthLoadErrorDesc": "Could not retrieve work log records for the selected month. Please check your connection and try again.",
+      "weekLoadError": "Failed to Load Weekly Work Logs",
+      "weekLoadErrorDesc": "Could not retrieve weekly work log records for the selected period. Please check your connection and try again.",
       "subtitle": "Review historical daily work logs"
     },
     "export": {
@@ -516,8 +527,10 @@
       },
       "errors": {
         "dateRequired": "Both Start Date and End Date are required.",
+        "invalidDate": "Both Start Date and End Date must be valid calendar dates (YYYY-MM-DD).",
         "dateOrder": "End Date must be on or after Start Date.",
         "dateRangeMax": "Date range cannot exceed 366 days.",
+        "rolesLoadError": "Failed to load assigned work roles.",
         "forbidden": "You are only permitted to export your own work logs.",
         "row_limit_exceeded": "The requested export exceeds the maximum allowed limit of 50,000 rows. Please narrow your date range or filters.",
         "too_many_requests": "Export rate limit reached (maximum 15 exports per 15 minutes). Please wait before trying again.",

@@ -10,10 +10,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Users,
+  RefreshCw,
 } from 'lucide-react';
 
 import { useAuth } from '../../hooks/useAuth.js';
 import { fetchMyWorkRoles, downloadWorkLogsExport } from '../../api/workLogs.js';
+import { isValidCalendarDate } from '../../lib/workLogReviewHelpers.js';
 import {
   getKathmanduToday,
   parseYmd,
@@ -51,8 +53,13 @@ export function WorkLogExportPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Fetch work roles for filter dropdown
-  const { data: myRoles = [] } = useQuery<WorkRole[]>({
+  // Fetch work roles for filter dropdown with error handling
+  const {
+    data: myRoles = [],
+    isLoading: isLoadingRoles,
+    isError: isRolesError,
+    refetch: refetchRoles,
+  } = useQuery<WorkRole[]>({
     queryKey: ['work-roles', 'my-roles'],
     queryFn: fetchMyWorkRoles,
     staleTime: 5 * 60 * 1000,
@@ -63,20 +70,27 @@ export function WorkLogExportPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    // Validation checks
+    // 1. Presence check
     if (!startDate || !endDate) {
       setErrorMessage(t('workLog.export.errors.dateRequired'));
       return;
     }
 
+    // 2. Real calendar dates validation check (before order & 366-day checks)
+    if (!isValidCalendarDate(startDate) || !isValidCalendarDate(endDate)) {
+      setErrorMessage(t('workLog.export.errors.invalidDate'));
+      return;
+    }
+
+    // 3. Date order check
     if (endDate < startDate) {
       setErrorMessage(t('workLog.export.errors.dateOrder'));
       return;
     }
 
-    // Date range max 366 days
-    const startMs = new Date(startDate).getTime();
-    const endMs = new Date(endDate).getTime();
+    // 4. Date range max 366 days
+    const startMs = new Date(startDate + 'T00:00:00Z').getTime();
+    const endMs = new Date(endDate + 'T00:00:00Z').getTime();
     const diffDays = Math.round((endMs - startMs) / (24 * 3600 * 1000));
     if (diffDays > 366) {
       setErrorMessage(t('workLog.export.errors.dateRangeMax'));
@@ -103,6 +117,12 @@ export function WorkLogExportPage() {
       await downloadWorkLogsExport(params);
       setSuccessMessage(t('workLog.export.notifications.downloadStarted'));
     } catch (err: any) {
+      // Check for network error first
+      if (!err?.response) {
+        setErrorMessage(t('common.networkError'));
+        return;
+      }
+
       let errorCode = '';
       let statusCode = err?.response?.status;
 
@@ -111,12 +131,12 @@ export function WorkLogExportPage() {
         try {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
-          errorCode = json.error || '';
+          errorCode = typeof json.error === 'string' ? json.error : '';
         } catch {
           // ignore parsing error
         }
       } else if (err?.response?.data) {
-        errorCode = err.response.data.error || '';
+        errorCode = typeof err.response.data.error === 'string' ? err.response.data.error : '';
       }
 
       if (statusCode === 403 || errorCode === 'forbidden') {
@@ -233,23 +253,53 @@ export function WorkLogExportPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="export-work-role" className="text-xs font-semibold">
-                  {t('workLog.export.workRole')}
-                </Label>
-                <Select
-                  id="export-work-role"
-                  value={workRoleId}
-                  onChange={(e) => setWorkRoleId(e.target.value)}
-                  disabled={isExporting}
-                  className="w-full text-xs"
-                >
-                  <option value="">{t('workLog.export.allWorkRoles')}</option>
-                  {myRoles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="export-work-role" className="text-xs font-semibold">
+                    {t('workLog.export.workRole')}
+                  </Label>
+                  {isRolesError && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => refetchRoles()}
+                      className="h-5 px-1.5 text-[11px] text-destructive hover:text-destructive gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>{t('common.retry')}</span>
+                    </Button>
+                  )}
+                </div>
+                {isRolesError ? (
+                  <div className="p-2 rounded border border-destructive/30 bg-destructive/5 text-xs text-destructive flex items-center justify-between">
+                    <span>{t('workLog.export.errors.rolesLoadError')}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetchRoles()}
+                      className="h-6 px-2 text-xs gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>{t('common.retry')}</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    id="export-work-role"
+                    value={workRoleId}
+                    onChange={(e) => setWorkRoleId(e.target.value)}
+                    disabled={isExporting || isLoadingRoles}
+                    className="w-full text-xs"
+                  >
+                    <option value="">{t('workLog.export.allWorkRoles')}</option>
+                    {myRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </div>
             </div>
 

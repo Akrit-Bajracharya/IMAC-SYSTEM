@@ -1490,3 +1490,68 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
 ### 3. Verification Results
 - All 1,103 automated tests across 33 test files continue to pass (0 failures).
 - Component-level render paths and interactive error cards rely on hand-test backlog scenarios.
+
+---
+
+## Current Milestone: Step 09a Files Review Fixes (`apps/web` only) — COMPLETED
+
+### 1. Scope & Objectives
+- Fixed confirmed findings identified during Step 9a screens review across `apps/web`:
+  - `apps/web/src/pages/admin/WorkLogSettingsPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`
+  - `apps/web/src/pages/workLogs/WorkLogExportPage.tsx`
+  - `apps/web/src/api/workLogs.ts`
+  - `apps/web/src/pages/dashboard/AdminDashboardPage.tsx`
+  - `apps/web/src/pages/dashboard/EmployeeDashboardPage.tsx`
+  - `apps/web/src/i18n/locales/en.json`
+- Created dedicated pure helpers and unit test suite:
+  - `apps/web/src/lib/workLogReviewHelpers.ts`
+  - `apps/web/src/lib/__tests__/workLogReviewHelpers.test.ts`
+- Strictly frontend (`apps/web`) only; zero backend edits made (`apps/api`); zero schema changes; zero new npm packages; Daily Work Log files untouched.
+
+### 2. What Was Built & Fixed
+- **Pure Functional Helpers & Unit Test Suite (`apps/web/src/lib/workLogReviewHelpers.ts`)**:
+  - `isValidCalendarDate(dateStr)`: Strictly validates `YYYY-MM-DD` formatting, 1-12 months, and exact day bounds per month including February leap year rules (`2024-02-29` is valid, `2026-02-29` and `2026-02-31` are invalid).
+  - `resolveWorkLogErrorInfo(error)`: Authoritative error resolver: only treats `data.error` as an error code if it is a non-empty string (ignoring objects, arrays, booleans, numbers); maps missing responses to `code: 'network_error'` with translated message key `common.networkError`; resolves HTTP 403, 404, 401, and `profile_not_found`.
+  - `shouldHydrateSettings(isHydrated, isDirty)`: Protects form inputs from being clobbered by background refetches once edited by user.
+  - `shouldUpdateWeekStartDate(newDate)`: Rejects empty strings and whitespace, ensuring empty dates are never stored or queried.
+  - Added 22 unit tests in `apps/web/src/lib/__tests__/workLogReviewHelpers.test.ts` covering standard and boundary negative cases (impossible dates, leap years, non-string error codes, network outages).
+- **WorkLogSettingsPage Hardening (`apps/web/src/pages/admin/WorkLogSettingsPage.tsx`)**:
+  - **Hook Ordering**: Moved all React hooks (`useState`, `useQuery`, `useEffect`, `useMutation`) above the role check so no hook sits after an early return.
+  - **Failed Load Error Card**: If settings query fails (`isError`), renders an error card with a `Retry` button and strictly does NOT render the settings form.
+  - **Controlled Render**: Renders the form only when `isSuccess` is true; an empty list (`settings = []`) from a successful load shows defaults (`true`, `warn`, `24`), while loading, disabled, or failed queries never show the default form.
+  - **Form Hydration & Dirty State**: Module-level stable empty constant `EMPTY_SETTINGS = []`; hydration runs only when unhydrated or clean; `isDirty` and `isHydrated` reset cleanly upon successful save and on Retry.
+  - **Save Error Presentation**: Resolves errors using `resolveWorkLogErrorInfo` to show translated error messages (`common.networkError`, `common.forbidden`, `admin.settings.errors.<code}>`), eliminating raw `err.message` or `AxiosError` strings.
+- **WorkLogHistoryPage Silent Failure & Date Guards (`apps/web/src/pages/workLogs/WorkLogHistoryPage.tsx`)**:
+  - **Month & Week Error Cards**: When `isMonthError` or `isWeekError` occurs, replaces the 0-hours summary cards and empty views with a dedicated error card and `Retry` button (`refetchMonth()` / `refetchWeek()`).
+  - **Empty Week Start Date Guard**: Input `onChange` ignores empty strings (`shouldUpdateWeekStartDate`), and the week query explicitly enforces `enabled: activeTab === 'week' && Boolean(weekStartDate && weekStartDate.trim().length > 0)`, preventing `?startDate=` requests.
+  - Em-dashes in titles were left untouched.
+- **WorkLogExportPage Date Validation & Roles Error State (`apps/web/src/pages/workLogs/WorkLogExportPage.tsx`)**:
+  - **Strict Calendar Date Validation**: Validates both `startDate` and `endDate` with `isValidCalendarDate` before checking date ordering and the 366-day span limit, each with its own translated error message.
+  - **Work Roles Query Error State**: Captures `isError` on `fetchMyWorkRoles` and renders an inline error alert with a `Retry` button for the work roles dropdown.
+  - Blob error parsing safely extracts string codes and handles network drops (`!err?.response`).
+- **Single Error Resolver Invariant & Dashboard Hardening**:
+  - `apps/web/src/api/workLogs.ts` (`getWorkLogErrorInfo`): Refactored to delegate directly to `resolveWorkLogErrorInfo`, maintaining a single error-code resolver across the client.
+  - Inspected all callers (`AdminDashboardPage.tsx`, `EmployeeDashboardPage.tsx`): Added error notification blocks so network and server errors are displayed with friendly translated messages rather than silently falling through to "not started / 0h logged".
+- **Localization Keys Added (`apps/web/src/i18n/locales/en.json`)**:
+  - Added `common.networkError`, `common.networkErrorDesc`, `common.forbidden`.
+  - Added `dashboard.logLoadError`, `dashboard.logLoadErrorDesc`.
+  - Added `admin.settings.loadErrorTitle`, `admin.settings.loadErrorDesc`.
+  - Added `workLog.history.monthLoadError`, `workLog.history.monthLoadErrorDesc`.
+  - Added `workLog.history.weekLoadError`, `workLog.history.weekLoadErrorDesc`.
+  - Added `workLog.export.errors.invalidDate`, `workLog.export.errors.rolesLoadError`.
+
+### 3. Verification & Test Results
+- **Automated Tests**:
+  - All 18 test files in `apps/api` passed: **779 passed**.
+  - All 16 test files in `apps/web` passed: **346 passed** (+22 new tests in `workLogReviewHelpers.test.ts`).
+  - Monorepo total: **34 test files, 1,125 tests passed (0 failures)**.
+- **Linter & Type Check**:
+  - `npm run lint`: clean across all workspaces (0 errors).
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+- **Production Build**:
+  - `npm run build --workspace=apps/web`: built cleanly in 8.07s.
+- **Manual Test Backlog**:
+  - Appended `TEST-09A-FIX-01`, `TEST-09A-FIX-02`, `TEST-09A-FIX-03`, `TEST-09A-FIX-04` marked `NOT RUN` to `docs/HAND-TEST-BACKLOG.md`.
+- **Honest Disclaimer**:
+  - Vitest in `apps/web` operates in a Node environment executing pure TypeScript logic. Interactive component mounting, React hook lifecycle ordering, and visual error card render paths are verified via manual test scenarios in the hand-test backlog.
