@@ -1750,3 +1750,72 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
   - Clean across all workspaces via `npm run lint`.
 - **Production Build**:
   - `npm run build --workspace=apps/web` compiled cleanly with zero errors in 17.25s.
+
+---
+
+## Current Milestone: Step 17a — Notifications Data Model and Read API (Backend Only) — COMPLETED
+
+### 1. What Was Built
+- **Prisma Schema Update (`apps/api/prisma/schema.prisma`)**:
+  - Added model `Notification`:
+    - `id`: String UUID primary key (`@id @default(uuid())`).
+    - `userId`: String foreign key to `User(id)` with `onDelete: Restrict`.
+    - `type`: String notification category.
+    - `entityType`: Optional string.
+    - `entityId`: Optional string.
+    - `projectId`: Optional string (plain string like in `WorkLogEntry`).
+    - `payload`: JSON object with default `"ready-to-use"` empty object (`@default("{}")`).
+    - `readAt`: Optional DateTime recording when notification was marked as read.
+    - `createdAt`: DateTime (`@default(now())`).
+    - Single field index `@@index([userId])` and composite index `@@index([userId, readAt, createdAt])`.
+  - Added relation on `User`: `notifications Notification[]`.
+  - Validated with `npx prisma validate` and generated Prisma Client with `npx prisma generate` (zero migrations created, zero database connections made).
+- **Notification Service & Privacy Sanitizer (`apps/api/src/services/notifications.ts`)**:
+  - `NOTIFICATION_PAYLOAD_ALLOW_LIST`: Strict allow-list containing only IDs and short titles (`taskId`, `taskTitle`, `projectId`, `projectName`, `milestoneId`, `milestoneTitle`, `commentId`, `timeLogId`, `actorUserId`, `status`, `fromStatus`, `toStatus`, `priority`, `roleName`).
+  - Prohibits free text: drops `body`, `commentBody`, `messageBody`, `description`, `note`, `reason`, `password`.
+  - Amendment B rationale: `actorUserId` is included while `actorDisplayName` and `actorUsername` are excluded because user display names and usernames can change or go stale over time.
+  - Allowed value types: string, number, boolean, null. Any nested objects, arrays, undefined, or unknown keys are strictly dropped. String values are capped at 200 characters.
+  - `createNotification(tx, input)` & `createNotifications(tx, inputs)`:
+    - Strongly typed with `NotificationPrismaClient` accepting both `PrismaClient` and `Prisma.TransactionClient` (no `any`).
+    - Self-notification guard: skips notification if `actorUserId === userId`.
+    - Deduplication: deduplicates recipients within batch inputs so each user receives at most one notification.
+    - Does NOT wire any trigger into existing routes in this step.
+- **Central Permissions Matrix (`apps/api/src/lib/permissions.ts`)**:
+  - Added actions `notification:read` and `notification:update` granted to all five system roles (`system_admin`, `hr_admin`, `project_manager`, `employee`, `viewer`).
+- **Notifications Router (`apps/api/src/routes/notifications.ts`)**:
+  - Mounted at `/api/notifications` in `app.ts` under `csrfMiddleware`, `requireAuth`, and `requirePasswordChanged`.
+  - `GET /unread-count`: Registered BEFORE `/:id/read`. Returns `{ unreadCount }` for session user.
+  - `POST /read-all`: Registered BEFORE `/:id/read`. Marks all unread notifications of caller as read, returns `{ updated }`.
+  - `GET /`: Lists own notifications (`where: { userId }`), ordered by `createdAt: 'desc', id: 'desc'`. Strict query parameter validation (plain strings, rejects empty strings and arrays). Validates `limit` (default 20, max 100), `offset` (0 valid), and `unreadOnly` (strict boolean `'true'` or `'false'`, rejects `'maybe'` with 400). Returns `{ items, total, unreadCount, limit, offset }`.
+  - `POST /:id/read`: Marks single notification read using `updateMany({ where: { id, userId } })`. Idempotent (returns 200 on repeated calls). Returns uniform 404 `{ error: 'not_found', message: 'Notification not found' }` if notification belongs to another user, does not exist, or ID is malformed.
+  - HTTP method restrictions: Direct `POST /`, `PUT`, `PATCH`, and `DELETE` requests are refused with 404 Route not found.
+  - Rule 6: Reading or marking notifications writes NO audit entry.
+- **Demo Tooling Updates (`demoGuard.ts`, `demoRemove.ts`, `demoStatus.ts`)**:
+  - Added `Notification` to `DEMO_DELETION_ORDER` immediately before `User`.
+  - Added `{ child: 'Notification', parent: 'User' }` to `PARENT_CHILD_RELATIONS`.
+  - Added `Notification` deletion step in `demoRemove.ts` by `userId in demoUserIds` before User.
+  - Added `Notification` count in `demoStatus.ts`.
+- **Automated Tests**:
+  - Created `apps/api/src/__tests__/notifications.test.ts` (39 tests):
+    - 401 unauthenticated requests on all 4 endpoints.
+    - Role access and strict `userId` scoping across all 5 system roles.
+    - Idempotent single read and cross-user 404 isolation.
+    - Query parameter parsing, `offset: 0`, `limit > 100` rejection, strict boolean `unreadOnly`.
+    - Payload sanitizer dropping private keys, nested objects, and truncating strings > 200 chars.
+    - Transaction helpers with fake transaction object testing deduplication and self-notification skip.
+    - Refusal of unhandled HTTP methods (404) verified both with default test bypass and with explicit CSRF protection + valid token.
+    - Zero audit log generation invariant.
+  - Updated `permissions.test.ts` (+2 tests) and `routeInventory.test.ts` (+4 tests).
+  - Verified `demoData.test.ts` model-coverage test (70 passing tests).
+
+### 2. Verification & Test Results
+- **Automated Tests**:
+  - `apps/api`: 20 test files passed, **863 tests passed (0 failures)** (+45 new tests).
+  - `apps/web`: 17 test files passed, **373 tests passed (0 failures)**.
+  - Monorepo total: **37 test files passed, 1,236 tests passed (0 failures)**.
+- **Type Checking**:
+  - Clean across all workspaces (`@imac/api`, `@imac/web`, `@imac/shared` via `npm run typecheck`).
+- **Linting**:
+  - Clean across all workspaces via `npm run lint`.
+- **Database Status**:
+  - Zero migration folders created; zero migrate commands run; zero database connections made.

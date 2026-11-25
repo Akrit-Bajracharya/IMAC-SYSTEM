@@ -2444,3 +2444,59 @@ Documented in `docs/open-policy-questions.md`:
 - **Decisions or problems**:
   - `fetchAdminUsers()` returns all users without pagination or active filter; inactive accounts are labeled `(inactive)` with an explanatory note below the actor select.
   - Protected files (`password.ts`, `session.ts`, `auth.ts`, `routes/auth.ts`, and `prisma/*`) were untouched; zero edits to `apps/api`, `packages/shared`, or `package-lock.json`; no git commits executed.
+
+---
+
+## Step 17a: Notifications Data Model and Read API (apps/api only)
+
+### Task 17a-01: Data Model, Privacy Sanitizer, Router, Transaction Helpers, Demo Tooling & Integration Tests
+- **Date**: 2026-11-24
+- **Day of week**: Tuesday
+- **Start time**: 14:55:00 +05:45
+- **End time**: 15:22:00 +05:45
+- **Step**: Step 17a (Notifications data model and read API — apps/api only, no screen, no triggers)
+- **Task performed**:
+  - Item 1 (Model Notification): Added `Notification` model to `apps/api/prisma/schema.prisma` with `id` (uuid), `userId` (FK to User, onDelete Restrict, indexed), `type`, optional `entityType`, optional `entityId`, optional `projectId` (plain string), `payload` (`Json @default("{}")`), optional `readAt`, `createdAt`, composite index `@@index([userId, readAt, createdAt])`, and added relation `notifications Notification[]` on `User`. Validated schema with `npx prisma validate` and generated Prisma Client with `npx prisma generate`. Zero migration folders created; zero migrate commands run; zero database connections made.
+  - Item 2 & Amendment A/B (Payload Sanitizer): Implemented `sanitizeNotificationPayload` in `apps/api/src/services/notifications.ts` using strict allow-list `NOTIFICATION_PAYLOAD_ALLOW_LIST`. Dropped all keys not on the allow-list (no block-list). Allowed primitive types: string, number, boolean, null. Nested objects and arrays dropped. Strings capped at 200 characters. Preserved `actorUserId` and omitted `actorDisplayName`/`actorUsername` because user display names and usernames go stale over time. Forbidden keys (`body`, `commentBody`, `messageBody`, `description`, `note`, `reason`, `password`) strictly dropped.
+  - Item 3 & Amendment G (Transaction Helpers): Implemented `createNotification(tx, input)` and `createNotifications(tx, inputs)` typed with `NotificationPrismaClient` accepting both `PrismaClient` and `Prisma.TransactionClient` (no `any`). Added self-notification filter (`actorUserId === userId` skipped) and recipient deduplication. Wired zero triggers into existing routes.
+  - Item 4 (Permissions): Added actions `notification:read` and `notification:update` in `apps/api/src/lib/permissions.ts` granted to all five system roles (`system_admin`, `hr_admin`, `project_manager`, `employee`, `viewer`). Changed nothing else in `permissions.ts`.
+  - Item 5 & Amendments D/E/F (Routes under `/api/notifications`):
+    - Mounted at `/api/notifications` in `app.ts` under `csrfMiddleware`, `requireAuth`, and `requirePasswordChanged`.
+    - Registered `GET /unread-count` and `POST /read-all` BEFORE `POST /:id/read`.
+    - `GET /`: Lists own notifications (`where: { userId }`), ordered by `createdAt: 'desc', id: 'desc'`. Strict query parameter validation (plain strings, rejects empty strings and arrays). Validates `limit` (default 20, max 100), `offset` (0 valid), and `unreadOnly` (strict boolean `'true'` or `'false'`, rejects `'maybe'` with 400). Returns `{ items, total, unreadCount, limit, offset }`.
+    - `GET /unread-count`: Returns `{ unreadCount }` for session user.
+    - `POST /read-all`: Marks all unread notifications of caller as read, returns `{ updated }`.
+    - `POST /:id/read`: Marks single notification read using `updateMany({ where: { id, userId } })`. Idempotent (returns 200 on repeated calls). Returns uniform 404 `{ error: 'not_found', message: 'Notification not found' }` if notification belongs to another user, does not exist, or ID is malformed.
+    - Proves direct `POST /`, `PUT`, `PATCH`, and `DELETE` are refused with 404 Route not found (tested both in standard test mode and with explicit CSRF protection + valid token).
+  - Item 6 (Audit Log Invariant): Confirmed reading or marking notifications writes NO audit entry (`db.auditLog.create` never called).
+  - Item 7 (Tests): Added mock-based test suite `apps/api/src/__tests__/notifications.test.ts` (39 tests). Updated `setup.ts` with `notification` mock delegate. Added route checks to `routeInventory.test.ts` and permission checks to `permissions.test.ts`.
+  - Item 8 (Demo Tooling): Added `Notification` to `DEMO_DELETION_ORDER` immediately before `User` in `apps/api/scripts/demoGuard.ts`. Added `{ child: 'Notification', parent: 'User' }` to `PARENT_CHILD_RELATIONS`. Added `Notification` deletion step in `apps/api/scripts/demoRemove.ts` by `userId in demoUserIds` before User. Added `Notification` count in `apps/api/scripts/demoStatus.ts`. Zero demo scripts executed.
+  - Item 9 (Documentation): Appended policy questions 40-42 to `docs/open-policy-questions.md`, appended manual test scenarios `TEST-17A-01` to `TEST-17A-03` to `docs/HAND-TEST-BACKLOG.md`, appended milestone summary to `docs/PROGRESS.md`, and logged task in `finalreport.md`.
+  - Verification: Full test suite passed (37 test files, 1,236 tests passed, 0 failures), lint passed with 0 errors, typecheck passed with 0 errors across all workspaces.
+- **Files created or changed**:
+  - `apps/api/prisma/schema.prisma`
+  - `apps/api/scripts/demoGuard.ts`
+  - `apps/api/scripts/demoRemove.ts`
+  - `apps/api/scripts/demoStatus.ts`
+  - `apps/api/src/lib/permissions.ts`
+  - `apps/api/src/services/notifications.ts`
+  - `apps/api/src/routes/notifications.ts`
+  - `apps/api/src/app.ts`
+  - `apps/api/src/__tests__/setup.ts`
+  - `apps/api/src/__tests__/permissions.test.ts`
+  - `apps/api/src/__tests__/routeInventory.test.ts`
+  - `apps/api/src/__tests__/notifications.test.ts`
+  - `docs/open-policy-questions.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Tests run with pass counts**:
+  - `apps/api`: 20 test files passed, **863 tests passed (0 failures)** (+45 new tests).
+  - `apps/web`: 17 test files passed, **373 tests passed (0 failures)**.
+  - Monorepo total: **37 test files passed, 1,236 tests passed (0 failures)**.
+  - `npm run lint`: clean across all workspaces (0 errors).
+  - `npm run typecheck`: clean across all workspaces (0 errors).
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - In `notifications.ts`, `actorUserId` is preserved while `actorDisplayName` and `actorUsername` are dropped to prevent stale denormalized name strings.
+  - Zero migrations created; zero migrate commands run; zero database connections made; protected files untouched; zero git commits executed.

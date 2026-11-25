@@ -426,4 +426,30 @@ describe('Step 10d: Route Inventory Test Suite', () => {
       expect(res.body.error).toBe('not_found');
     });
   });
+
+  describe('Notifications Route Inventory & Security Guards (Step 17a)', () => {
+    it('returns 401 for unauthenticated request to GET /api/notifications', async () => {
+      const res = await request(app).get('/api/notifications');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+
+    it('returns 401 for unauthenticated request to GET /api/notifications/unread-count', async () => {
+      const res = await request(app).get('/api/notifications/unread-count');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+
+    it('returns 401 for unauthenticated request to POST /api/notifications/read-all', async () => {
+      const res = await request(app).post('/api/notifications/read-all');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+
+    it('returns 401 for unauthenticated request to POST /api/notifications/:id/read', async () => {
+      const res = await request(app).post(`/api/notifications/${validProjectId}/read`);
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+  });
 });

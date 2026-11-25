@@ -474,6 +474,7 @@ export const DEMO_DELETION_ORDER = [
   'AvailabilityStatus',
   'Session',
   'AuditLog',
+  'Notification',
   'User',
 ] as const;
 
@@ -504,6 +505,7 @@ export const PARENT_CHILD_RELATIONS: Array<{ child: string; parent: string }> = 
   { child: 'AvailabilityStatus', parent: 'User' },
   { child: 'Session', parent: 'User' },
   { child: 'AuditLog', parent: 'User' },
+  { child: 'Notification', parent: 'User' },
 ];
 
 /**

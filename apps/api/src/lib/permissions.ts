@@ -37,7 +37,9 @@ export type Action =
   | 'timeLog:write'
   | 'message:read'
   | 'message:create'
-  | 'message:pin';
+  | 'message:pin'
+  | 'notification:read'
+  | 'notification:update';
 
 export function can(user: AuthUser, action: Action): boolean {
   const role = user.systemRole;
@@ -65,6 +67,8 @@ export function can(user: AuthUser, action: Action): boolean {
     case 'task:read':
     case 'timeLog:read':
     case 'message:read':
+    case 'notification:read':
+    case 'notification:update':
       return ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'].includes(role);
 
     // Architectural Note:

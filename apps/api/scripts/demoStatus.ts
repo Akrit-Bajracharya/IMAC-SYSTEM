@@ -145,6 +145,10 @@ async function main() {
       where: { actorUserId: { in: demoUserIds } },
     });
 
+    counts['Notification'] = await prisma.notification.count({
+      where: { userId: { in: demoUserIds } },
+    });
+
     console.log('--- IMAC DEMO DATA STATUS ---');
     let totalDemoRecords = 0;
     for (const [entity, count] of Object.entries(counts)) {

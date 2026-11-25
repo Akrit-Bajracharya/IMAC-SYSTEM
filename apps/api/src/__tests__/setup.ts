@@ -188,6 +188,18 @@ const mockDb: any = {
     aggregate: vi.fn(),
     groupBy: vi.fn(),
   },
+  notification: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    count: vi.fn(),
+    create: vi.fn(),
+    createMany: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
 };
 
 mockDb.$transaction = vi.fn(async (arg: any) => {

@@ -273,3 +273,29 @@ This document tracks unresolved policy, organizational, and operational decision
 
 
 
+
+---
+
+## 5. Notifications Subsystem Policies (Step 17a)
+
+40. **Notification Retention and Auto-Pruning Policy**
+    - **Question**: How long should read and unread notifications be retained in PostgreSQL before being permanently pruned or archived?
+    - **Current Implementation (Step 17a)**: No automated deletion or expiration TTL is implemented; notifications accumulate indefinitely in the `Notification` table until explicitly removed.
+    - **Policy Alternatives**:
+      - Default auto-prune read notifications after 30 or 60 days via a background maintenance cron job.
+      - Retain unread notifications for a longer window (e.g. 90 or 180 days) before auto-expiring.
+      - Retain notifications indefinitely and let users manually clear read notifications.
+
+41. **User Notification Preference Controls & Type Muting**
+    - **Question**: Should users be permitted to mute or opt out of specific notification categories (e.g. comment creation, milestone status changes, message posting)?
+    - **Current Implementation (Step 17a)**: All generated notification types are delivered to the recipient's in-app notification queue without per-user muting preferences.
+    - **Policy Alternatives**:
+      - Introduce a user notification settings preference table allowing granular opt-out per notification category.
+      - Enforce mandatory notifications for direct task assignments and status transitions while allowing optional muting for general comments or milestone updates.
+
+42. **Administrative Notification Scoping for HR Admins**
+    - **Question**: Should `hr_admin` receive system-level or administrative notifications (e.g., employee account deactivation, work role assignment, work log compliance alerts), or are admin notifications exclusive to `system_admin`?
+    - **Current Implementation (Step 17a)**: Notifications are scoped to individual users (`userId`). Administrative notifications have not yet been wired to any role triggers.
+    - **Policy Alternatives**:
+      - Deliver employee profile and work role lifecycle notifications to both `system_admin` and `hr_admin`.
+      - Route only compliance and shift mismatch alerts to `hr_admin`, keeping core security/auth alerts exclusive to `system_admin`.

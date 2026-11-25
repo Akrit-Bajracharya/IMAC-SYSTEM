@@ -1194,3 +1194,61 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
   - Flawless mobile layout without horizontal overflow or clipped text.
 - **Negative Invariants (What Must NOT Happen)**:
   - Page must **NOT** create horizontal page-level scrollbars on mobile viewports.
+
+## Step 17a: Notifications Data Model and Read API
+
+### TEST-17A-01: Own Notifications List and Unread Count
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `project_manager` (`demo_pm`), `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in as `demo_dev`.
+  2. Call `GET /api/notifications` via authenticated HTTP client or browser console.
+  3. Verify response shape: `{ items: [], total: N, unreadCount: M, limit: 20, offset: 0 }`.
+  4. Verify all items returned belong strictly to `demo_dev` (`userId === demo_dev.id`).
+  5. Call `GET /api/notifications/unread-count`. Verify response: `{ unreadCount: M }` matching the unread count in `GET /api/notifications`.
+  6. Call `GET /api/notifications?unreadOnly=true`. Verify all returned items have `readAt: null`.
+  7. Call `GET /api/notifications?offset=0&limit=5`. Verify offset `0` is respected and limit is capped.
+- **Expected Result**:
+  - Notifications are returned in descending chronological order (`createdAt: 'desc', id: 'desc'`).
+  - Unread count matches number of notifications where `readAt` is null.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Users must **NOT** see any notifications belonging to other users.
+
+### TEST-17A-02: Mark Single Notification and All Notifications Read (Idempotency & Isolation)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. As `demo_dev`, locate an unread notification ID (`notif_id_1`).
+  2. Send `POST /api/notifications/notif_id_1/read`.
+  3. Verify response is HTTP 200 `{ success: true }`.
+  4. Immediately send `POST /api/notifications/notif_id_1/read` a second time (idempotency check).
+  5. Verify response remains HTTP 200 `{ success: true }`.
+  6. Log in as `demo_pm`. Attempt to call `POST /api/notifications/notif_id_1/read` (targeting `demo_dev`'s notification).
+  7. Verify response is HTTP 404 `{ error: "not_found", message: "Notification not found" }`.
+  8. Call `POST /api/notifications/invalid-uuid-format/read`.
+  9. Verify response is HTTP 404 `{ error: "not_found", message: "Notification not found" }`.
+  10. As `demo_pm`, call `POST /api/notifications/read-all`.
+  11. Verify response is HTTP 200 `{ updated: K }`, where K is the count of previously unread notifications belonging to `demo_pm`.
+- **Expected Result**:
+  - Updating a single notification is idempotent.
+  - Cross-user notification updates return uniform 404, preventing notification ID enumeration.
+  - `POST /read-all` updates all and only unread notifications belonging to the session user.
+- **Negative Invariants (What Must NOT Happen)**:
+  - Non-owners must **NOT** be able to mark another user's notifications as read.
+  - Reading or marking notifications must **NOT** write any entries to the `AuditLog` table.
+
+### TEST-17A-03: Refusal of Mutating Methods and Direct Creation
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`)
+- **Test Steps**:
+  1. Log in as `boss`.
+  2. Send `POST /api/notifications` with payload `{ "type": "task.assigned" }`.
+  3. Send `PUT /api/notifications` with payload `{}`.
+  4. Send `PATCH /api/notifications` with payload `{}`.
+  5. Send `DELETE /api/notifications`.
+  6. Send `PUT /api/notifications/:id`.
+  7. Send `DELETE /api/notifications/:id`.
+- **Expected Result**:
+  - All six requests receive HTTP 404 `{ error: "not_found", message: "Route not found" }`.
+- **Negative Invariants (What Must NOT Happen)**:
+  - The API must **NOT** expose any endpoints allowing clients to create, edit, or delete notification rows directly.

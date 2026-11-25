@@ -198,7 +198,13 @@ async function main() {
         });
         deletionCounts['AuditLog'] = delAudit.count;
 
-        // 18. User
+        // 18. Notification
+        const delNotifications = await tx.notification.deleteMany({
+          where: { userId: { in: demoUserIds } },
+        });
+        deletionCounts['Notification'] = delNotifications.count;
+
+        // 19. User
         const delUsers = await tx.user.deleteMany({
           where: { id: { in: demoUserIds } },
         });

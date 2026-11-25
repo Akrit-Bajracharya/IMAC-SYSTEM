@@ -288,7 +288,18 @@ describe('Permissions - can() policy matrix', () => {
     });
   });
 
-    describe('unrecognized action fallback', () => {
+  describe('notification permissions across all 5 system roles (Step 17a)', () => {
+    it('grants notification:read and notification:update to all 5 system roles', () => {
+      const allRoles = ['system_admin', 'hr_admin', 'project_manager', 'employee', 'viewer'] as const;
+      for (const role of allRoles) {
+        const u = createUserWithRole(role);
+        expect(can(u, 'notification:read'), `${role} must have notification:read`).toBe(true);
+        expect(can(u, 'notification:update'), `${role} must have notification:update`).toBe(true);
+      }
+    });
+  });
+
+  describe('unrecognized action fallback', () => {
     const admin = createUserWithRole('system_admin');
 
     it('denies unrecognized actions', () => {
