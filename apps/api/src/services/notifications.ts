@@ -85,7 +85,47 @@ export type NotificationPrismaClient =
         create: (args: Prisma.NotificationCreateArgs) => Promise<any>;
         createMany?: (args: Prisma.NotificationCreateManyArgs) => Promise<any>;
       };
+      projectMember?: {
+        findMany: (args: Prisma.ProjectMemberFindManyArgs) => Promise<Array<{ userId: string }>>;
+      };
     };
+
+/**
+ * Filters candidate user IDs down to users who are both:
+ * 1) active members of the specified project, and
+ * 2) active users (user.isActive === true).
+ * Does NOT swallow errors or undefined/malformed results; if findMany fails, the transaction rolls back.
+ */
+export async function filterActiveProjectRecipients(
+  tx: Prisma.TransactionClient | PrismaClient,
+  projectId: string,
+  candidateUserIds: Array<string | null | undefined>
+): Promise<string[]> {
+  const uniqueIds = Array.from(
+    new Set(
+      candidateUserIds.filter(
+        (id): id is string => typeof id === 'string' && id.trim().length > 0
+      )
+    )
+  );
+
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const members = await tx.projectMember.findMany({
+    where: {
+      projectId,
+      userId: { in: uniqueIds },
+      user: { isActive: true },
+    },
+    select: {
+      userId: true,
+    },
+  });
+
+  return members.map((m) => m.userId);
+}
 
 /**
  * Creates a single notification inside an existing transaction or db context.

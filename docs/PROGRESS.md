@@ -1853,3 +1853,23 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
 - **Translations & Tests**:
   - Added `nav.notifications` and `notifications.*` keys in `apps/web/src/i18n/locales/en.json` with 0 missing keys verified.
   - Added 38 unit tests in `apps/web/src/lib/__tests__/notificationsHelpers.test.ts` (pure Node Vitest, no component rendering) and updated `apps/web/src/router/__tests__/routes.test.ts` (18 tests).
+
+---
+
+## Current Milestone: Step 17c — Notification Triggers (`apps/api` only) — COMPLETED
+
+### 1. What Was Built
+- **API Constants (`apps/api/src/constants/notificationTypes.ts`)**:
+  - Defined `NOTIFICATION_TYPES` (`task.assigned`, `task.status_changed`, `message.converted_to_task`, `project.member_added`, `work_log.reminder`) and `ALL_NOTIFICATION_TYPES`, synchronized with `apps/web/src/constants/notificationTypes.ts`.
+- **Recipient Filtering Helper (`apps/api/src/services/notifications.ts`)**:
+  - Added `filterActiveProjectRecipients(tx, projectId, candidateUserIds)` querying `tx.projectMember.findMany` with `user: { isActive: true }` so inactive users and departed project members stay unnotified. Does not swallow errors or undefined results.
+- **5 Notification Triggers Wired Inside Existing `$transaction` Blocks**:
+  1. `POST /api/projects/:id/tasks` (`tasks.ts`): Notifies `data.assigneeUserId` (`task.assigned`) inside `tx` right after the `task.assigned` audit write.
+  2. `PATCH /api/projects/:id/tasks/:taskId` (`tasks.ts`): Notifies new `data.assigneeUserId` (`task.assigned`) inside `tx` right after the `task.assigned` audit write ONLY when `assigneeUserId` changed to a different non-null user.
+  3. `POST /api/projects/:id/tasks/:taskId/status` (`tasks.ts`): Only AFTER `tx.task.updateMany` succeeds (`count === 1`) and `task.status_changed` audit write completes, filters `[task.assigneeUserId, task.createdByUserId]` via `filterActiveProjectRecipients` and notifies via `createNotifications` (`task.status_changed`).
+  4. `POST /api/projects/:id/messages/:messageId/to-task` (`messages.ts`): Inside `tx` after `task.created` audit write, filters `[message.authorUserId]` via `filterActiveProjectRecipients` and notifies via `createNotification` (`message.converted_to_task`).
+  5. `POST /api/projects/:id/members` (`projects.ts`): Inside `tx` after `project_member.added` audit write, notifies `userId` via `createNotification` (`project.member_added`).
+- **Tests & SQL Check**:
+  - Added mock-based tests in `apps/api/src/__tests__/notificationTriggers.test.ts` covering all 5 triggers, actor exclusion, inactive/departed member exclusion, 409 conflict guard, transaction rollback, payload privacy, and bidirectional API <-> Web constants sync.
+  - Updated `apps/api/src/__tests__/setup.ts` (`findMany` default `[]`) and `apps/api/src/__tests__/projectMessages.test.ts` (added `projectMember` and `notification` delegates to inline `tx` mocks).
+  - Created read-only `docs/notification-triggers-check.sql` for `imac_demo` inspection.

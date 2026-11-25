@@ -1,5 +1,7 @@
 import { Router, type Response } from 'express';
 import { db } from '../db.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
+import { createNotification } from '../services/notifications.js';
 import {
   requireAuth,
   requirePasswordChanged,
@@ -532,6 +534,20 @@ projectsRouter.post(
               projectRole,
             },
             ipAddress: req.ip,
+          },
+        });
+
+        await createNotification(tx, {
+          userId,
+          actorUserId: req.user!.id,
+          type: NOTIFICATION_TYPES.PROJECT_MEMBER_ADDED,
+          entityType: 'project',
+          entityId: project.id,
+          projectId: project.id,
+          payload: {
+            projectId: project.id,
+            projectName: project.name,
+            actorUserId: req.user!.id,
           },
         });
 

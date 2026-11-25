@@ -2540,3 +2540,39 @@ Documented in `docs/open-policy-questions.md`:
 - **Decisions or problems**:
   - Verified `getProjectsRedirectPath` in `router/index.tsx` routes `hr_admin` to `/employee/projects`, which rejects `hr_admin` under `ProtectedRoute allowedRoles={['employee', 'project_manager', 'viewer']}`; left untouched per Step 17b boundary and reported in summary.
   - Zero edits to `apps/api`, `packages/shared`, or `package-lock.json`; no packages installed; no git commits executed.
+
+---
+
+## Step 17c: Notification Triggers (`apps/api` only)
+
+### Task 17c-01: Wire 5 Notification Triggers, Eligibility Filters, Rollback Tests & SQL Check
+- **Date**: 2026-11-25
+- **Day of week**: Wednesday
+- **Start time**: 10:42:00 +05:45
+- **End time**: 12:24:00 +05:45
+- **Step**: Step 17c (Wire notification triggers into existing routes — `apps/api` only)
+- **Task performed**:
+  - Created `apps/api/src/constants/notificationTypes.ts` synchronized with `apps/web/src/constants/notificationTypes.ts`.
+  - Added `filterActiveProjectRecipients` in `apps/api/src/services/notifications.ts`.
+  - Wired all 5 triggers inside existing `$transaction(async (tx) => ...)` blocks in `tasks.ts`, `messages.ts`, and `projects.ts` using `tx` alongside audit writes.
+  - Updated mock defaults in `setup.ts` and inline `tx` mocks in `projectMessages.test.ts`.
+  - Created `apps/api/src/__tests__/notificationTriggers.test.ts` (mock-based) covering all 5 triggers, actor exclusion, departed/inactive exclusion, 409 conflict guard, rollback on failure, payload privacy, and API <-> Web constants sync.
+  - Created read-only `docs/notification-triggers-check.sql` (for `imac_demo` only, not executed).
+  - Appended `TEST-17C-01`..`TEST-17C-05` (`NOT RUN`) to `docs/HAND-TEST-BACKLOG.md` and updated `docs/PROGRESS.md`.
+- **Files created or changed**:
+  - `apps/api/src/constants/notificationTypes.ts`
+  - `apps/api/src/services/notifications.ts`
+  - `apps/api/src/routes/tasks.ts`
+  - `apps/api/src/routes/messages.ts`
+  - `apps/api/src/routes/projects.ts`
+  - `apps/api/src/__tests__/setup.ts`
+  - `apps/api/src/__tests__/projectMessages.test.ts`
+  - `apps/api/src/__tests__/notificationTriggers.test.ts`
+  - `docs/notification-triggers-check.sql`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - `projectMessages.test.ts` used custom inline `tx` objects in two `to-task` tests; added `projectMember.findMany` and `notification.create` delegate mocks there per Amendment E.
+  - Zero edits to `apps/web`, `packages/shared`, `apps/api/prisma`, or protected auth files; no new routes or permission actions; no git commits executed.

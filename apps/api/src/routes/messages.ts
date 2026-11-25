@@ -1,5 +1,10 @@
 import { Router, type Response } from 'express';
 import { db } from '../db.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
+import {
+  createNotification,
+  filterActiveProjectRecipients,
+} from '../services/notifications.js';
 import {
   requireAuth,
   requirePasswordChanged,
@@ -373,6 +378,27 @@ messagesRouter.post(
           },
         },
       });
+
+      const eligibleRecipients = await filterActiveProjectRecipients(tx, projectId, [
+        message.authorUserId,
+      ]);
+
+      for (const recipientId of eligibleRecipients) {
+        await createNotification(tx, {
+          userId: recipientId,
+          actorUserId: req.user!.id,
+          type: NOTIFICATION_TYPES.MESSAGE_CONVERTED_TO_TASK,
+          entityType: 'task',
+          entityId: task.id,
+          projectId,
+          payload: {
+            taskId: task.id,
+            taskTitle: task.title,
+            projectId,
+            actorUserId: req.user!.id,
+          },
+        });
+      }
 
       return { task };
     });

@@ -1333,3 +1333,64 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
 - **Expected Result**:
   - Dropdown fits cleanly within the 375px viewport without clipping or horizontal overflow.
   - Notification rows stack vertically with no horizontal page scroll.
+
+## Step 17c: Notification Triggers (`apps/api`)
+
+### TEST-17C-01: Task Creation Assignment Notification (`POST /api/projects/:id/tasks`)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`), `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Log in as `demo_pm` and create a task in a managed project assigned to `demo_dev`.
+  2. Check `demo_pm`'s notification bell: actor sees nothing (no self-notification).
+  3. Log in as `demo_dev`: observe the notification bell badge increments (`1`) and dropdown shows `You were assigned to task "<title>"`.
+  4. As `demo_pm`, create another task assigned to `demo_pm` (self-assigned) and another task with no assignee.
+- **Expected Result**:
+  - `demo_dev` receives the `task.assigned` notification and bell badge updates.
+  - Actor (`demo_pm`) receives nothing for self-assigned or unassigned tasks.
+
+### TEST-17C-02: Task Reassignment Notification & Removal Guard (`PATCH /api/projects/:id/tasks/:taskId`)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`), `employee` (`demo_dev`, `demo_dev2`)
+- **Test Steps**:
+  1. As `demo_pm`, edit an existing task assigned to `demo_dev` and change only its title (keep `assigneeUserId` unchanged).
+  2. Reassign the task from `demo_dev` to `demo_dev2`.
+  3. Edit the task again to remove the assignee (`assigneeUserId: null`).
+- **Expected Result**:
+  - Unchanged assignee sends nothing.
+  - Reassignment notifies ONLY `demo_dev2` (new assignee), NOT `demo_dev` (previous assignee) and NOT `demo_pm` (actor).
+  - Removing the assignee (`null`) sends nothing.
+
+### TEST-17C-03: Task Status Change Notification (`POST /api/projects/:id/tasks/:taskId/status`)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. Have `demo_pm` create a task assigned to `demo_dev`.
+  2. Log in as `demo_dev` and change the task status from `todo` to `in_progress`.
+  3. Check `demo_dev`'s bell (actor sees nothing).
+  4. Check `demo_pm`'s bell (task creator receives `task.status_changed` notification).
+- **Expected Result**:
+  - Active assignee and creator (deduplicated, actor excluded) receive `task.status_changed`.
+  - Departed/inactive users receive nothing.
+
+### TEST-17C-04: Message Converted to Task Notification (`POST /api/projects/:id/messages/:messageId/to-task`)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `project_manager` (`demo_pm`)
+- **Test Steps**:
+  1. As `demo_dev`, post a project message with confidential body details on line 2.
+  2. As `demo_pm`, click "Turn into task" on that message.
+  3. Check `demo_pm`'s bell (actor sees nothing).
+  4. Check `demo_dev`'s bell (message author receives `message.converted_to_task` notification with only the task title, no message body).
+- **Expected Result**:
+  - Active message author receives `message.converted_to_task` without message body in payload.
+  - If the message author is no longer an active project member, no notification is sent.
+
+### TEST-17C-05: Project Member Added Notification (`POST /api/projects/:id/members`)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`), `system_admin` (`boss`), `employee` (`demo_dev2`)
+- **Test Steps**:
+  1. As `demo_pm`, add `demo_dev2` to a project.
+  2. Log in as `demo_dev2` and check the bell badge and dropdown (`You were added to project "<name>"`).
+  3. As `boss`, add `boss` (self) to a project.
+- **Expected Result**:
+  - `demo_dev2` sees the `project.member_added` notification and clicking it navigates to the project page.
+  - `boss` adding themselves sees nothing (actor excluded).

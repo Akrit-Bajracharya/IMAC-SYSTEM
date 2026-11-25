@@ -28,6 +28,7 @@ const mockDb: any = {
     upsert: vi.fn(),
   },
   auditLog: {
+    findFirst: vi.fn(),
     create: vi.fn().mockResolvedValue({}),
   },
   employeeProfile: {
@@ -65,7 +66,7 @@ const mockDb: any = {
   workLogDay: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -77,7 +78,7 @@ const mockDb: any = {
   workLogEntry: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -89,7 +90,7 @@ const mockDb: any = {
   project: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -101,7 +102,7 @@ const mockDb: any = {
   projectMember: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -113,7 +114,7 @@ const mockDb: any = {
   projectStatusEvent: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -124,7 +125,7 @@ const mockDb: any = {
   milestone: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -135,7 +136,7 @@ const mockDb: any = {
   task: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -147,7 +148,7 @@ const mockDb: any = {
   taskDependency: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -157,7 +158,7 @@ const mockDb: any = {
   comment: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -167,7 +168,7 @@ const mockDb: any = {
   projectMessage: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -177,7 +178,7 @@ const mockDb: any = {
   timeLog: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -191,7 +192,7 @@ const mockDb: any = {
   notification: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    findMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),

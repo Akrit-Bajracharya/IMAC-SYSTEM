@@ -408,6 +408,12 @@ describe('Step 10e Part B: Project Messages Subsystem Tests', () => {
           task: {
             create: vi.fn().mockResolvedValue(createdTaskMock),
           },
+          projectMember: {
+            findMany: vi.fn().mockResolvedValue([]),
+          },
+          notification: {
+            create: vi.fn().mockResolvedValue({}),
+          },
         });
       });
 
@@ -520,6 +526,12 @@ describe('Step 10e Part B: Project Messages Subsystem Tests', () => {
           },
           task: {
             create: vi.fn().mockResolvedValue(createdTaskMock),
+          },
+          projectMember: {
+            findMany: vi.fn().mockResolvedValue([]),
+          },
+          notification: {
+            create: vi.fn().mockResolvedValue({}),
           },
         });
       });

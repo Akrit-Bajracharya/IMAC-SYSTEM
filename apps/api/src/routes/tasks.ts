@@ -1,5 +1,11 @@
 import { Router, type Response } from 'express';
 import { db } from '../db.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
+import {
+  createNotification,
+  createNotifications,
+  filterActiveProjectRecipients,
+} from '../services/notifications.js';
 import {
   requireAuth,
   requirePasswordChanged,
@@ -307,6 +313,21 @@ tasksRouter.post(
               assigneeUserId: data.assigneeUserId,
             },
             ipAddress: req.ip,
+          },
+        });
+
+        await createNotification(tx, {
+          userId: data.assigneeUserId,
+          actorUserId: req.user!.id,
+          type: NOTIFICATION_TYPES.TASK_ASSIGNED,
+          entityType: 'task',
+          entityId: task.id,
+          projectId,
+          payload: {
+            taskId: task.id,
+            taskTitle: task.title,
+            projectId,
+            actorUserId: req.user!.id,
           },
         });
       }
@@ -645,6 +666,23 @@ tasksRouter.patch(
             ipAddress: req.ip,
           },
         });
+
+        if (data.assigneeUserId !== null) {
+          await createNotification(tx, {
+            userId: data.assigneeUserId,
+            actorUserId: req.user!.id,
+            type: NOTIFICATION_TYPES.TASK_ASSIGNED,
+            entityType: 'task',
+            entityId: u.id,
+            projectId,
+            payload: {
+              taskId: u.id,
+              taskTitle: u.title,
+              projectId,
+              actorUserId: req.user!.id,
+            },
+          });
+        }
       }
 
       return u;
@@ -874,6 +912,31 @@ tasksRouter.post(
           ipAddress: req.ip,
         },
       });
+
+      const eligibleRecipients = await filterActiveProjectRecipients(tx, projectId, [
+        task.assigneeUserId,
+        task.createdByUserId,
+      ]);
+
+      await createNotifications(
+        tx,
+        eligibleRecipients.map((recipientId) => ({
+          userId: recipientId,
+          actorUserId: req.user!.id,
+          type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
+          entityType: 'task',
+          entityId: taskId,
+          projectId,
+          payload: {
+            taskId,
+            taskTitle: task.title,
+            projectId,
+            fromStatus: task.status,
+            toStatus,
+            actorUserId: req.user!.id,
+          },
+        }))
+      );
 
       return { success: true };
     });
