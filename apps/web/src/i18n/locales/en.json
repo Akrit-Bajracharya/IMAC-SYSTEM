@@ -53,7 +53,8 @@
     "workLogExport": "Export Logs",
     "leave": "Leave",
     "overtime": "Overtime",
-    "projects": "Projects"
+    "projects": "Projects",
+    "notifications": "Notifications"
   },
   "common": {
     "loading": "Loading...",
@@ -1038,6 +1039,62 @@
         "notFound": "Message or project not found",
         "unexpected": "An unexpected error occurred. Please try again."
       }
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Stay updated on task assignments, status changes, and team activity.",
+    "bell": {
+      "ariaLabel": "Notifications ({{count}} unread)",
+      "dropdownTitle": "Notifications",
+      "markAllRead": "Mark all as read",
+      "markingAllRead": "Marking...",
+      "viewAll": "View all",
+      "loading": "Loading notifications...",
+      "empty": "No notifications yet"
+    },
+    "filters": {
+      "all": "All",
+      "unread": "Unread"
+    },
+    "actions": {
+      "markAllRead": "Mark all as read",
+      "markingAllRead": "Marking...",
+      "markRead": "Mark as read",
+      "loadMore": "Load more",
+      "loadingMore": "Loading...",
+      "retry": "Retry"
+    },
+    "status": {
+      "unread": "Unread"
+    },
+    "empty": {
+      "all": "No notifications yet",
+      "unread": "No unread notifications"
+    },
+    "loading": "Loading notifications...",
+    "types": {
+      "taskAssigned": "You were assigned to task \"{{taskTitle}}\"",
+      "taskAssignedNoTitle": "You were assigned to a task",
+      "taskStatusChanged": "Task \"{{taskTitle}}\" moved to {{status}}",
+      "taskStatusChangedNoStatus": "Status updated on task \"{{taskTitle}}\"",
+      "taskStatusChangedNoTitle": "A task status changed to {{status}}",
+      "taskStatusChangedGeneric": "A task status was updated",
+      "messageConvertedToTask": "A project message was converted to task \"{{taskTitle}}\"",
+      "messageConvertedToTaskNoTitle": "A project message was converted to a task",
+      "projectMemberAdded": "You were added to project \"{{projectName}}\"",
+      "projectMemberAddedNoName": "You were added to a project",
+      "workLogReminder": "Reminder: please submit your daily work log",
+      "fallback": "You have a new notification"
+    },
+    "errors": {
+      "network": "Unable to connect to the server. Please check your connection and try again.",
+      "validation": "Invalid notification request parameters.",
+      "forbidden": "You do not have permission to view these notifications.",
+      "notFound": "Notification could not be found.",
+      "generic": "Could not load notifications. Please try again.",
+      "markReadFailed": "Could not mark notification as read. Please try again.",
+      "markAllReadFailed": "Could not mark all notifications as read. Please try again."
     }
   }
 }

@@ -12,11 +12,13 @@ import {
   ClipboardList,
   Calendar,
   FileSpreadsheet,
+  Bell,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { Badge } from '../ui/badge.js';
 import { Button } from '../ui/button.js';
 import { cn } from '../../lib/utils.js';
+import { NotificationBell } from './NotificationBell.js';
 
 export function AdminLayout() {
   const { t } = useTranslation();
@@ -79,6 +81,13 @@ export function AdminLayout() {
       to: '/admin/work-log/export',
       label: t('nav.workLogExport'),
       icon: FileSpreadsheet,
+      end: false,
+      visible: true,
+    },
+    {
+      to: '/admin/notifications',
+      label: t('nav.notifications'),
+      icon: Bell,
       end: false,
       visible: true,
     },
@@ -149,6 +158,7 @@ export function AdminLayout() {
           <h2 className="text-lg md:text-xl font-semibold truncate">{pageTitle}</h2>
 
           <div className="flex items-center gap-3">
+            <NotificationBell />
             {user && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium hidden sm:inline">
@@ -190,6 +200,7 @@ export const getAdminNavItems = (isSystemAdmin = true) => [
   { to: '/admin/work-log', end: true, visible: true },
   { to: '/admin/work-log/history', end: false, visible: true },
   { to: '/admin/work-log/export', end: false, visible: true },
+  { to: '/admin/notifications', end: false, visible: true },
   { to: '/admin/settings', end: false, visible: isSystemAdmin },
   { to: '/admin/audit-log', end: false, visible: isSystemAdmin },
 ];

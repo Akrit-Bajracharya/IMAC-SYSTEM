@@ -10,11 +10,13 @@ import {
   Clock,
   LogOut,
   CalendarDays,
+  Bell,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { Badge } from '../ui/badge.js';
 import { Button } from '../ui/button.js';
 import { cn } from '../../lib/utils.js';
+import { NotificationBell } from './NotificationBell.js';
 
 export function EmployeeLayout() {
   const { t } = useTranslation();
@@ -56,6 +58,12 @@ export function EmployeeLayout() {
       to: '/employee/work-log/export',
       label: t('nav.workLogExport'),
       icon: FileSpreadsheet,
+      end: false,
+    },
+    {
+      to: '/employee/notifications',
+      label: t('nav.notifications'),
+      icon: Bell,
       end: false,
     },
     {
@@ -126,6 +134,7 @@ export function EmployeeLayout() {
           <h2 className="text-lg md:text-xl font-semibold truncate">{pageTitle}</h2>
 
           <div className="flex items-center gap-3">
+            <NotificationBell />
             {user && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium hidden sm:inline">
@@ -165,4 +174,5 @@ export const getEmployeeNavItems = () => [
   { to: '/employee/work-log', end: true, visible: true },
   { to: '/employee/work-log/history', end: false, visible: true },
   { to: '/employee/work-log/export', end: false, visible: true },
+  { to: '/employee/notifications', end: false, visible: true },
 ];

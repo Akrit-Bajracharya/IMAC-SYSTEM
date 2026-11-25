@@ -1819,3 +1819,37 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
   - Clean across all workspaces via `npm run lint`.
 - **Database Status**:
   - Zero migration folders created; zero migrate commands run; zero database connections made.
+
+---
+
+## Current Milestone: Step 17b — Notification Bell and Notification Centre (`apps/web` only) — COMPLETED
+
+### 1. What Was Built
+- **Notification Constants (`apps/web/src/constants/notificationTypes.ts`)**:
+  - Defined `NOTIFICATION_TYPES` (`task.assigned`, `task.status_changed`, `message.converted_to_task`, `project.member_added`, `work_log.reminder`) and `ALL_NOTIFICATION_TYPES` for reuse in Step 17c.
+- **API Client (`apps/web/src/api/notifications.ts`)**:
+  - Implemented `fetchNotifications({ limit, offset, unreadOnly })`, `fetchUnreadCount()`, `markNotificationRead(id)`, and `markAllNotificationsRead()`.
+  - Uses `buildNotificationQueryParams` so empty/undefined values are dropped, `offset: 0` is explicitly sent, and `unreadOnly` is sent only when `true`.
+- **Pure Helpers (`apps/web/src/lib/notificationsHelpers.ts`)**:
+  - Shared query key family `notificationKeys` (`all`, `unreadCount`, `list`) so bell dropdown and page caches stay consistent and invalidate together.
+  - `formatUnreadBadge`: hidden at `0`, `1..99` as string, `"99+"` above `99`.
+  - `notificationText`: builds plain-text translated messages from `type` + `payload` without ever printing `"undefined"` or `"null"`, and falls back to `"You have a new notification"` for unknown types.
+  - `notificationLink`: strictly validates `projectId`, `entityId`, and `payload.taskId` as UUIDs (returning `null` for malformed IDs or `"../"` traversal), reuses `getTaskDetailPath` for task types, and routes project types to `/admin/projects/:id` or `/employee/projects/:id`.
+  - `mergeNotificationPages`: merges paginated pages and deduplicates by `id`.
+  - `executeNotificationRowClick`: attempts mark-read on unread items, navigates even if mark-read fails, and surfaces an inline error only when staying on the page (`link === null`).
+  - `resolveNotificationError`: reuses `resolveWorkLogErrorInfo` solely to classify errors (`network`, `400`, `403`, `404`, `other`) and maps to `notifications.errors.*`.
+- **Bell Component (`apps/web/src/components/layout/NotificationBell.tsx`)**:
+  - Mounted in both `AdminLayout` and `EmployeeLayout` headers for all roles (including `viewer`).
+  - Polls `GET /api/notifications/unread-count` every 60s (`refetchInterval: 60_000`, `refetchIntervalInBackground: false`, `refetchOnWindowFocus: true`). Fails silently without an error popup or badge.
+  - Dropdown list (`limit: 5`) loads only when opened (`enabled: isOpen`), closes on outside click and `Escape` (returning focus to the bell button), and fits cleanly within mobile viewports.
+  - Bell button includes translated `aria-label` with unread count and `aria-expanded`.
+- **Notification Centre Page (`apps/web/src/pages/notifications/NotificationsPage.tsx`)**:
+  - All hooks declared unconditionally at the top before any early returns.
+  - `All` / `Unread` filter tabs, offset-based `"Load more"` (`limit: 20`, deduplicated by `id`), `"Mark all as read"`, per-row mark-read, explicit `"Unread"` text marker alongside distinct styling, loading/empty/error states with `"Retry"`, and mobile-friendly stacked rows.
+- **Navigation & Routing (`AdminLayout.tsx`, `EmployeeLayout.tsx`, `router/index.tsx`)**:
+  - Added `"Notifications"` sidebar item visible to all roles in both layouts.
+  - Added `/notifications` top-level redirect (`system_admin` and `hr_admin` -> `/admin/notifications`; `employee`, `project_manager`, and `viewer` -> `/employee/notifications`) plus routes inside both layouts.
+  - Note: Verified `getProjectsRedirectPath` in `router/index.tsx` still sends `hr_admin` to `/employee/projects`, which blocks `hr_admin` (`allowedRoles={['employee', 'project_manager', 'viewer']}`); left untouched per Step 17b scope.
+- **Translations & Tests**:
+  - Added `nav.notifications` and `notifications.*` keys in `apps/web/src/i18n/locales/en.json` with 0 missing keys verified.
+  - Added 38 unit tests in `apps/web/src/lib/__tests__/notificationsHelpers.test.ts` (pure Node Vitest, no component rendering) and updated `apps/web/src/router/__tests__/routes.test.ts` (18 tests).

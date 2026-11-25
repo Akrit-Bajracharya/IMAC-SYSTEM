@@ -15,6 +15,8 @@ import { WorkRolesPage } from '../pages/admin/WorkRolesPage.js';
 import { EmployeeWorkRolesPage } from '../pages/admin/EmployeeWorkRolesPage.js';
 import { WorkLogSettingsPage } from '../pages/admin/WorkLogSettingsPage.js';
 import { AuditLogPage } from '../pages/admin/AuditLogPage.js';
+import { NotificationsPage } from '../pages/notifications/NotificationsPage.js';
+import { getNotificationsRedirectPath } from '../lib/notificationsHelpers.js';
 import { DirectoryPage } from '../pages/directory/DirectoryPage.js';
 import { ProjectListPage } from '../pages/projects/ProjectListPage.js';
 import { ProjectDetailPage } from '../pages/projects/ProjectDetailPage.js';
@@ -81,6 +83,13 @@ function TaskParamRedirect() {
   return <ProjectsRedirect subpath={`${id}/tasks/${taskId}`} />;
 }
 
+function NotificationsRedirect() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <Spinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={getNotificationsRedirectPath(user.systemRole)} replace />;
+}
+
 export const routes: RouteObject[] = [
   {
     path: '/login',
@@ -130,6 +139,10 @@ export const routes: RouteObject[] = [
       {
         path: 'work-log/export',
         element: <WorkLogRedirect subpath="export" />,
+      },
+      {
+        path: 'notifications',
+        element: <NotificationsRedirect />,
       },
       {
         path: 'admin',
@@ -187,6 +200,10 @@ export const routes: RouteObject[] = [
               {
                 path: 'work-log/export',
                 element: <WorkLogExportPage />,
+              },
+              {
+                path: 'notifications',
+                element: <NotificationsPage />,
               },
               {
                 path: 'settings',
@@ -258,6 +275,10 @@ export const routes: RouteObject[] = [
               {
                 path: 'work-log/export',
                 element: <WorkLogExportPage />,
+              },
+              {
+                path: 'notifications',
+                element: <NotificationsPage />,
               },
               {
                 path: '*',

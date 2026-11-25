@@ -48,18 +48,24 @@ describe('Web App Route Table and Navigation Integrity Tests', () => {
   });
 
   describe('2. Specific Required Work Log and Settings Routes', () => {
-    it('resolves Daily Log, History, Export and Settings links under Admin', () => {
+    it('resolves Daily Log, History, Export, Settings and Audit Log links under Admin', () => {
       matchConcreteRoute('/admin/work-log');
       matchConcreteRoute('/admin/work-log/history');
       matchConcreteRoute('/admin/work-log/export');
       matchConcreteRoute('/admin/settings');
       matchConcreteRoute('/admin/audit-log');
+      matchConcreteRoute('/admin/notifications');
     });
 
-    it('resolves Daily Log, History and Export links under Employee', () => {
+    it('resolves Daily Log, History, Export and Notifications links under Employee', () => {
       matchConcreteRoute('/employee/work-log');
       matchConcreteRoute('/employee/work-log/history');
       matchConcreteRoute('/employee/work-log/export');
+      matchConcreteRoute('/employee/notifications');
+    });
+
+    it('resolves top-level /notifications redirect', () => {
+      matchConcreteRoute('/notifications');
     });
   });
 

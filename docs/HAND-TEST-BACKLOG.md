@@ -1252,3 +1252,84 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
   - All six requests receive HTTP 404 `{ error: "not_found", message: "Route not found" }`.
 - **Negative Invariants (What Must NOT Happen)**:
   - The API must **NOT** expose any endpoints allowing clients to create, edit, or delete notification rows directly.
+
+## Step 17b: Notification Bell and Notification Centre (`apps/web`)
+
+### TEST-17B-01: Bell and Sidebar Item Visible for Every Role
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`), `hr_admin` (`demo_hr`), `project_manager` (`demo_pm`), `employee` (`demo_dev`), `viewer` (`demo_viewer`)
+- **Test Steps**:
+  1. Log in as each of the 5 system roles.
+  2. Inspect the top header bar and sidebar navigation.
+  3. Click the "Notifications" sidebar link or visit `/notifications`.
+- **Expected Result**:
+  - Bell icon is visible in the header and "Notifications" link is visible in the sidebar for every role (including `viewer`).
+  - `/notifications` redirects `system_admin` and `hr_admin` to `/admin/notifications`, and `project_manager`, `employee`, and `viewer` to `/employee/notifications`.
+- **Negative Invariants**:
+  - No role should receive a 403 Unauthorized on `/notifications`.
+
+### TEST-17B-02: Unread Count Stays 0 With Empty Data
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Log in as `demo_dev` when the `Notification` table is empty.
+  2. Inspect the bell button in the header.
+  3. Click the bell button to open the dropdown.
+  4. Click "View all" to open the Notifications page.
+- **Expected Result**:
+  - No unread badge is shown on the bell at 0.
+  - Dropdown displays `"No notifications yet"`.
+  - Page displays `"No notifications yet"` under `All` and `"No unread notifications"` under `Unread`.
+- **Negative Invariants**:
+  - Badge must **NOT** display `"0"`.
+
+### TEST-17B-03: Insert Test Row via SQL and Verify Badge, Dropdown & Page
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Insert a test `Notification` row into `imac_demo` via SQL for `demo_dev` (e.g. `type = 'task.assigned'`, `payload = '{"taskTitle":"Verify SQL Notification"}'`, `readAt = NULL`).
+  2. Focus the browser tab or wait up to 60 seconds for the unread-count poll.
+  3. Inspect the bell badge and open the dropdown.
+  4. Click "View all" to open `/employee/notifications`.
+- **Expected Result**:
+  - Bell badge displays `"1"` (and `"99+"` if > 99).
+  - Dropdown shows the notification with translated text (`You were assigned to task "Verify SQL Notification"`) and an `"Unread"` text marker.
+  - Page lists the notification newest first with `"Unread"` badge and `"Mark as read"` button.
+- **Negative Invariants**:
+  - Must **NOT** print `"undefined"`, `"null"`, or raw HTML.
+
+### TEST-17B-04: Mark Read and Mark All Read
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Ensure `demo_dev` has 2+ unread notifications (one with a valid task link, one without a link such as `work_log.reminder`).
+  2. On the Notifications page, click the notification with a valid task link.
+  3. Return to `/employee/notifications` and click "Mark all as read".
+- **Expected Result**:
+  - Clicking the task notification marks it read and navigates to the task detail page.
+  - Clicking "Mark all as read" marks remaining unread items read, removes `"Unread"` markers, and updates the header bell badge to hidden (`0`).
+- **Negative Invariants**:
+  - Unread count in the bell must **NOT** stay stale after marking read.
+
+### TEST-17B-05: Backend / Docker Stopped Error Card & Retry
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Stop the API server / Docker container.
+  2. Observe the bell in the header (no error popup should appear; bell renders without badge).
+  3. Navigate to `/employee/notifications`.
+  4. Restart the API server / Docker container and click "Retry".
+- **Expected Result**:
+  - Error card displays translated message (`Unable to connect to the server. Please check your connection and try again.`) with a `"Retry"` button — never raw JSON or `err.message`.
+  - Clicking `"Retry"` after restart loads the notifications list cleanly.
+
+### TEST-17B-06: Phone Width Responsiveness (< 640px)
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Resize the browser viewport to 375px width.
+  2. Open the bell dropdown in the header.
+  3. Navigate to `/employee/notifications`.
+- **Expected Result**:
+  - Dropdown fits cleanly within the 375px viewport without clipping or horizontal overflow.
+  - Notification rows stack vertically with no horizontal page scroll.

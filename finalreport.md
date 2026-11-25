@@ -2500,3 +2500,43 @@ Documented in `docs/open-policy-questions.md`:
 - **Decisions or problems**:
   - In `notifications.ts`, `actorUserId` is preserved while `actorDisplayName` and `actorUsername` are dropped to prevent stale denormalized name strings.
   - Zero migrations created; zero migrate commands run; zero database connections made; protected files untouched; zero git commits executed.
+
+---
+
+## Step 17b: Notification Bell and Notification Centre (`apps/web` only)
+
+### Task 17b-01: Notification Bell, Notification Centre Page, Pure Helpers, Routing & Tests
+- **Date**: 2026-11-25
+- **Day of week**: Wednesday
+- **Start time**: 10:23:00 +05:45
+- **End time**: 10:34:00 +05:45
+- **Step**: Step 17b (Notification bell and notification centre — `apps/web` only)
+- **Task performed**:
+  - Created `apps/web/src/constants/notificationTypes.ts` with `NOTIFICATION_TYPES` and `ALL_NOTIFICATION_TYPES`.
+  - Created `apps/web/src/api/notifications.ts` (`fetchNotifications`, `fetchUnreadCount`, `markNotificationRead`, `markAllNotificationsRead`).
+  - Created `apps/web/src/lib/notificationsHelpers.ts` (`notificationKeys`, `buildNotificationQueryParams`, `formatUnreadBadge`, `getNotificationsRedirectPath`, `notificationText`, `notificationLink` with strict UUID validation, `mergeNotificationPages`, `executeNotificationRowClick`, `resolveNotificationError`).
+  - Created `apps/web/src/components/layout/NotificationBell.tsx` (60s unread-count polling paused in background tabs, lazy dropdown load on open, outside click + Escape returning focus, translated `aria-label` + `aria-expanded`, mobile viewport fit).
+  - Created `apps/web/src/pages/notifications/NotificationsPage.tsx` (unconditional hooks, `All`/`Unread` filter, `"Load more"` pagination, `"Mark all as read"`, per-row mark-read, explicit `"Unread"` text marker, loading/empty/error states with Retry).
+  - Updated `AdminLayout.tsx`, `EmployeeLayout.tsx`, and `router/index.tsx` (`/notifications` redirect, `/admin/notifications`, `/employee/notifications`, sidebar item visible to all roles).
+  - Added translations to `apps/web/src/i18n/locales/en.json` and verified 0 missing keys.
+  - Added 38 Vitest tests in `apps/web/src/lib/__tests__/notificationsHelpers.test.ts` and updated `apps/web/src/router/__tests__/routes.test.ts` (18 tests).
+  - Appended `TEST-17B-01`..`TEST-17B-06` (`NOT RUN`) to `docs/HAND-TEST-BACKLOG.md` and updated `docs/PROGRESS.md`.
+- **Files created or changed**:
+  - `apps/web/src/constants/notificationTypes.ts`
+  - `apps/web/src/api/notifications.ts`
+  - `apps/web/src/lib/notificationsHelpers.ts`
+  - `apps/web/src/components/layout/NotificationBell.tsx`
+  - `apps/web/src/pages/notifications/NotificationsPage.tsx`
+  - `apps/web/src/components/layout/AdminLayout.tsx`
+  - `apps/web/src/components/layout/EmployeeLayout.tsx`
+  - `apps/web/src/router/index.tsx`
+  - `apps/web/src/i18n/locales/en.json`
+  - `apps/web/src/lib/__tests__/notificationsHelpers.test.ts`
+  - `apps/web/src/router/__tests__/routes.test.ts`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - Verified `getProjectsRedirectPath` in `router/index.tsx` routes `hr_admin` to `/employee/projects`, which rejects `hr_admin` under `ProtectedRoute allowedRoles={['employee', 'project_manager', 'viewer']}`; left untouched per Step 17b boundary and reported in summary.
+  - Zero edits to `apps/api`, `packages/shared`, or `package-lock.json`; no packages installed; no git commits executed.
