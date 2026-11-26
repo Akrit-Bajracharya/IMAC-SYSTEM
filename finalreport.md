@@ -2616,3 +2616,34 @@ Documented in `docs/open-policy-questions.md`:
 - **Decisions or problems**:
   - Read-only `db.session.findUnique` used in 60s re-check instead of `getSession` so idle sessions are never artificially kept alive.
   - Zero edits to `apps/api/prisma`, `session.ts`, `middleware/auth.ts`, `routes/auth.ts`, or `password.ts`; no packages installed; no git commits executed.
+
+---
+
+## Step 18b: Daily Work Log Reminder Job (`apps/api` only)
+
+### Task 18b-01: Reminder Scheduler, Pure Decision Helpers, Batched Transactions & Tests
+- **Date**: 2026-11-26
+- **Day of week**: Thursday
+- **Start time**: 08:58:00 +05:45
+- **End time**: 09:05:00 +05:45
+- **Step**: Step 18b (Daily Work Log reminder job — `apps/api` only)
+- **Task performed**:
+  - Added `'date'` to `NOTIFICATION_PAYLOAD_ALLOW_LIST` in `apps/api/src/services/notifications.ts`.
+  - Created `apps/api/src/services/workLogReminder.ts` with pure exported helpers (`getKathmanduDateTime`, `startOfKathmanduDayUtc`, `startOfNextKathmanduDayUtc`, `parseReminderConfig`, `isWorkingDayForProfile`, `shouldRunReminderTick`, `isOnApprovedLeave`), `WORKING_DAYS_BY_COUNT`, `runWorkLogReminderTick` (100-user batching, per-batch `userId IN (...)` dedup inside `$transaction`, `lastCompletedDateStr` optimization, `publishAfterCommit`), `startWorkLogReminderJob`, and `stopWorkLogReminderJob`.
+  - Wired scheduler start and shutdown into `apps/api/src/index.ts`.
+  - Created mock-based `apps/api/src/__tests__/workLogReminder.test.ts` (zero existing tests edited).
+  - Created read-only `docs/work-log-reminder-check.sql` and updated `docs/open-policy-questions.md` (items 45–49), `docs/HAND-TEST-BACKLOG.md` (`TEST-18B-01`..`TEST-18B-03`), `docs/PROGRESS.md`, and `finalreport.md`.
+- **Files created or changed**:
+  - `apps/api/src/services/notifications.ts`
+  - `apps/api/src/services/workLogReminder.ts`
+  - `apps/api/src/index.ts`
+  - `apps/api/src/__tests__/workLogReminder.test.ts`
+  - `docs/work-log-reminder-check.sql`
+  - `docs/open-policy-questions.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - `WORKING_DAYS_BY_COUNT[5]` assumes Mon–Fri (Nepal Sun–Fri week not applied; documented in `open-policy-questions.md`).
+  - Zero edits to existing tests, `apps/web`, `packages/shared`, `apps/api/prisma`, or protected auth files; no git commits executed.

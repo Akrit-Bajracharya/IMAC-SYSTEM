@@ -313,3 +313,27 @@ This document tracks unresolved policy, organizational, and operational decision
 44. **Single-Server In-Memory SSE Registry Limitation**
     - **Question**: Should live notification delivery be migrated to a shared pub/sub broker (e.g. PostgreSQL `LISTEN/NOTIFY` or Redis) before horizontal scaling?
     - **Current Implementation (Step 18a)**: Uses an in-memory `Map<userId, Set<StreamEntry>>` inside a single Node.js API process. If multiple API instances are deployed behind a load balancer, a notification triggered on instance A will not push over an SSE stream connected to instance B (clients on instance B would rely on the 60s fallback or tab-focus refetch).
+
+---
+
+## 7. Daily Work Log Reminder Job Policies (Step 18b)
+
+45. **Reminder Time & Enabled Default**
+    - **Question**: Should `worklog.reminder.enabled` default to `false` or `true` in production, and is `17:00` (`Asia/Kathmandu`) the preferred reminder time?
+    - **Current Implementation (Step 18b)**: Reads `worklog.reminder.enabled` (default `'false'`) and `worklog.reminder.time` (default `'17:00'`) from `SystemSetting` on every tick; rows are not seeded in `prisma/seed.ts`.
+
+46. **Working Days Assumption (Mon–Fri vs Nepal Sun–Fri Workweek)**
+    - **Question**: `EmployeeProfile` currently stores only `workingDaysPerWeek` (default `5`) with no explicit weekday list. Should `workingDaysPerWeek = 5` represent Monday–Friday or Nepal's Sunday–Friday workweek?
+    - **Current Implementation (Step 18b)**: Mapped in `WORKING_DAYS_BY_COUNT` (`5` = Monday to Friday `[1, 2, 3, 4, 5]`). This is a documented assumption; the Nepal Sunday–Friday workweek is **not** applied.
+
+47. **Manager Summary Notifications**
+    - **Question**: Should project managers or HR admins receive a daily summary of staff who missed submitting their work log?
+    - **Current Implementation (Step 18b)**: Reminders are sent only to individual eligible employees; no manager summary notifications are generated.
+
+48. **Public Holidays & Approved Leave Exclusion**
+    - **Question**: How should public holidays and approved leave be excluded from daily work log reminders?
+    - **Current Implementation (Step 18b)**: No holiday calendar or leave management exists yet; `isOnApprovedLeave(userId, date)` is a `TODO` hook returning `false`.
+
+49. **Single-Server Missed Tick Limitation**
+    - **Question**: Should a missed reminder (e.g., if the API server was down past `17:00` until after midnight Kathmandu time) be sent retroactively the next day?
+    - **Current Implementation (Step 18b)**: Single-server 5-minute interval; a tick missed while the API is down is **not** retried after the Kathmandu calendar day ends.

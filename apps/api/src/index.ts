@@ -3,6 +3,10 @@ import { config } from './config.js';
 import { logger } from './logger.js';
 import { cleanExpiredSessions } from './services/session.js';
 import { closeAllNotificationStreams } from './services/notificationStream.js';
+import {
+  startWorkLogReminderJob,
+  stopWorkLogReminderJob,
+} from './services/workLogReminder.js';
 
 const PORT = config.port;
 
@@ -19,6 +23,9 @@ const cleanupInterval = setInterval(async () => {
   }
 }, CLEANUP_INTERVAL_MS);
 
+// 1b. Daily work log reminder scheduler (every 5 minutes; skipped in test env)
+startWorkLogReminderJob();
+
 // 2. Start server
 const server = app.listen(PORT, () => {
   logger.info(`IMAC API server started on port ${PORT} [env=${config.nodeEnv}]`);
@@ -28,6 +35,7 @@ const server = app.listen(PORT, () => {
 function handleShutdown(signal: string) {
   logger.info({ signal }, 'Received shutdown signal, closing server gracefully...');
   clearInterval(cleanupInterval);
+  stopWorkLogReminderJob();
   closeAllNotificationStreams();
 
   server.close(() => {

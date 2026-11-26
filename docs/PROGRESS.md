@@ -1896,3 +1896,18 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
 - **Tests**:
   - `apps/api/src/__tests__/notificationStream.test.ts` (14 mock-based tests) + `routeInventory.test.ts` (+1 test).
   - `apps/web/src/lib/__tests__/notificationStreamHelpers.test.ts` (24 pure Node Vitest tests).
+
+---
+
+## Current Milestone: Step 18b — Daily Work Log Reminder Job (`apps/api` only) — COMPLETED
+
+### 1. What Was Built
+- **Payload Allow-List (`apps/api/src/services/notifications.ts`)**:
+  - Added `'date'` to `NOTIFICATION_PAYLOAD_ALLOW_LIST` so `{ date }` is preserved on `work_log.reminder` notifications.
+- **Reminder Service (`apps/api/src/services/workLogReminder.ts`)**:
+  - Pure exported helpers: `getKathmanduDateTime`, `startOfKathmanduDayUtc`, `startOfNextKathmanduDayUtc`, `parseReminderConfig`, `isWorkingDayForProfile` (using `WORKING_DAYS_BY_COUNT`, documenting `5 = Monday to Friday` assumption and that Nepal Sunday–Friday is not applied), `shouldRunReminderTick`, and `isOnApprovedLeave` (`TODO` hook returning `false`).
+  - `runWorkLogReminderTick`: protected by `isTickInFlight`, remembers `lastCompletedDateStr` only after all batches succeed, catches all errors including `getSetting` failures, filters active non-viewer users with `EmployeeProfile` whose working days include today and who have no `submitted`/`approved` `WorkLogDay` today, batches in chunks of 100 inside `$transaction` with one per-batch `userId IN (...)` dedup query, and calls `publishAfterCommit` after each committed batch.
+  - `startWorkLogReminderJob` / `stopWorkLogReminderJob`: 5-minute interval wired into `apps/api/src/index.ts` and stopped in `handleShutdown`; never starts in `NODE_ENV=test`.
+- **Tests & SQL Check**:
+  - `apps/api/src/__tests__/workLogReminder.test.ts` (mock-based with fake timers, zero existing tests edited).
+  - Read-only `docs/work-log-reminder-check.sql` for `imac_demo`.

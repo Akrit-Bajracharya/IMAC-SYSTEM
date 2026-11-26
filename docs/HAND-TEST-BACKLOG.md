@@ -1438,3 +1438,33 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
   3. Wait up to 60 seconds and inspect Browser A's SSE stream status.
 - **Expected Result**:
   - Within 60 seconds, the server's read-only session re-check detects `isActive === false` and closes `demo_dev`'s SSE stream.
+
+## Step 18b: Daily Work Log Reminder Job (`apps/api`)
+
+### TEST-18B-01: Enable Reminder via SQL and Receive Bell Notification
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. On `imac_demo`, enable `worklog.reminder.enabled = 'true'` and set `worklog.reminder.time` to 1 minute from current `Asia/Kathmandu` time via SQL `SystemSetting` upsert.
+  2. Ensure `demo_dev` has no `submitted` or `approved` `WorkLogDay` for today and is logged in.
+  3. Wait for the 5-minute tick (or next tick after the configured minute).
+- **Expected Result**:
+  - `demo_dev` receives `work_log.reminder` notification (`entityType = 'work_log'`, `entityId = YYYY-MM-DD`, `payload = {"date":"YYYY-MM-DD"}`) and the header bell badge updates.
+
+### TEST-18B-02: No Duplicate Reminder on Subsequent Ticks
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. After `TEST-18B-01`, wait for the next 5-minute tick on the same Kathmandu day (and also test restarting the API server).
+- **Expected Result**:
+  - No second `work_log.reminder` notification is created for `demo_dev` on the same day.
+
+### TEST-18B-03: Submitted / Approved Day and Viewer Excluded
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`), `viewer` (`demo_viewer`)
+- **Test Steps**:
+  1. Have `demo_dev` submit today's work log before the reminder time.
+  2. Have `demo_viewer` active in the system.
+  3. Let the reminder tick run past the configured time.
+- **Expected Result**:
+  - Neither `demo_dev` (already submitted) nor `demo_viewer` (`viewer` role excluded) receives a `work_log.reminder` notification.

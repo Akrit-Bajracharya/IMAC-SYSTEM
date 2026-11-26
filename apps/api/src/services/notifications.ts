@@ -21,6 +21,7 @@ export const NOTIFICATION_PAYLOAD_ALLOW_LIST = new Set<string>([
   'toStatus',
   'priority',
   'roleName',
+  'date',
 ]);
 
 /**
