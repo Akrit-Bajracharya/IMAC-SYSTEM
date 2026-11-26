@@ -299,3 +299,17 @@ This document tracks unresolved policy, organizational, and operational decision
     - **Policy Alternatives**:
       - Deliver employee profile and work role lifecycle notifications to both `system_admin` and `hr_admin`.
       - Route only compliance and shift mismatch alerts to `hr_admin`, keeping core security/auth alerts exclusive to `system_admin`.
+
+---
+
+## 6. Live Notification Delivery (SSE) Policies (Step 18a)
+
+43. **Maximum Concurrent SSE Streams Per User and Globally**
+    - **Question**: Are the current in-memory caps of 5 concurrent SSE streams per user (evicting the oldest) and 500 concurrent streams globally (refusing the 501st with HTTP 503) appropriate for IMAC's office concurrency?
+    - **Current Implementation (Step 18a)**: Hardcoded in `apps/api/src/services/notificationStream.ts` (`MAX_STREAMS_PER_USER = 5`, `MAX_TOTAL_STREAMS = 500`).
+    - **Policy Alternatives**:
+      - Make limits configurable via `SystemSetting` or environment variables if staff routinely open more than 5 browser tabs or company headcount exceeds 500 concurrent tabs.
+
+44. **Single-Server In-Memory SSE Registry Limitation**
+    - **Question**: Should live notification delivery be migrated to a shared pub/sub broker (e.g. PostgreSQL `LISTEN/NOTIFY` or Redis) before horizontal scaling?
+    - **Current Implementation (Step 18a)**: Uses an in-memory `Map<userId, Set<StreamEntry>>` inside a single Node.js API process. If multiple API instances are deployed behind a load balancer, a notification triggered on instance A will not push over an SSE stream connected to instance B (clients on instance B would rely on the 60s fallback or tab-focus refetch).

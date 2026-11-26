@@ -7,6 +7,10 @@ import {
   filterActiveProjectRecipients,
 } from '../services/notifications.js';
 import {
+  publishAfterCommit,
+  type PendingStreamNotification,
+} from '../services/notificationStream.js';
+import {
   requireAuth,
   requirePasswordChanged,
   type AuthRequest,
@@ -268,6 +272,8 @@ tasksRouter.post(
       }
     }
 
+    const pendingNotifications: PendingStreamNotification[] = [];
+
     const result = await db.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
@@ -316,7 +322,7 @@ tasksRouter.post(
           },
         });
 
-        await createNotification(tx, {
+        const createdNotif = await createNotification(tx, {
           userId: data.assigneeUserId,
           actorUserId: req.user!.id,
           type: NOTIFICATION_TYPES.TASK_ASSIGNED,
@@ -330,10 +336,18 @@ tasksRouter.post(
             actorUserId: req.user!.id,
           },
         });
+        if (createdNotif) {
+          pendingNotifications.push({
+            userId: data.assigneeUserId,
+            notificationId: createdNotif.id,
+          });
+        }
       }
 
       return task;
     });
+
+    await publishAfterCommit(pendingNotifications);
 
     return res.status(201).json({
       ...result,
@@ -626,6 +640,8 @@ tasksRouter.patch(
     if (data.assigneeUserId !== undefined) updateData.assigneeUserId = data.assigneeUserId;
     if (data.milestoneId !== undefined) updateData.milestoneId = data.milestoneId;
 
+    const pendingNotifications: PendingStreamNotification[] = [];
+
     const updated = await db.$transaction(async (tx) => {
       const u = await tx.task.update({
         where: { id: taskId },
@@ -668,7 +684,7 @@ tasksRouter.patch(
         });
 
         if (data.assigneeUserId !== null) {
-          await createNotification(tx, {
+          const createdNotif = await createNotification(tx, {
             userId: data.assigneeUserId,
             actorUserId: req.user!.id,
             type: NOTIFICATION_TYPES.TASK_ASSIGNED,
@@ -682,11 +698,19 @@ tasksRouter.patch(
               actorUserId: req.user!.id,
             },
           });
+          if (createdNotif) {
+            pendingNotifications.push({
+              userId: data.assigneeUserId,
+              notificationId: createdNotif.id,
+            });
+          }
         }
       }
 
       return u;
     });
+
+    await publishAfterCommit(pendingNotifications);
 
     let assigneeIsProjectMember = false;
     if (updated.assigneeUserId) {
@@ -869,6 +893,8 @@ tasksRouter.post(
       }
     }
 
+    const pendingNotifications: PendingStreamNotification[] = [];
+
     const result = await db.$transaction(async (tx) => {
       if (toStatus === 'done') {
         const txBlockingDeps = await tx.taskDependency.findMany({
@@ -918,7 +944,7 @@ tasksRouter.post(
         task.createdByUserId,
       ]);
 
-      await createNotifications(
+      const createdNotifs = await createNotifications(
         tx,
         eligibleRecipients.map((recipientId) => ({
           userId: recipientId,
@@ -937,6 +963,9 @@ tasksRouter.post(
           },
         }))
       );
+      for (const n of createdNotifs) {
+        pendingNotifications.push({ userId: n.userId, notificationId: n.id });
+      }
 
       return { success: true };
     });
@@ -954,6 +983,8 @@ tasksRouter.post(
         message: 'Task status was modified concurrently, please retry',
       });
     }
+
+    await publishAfterCommit(pendingNotifications);
 
     return res.status(200).json({
       taskId,

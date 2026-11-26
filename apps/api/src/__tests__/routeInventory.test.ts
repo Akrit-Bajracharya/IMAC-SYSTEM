@@ -440,6 +440,12 @@ describe('Step 10d: Route Inventory Test Suite', () => {
       expect(res.body.error).toBe('unauthenticated');
     });
 
+    it('returns 401 for unauthenticated request to GET /api/notifications/stream', async () => {
+      const res = await request(app).get('/api/notifications/stream');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthenticated');
+    });
+
     it('returns 401 for unauthenticated request to POST /api/notifications/read-all', async () => {
       const res = await request(app).post('/api/notifications/read-all');
       expect(res.status).toBe(401);

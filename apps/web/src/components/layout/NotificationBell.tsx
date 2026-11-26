@@ -18,6 +18,12 @@ import {
   notificationText,
   resolveNotificationError,
 } from '../../lib/notificationsHelpers.js';
+import {
+  decideStreamActionOnVisibility,
+  getStreamBackoffDelayMs,
+  getUnreadFallbackRefetchInterval,
+  parseNotificationStreamEvent,
+} from '../../lib/notificationStreamHelpers.js';
 import { formatDateTimeDisplay } from '../../lib/dateUtils.js';
 import { cn } from '../../lib/utils.js';
 import { Button } from '../ui/button.js';
@@ -31,16 +37,21 @@ export function NotificationBell() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [isStreamConnected, setIsStreamConnected] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptRef = useRef<number>(0);
 
-  // Only the unread-count query polls (60s, paused when tab is hidden, refetch on focus).
+  // Only poll every 60s as a fallback when SSE stream is disconnected.
   // If it fails, show the bell without a badge and no error popup.
   const unreadCountQuery = useQuery({
     queryKey: notificationKeys.unreadCount,
     queryFn: fetchUnreadCount,
-    refetchInterval: 60_000,
+    refetchInterval: getUnreadFallbackRefetchInterval(isStreamConnected),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     enabled: Boolean(user),
@@ -75,6 +86,108 @@ export function NotificationBell() {
       );
     },
   });
+
+  // Live SSE stream connection: 1 EventSource per tab, exponential backoff (5s..60s),
+  // closes after 2 minutes when hidden, cancels timer & reopens on visibility (Amendment G).
+  useEffect(() => {
+    if (!user || typeof EventSource === 'undefined') return;
+
+    let disposed = false;
+
+    const clearRetryTimer = () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+
+    const clearHiddenTimer = () => {
+      if (hiddenTimerRef.current) {
+        clearTimeout(hiddenTimerRef.current);
+        hiddenTimerRef.current = null;
+      }
+    };
+
+    const closeStream = () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      setIsStreamConnected(false);
+    };
+
+    const connect = () => {
+      if (disposed || eventSourceRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+
+      const es = new EventSource('/api/notifications/stream', {
+        withCredentials: true,
+      });
+      eventSourceRef.current = es;
+
+      es.onopen = () => {
+        if (disposed) {
+          es.close();
+          return;
+        }
+        attemptRef.current = 0;
+        setIsStreamConnected(true);
+      };
+
+      es.addEventListener('unread', (event) => {
+        if (disposed) return;
+        const parsed = parseNotificationStreamEvent((event as MessageEvent).data);
+        if (!parsed) return;
+        queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+      });
+
+      es.onerror = () => {
+        closeStream();
+        if (disposed) return;
+        clearRetryTimer();
+        const delay = getStreamBackoffDelayMs(attemptRef.current);
+        attemptRef.current += 1;
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          connect();
+        }, delay);
+      };
+    };
+
+    const handleVisibilityChange = () => {
+      const decision = decideStreamActionOnVisibility({
+        isVisible: document.visibilityState === 'visible',
+        isStreamOpen: Boolean(eventSourceRef.current),
+      });
+
+      if (decision.cancelPendingClose) {
+        clearHiddenTimer();
+      }
+
+      if (decision.action === 'reconnect_now') {
+        clearRetryTimer();
+        connect();
+      } else if (decision.action === 'schedule_close' && !hiddenTimerRef.current) {
+        hiddenTimerRef.current = setTimeout(() => {
+          hiddenTimerRef.current = null;
+          closeStream();
+        }, decision.delayMs);
+      }
+    };
+
+    connect();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearRetryTimer();
+      clearHiddenTimer();
+      closeStream();
+    };
+  }, [user, queryClient]);
 
   // Close on outside click and Escape (returning focus to bell button on Escape).
   useEffect(() => {

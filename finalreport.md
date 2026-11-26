@@ -2576,3 +2576,43 @@ Documented in `docs/open-policy-questions.md`:
 - **Decisions or problems**:
   - `projectMessages.test.ts` used custom inline `tx` objects in two `to-task` tests; added `projectMember.findMany` and `notification.create` delegate mocks there per Amendment E.
   - Zero edits to `apps/web`, `packages/shared`, `apps/api/prisma`, or protected auth files; no new routes or permission actions; no git commits executed.
+
+---
+
+## Step 18a: Live Notification Delivery with Server-Sent Events (SSE)
+
+### Task 18a-01: SSE Registry, Stream Endpoint, Post-Commit Publishing, Bell EventSource & Tests
+- **Date**: 2026-11-26
+- **Day of week**: Wednesday
+- **Start time**: 08:26:00 +05:45
+- **End time**: 08:43:00 +05:45
+- **Step**: Step 18a (Live notification delivery with Server-Sent Events)
+- **Task performed**:
+  - Created `apps/api/src/services/notificationStream.ts` (5/user cap with oldest eviction & timer cleanup, 500 total cap, 25s ping, 60s read-only `db.session.findUnique` check, `publishToUser`, `publishAfterCommit`, `closeAllNotificationStreams`).
+  - Added `GET /api/notifications/stream` in `apps/api/src/routes/notifications.ts` (before `/:id/read`), returning 503 JSON before SSE headers when at cap.
+  - Wired `closeAllNotificationStreams()` into `apps/api/src/index.ts` `handleShutdown`.
+  - Wired `publishAfterCommit` after `$transaction` in all 5 trigger routes (`tasks.ts`, `messages.ts`, `projects.ts`).
+  - Created `apps/web/src/lib/notificationStreamHelpers.ts` and `apps/web/src/lib/__tests__/notificationStreamHelpers.test.ts` (24 tests).
+  - Updated `apps/web/src/components/layout/NotificationBell.tsx` with single `EventSource` per tab, backoff, 60s fallback polling, and 2-minute hidden-tab close/reopen.
+  - Created `apps/api/src/__tests__/notificationStream.test.ts` (14 mock-based tests) and updated `routeInventory.test.ts` (+1 test).
+  - Updated `docs/open-policy-questions.md` (items 43–44), `docs/HAND-TEST-BACKLOG.md` (`TEST-18A-01`..`TEST-18A-04`), `docs/PROGRESS.md`, and `finalreport.md`.
+- **Files created or changed**:
+  - `apps/api/src/services/notificationStream.ts`
+  - `apps/api/src/routes/notifications.ts`
+  - `apps/api/src/index.ts`
+  - `apps/api/src/routes/tasks.ts`
+  - `apps/api/src/routes/messages.ts`
+  - `apps/api/src/routes/projects.ts`
+  - `apps/api/src/__tests__/notificationStream.test.ts`
+  - `apps/api/src/__tests__/routeInventory.test.ts`
+  - `apps/web/src/lib/notificationStreamHelpers.ts`
+  - `apps/web/src/lib/__tests__/notificationStreamHelpers.test.ts`
+  - `apps/web/src/components/layout/NotificationBell.tsx`
+  - `docs/open-policy-questions.md`
+  - `docs/HAND-TEST-BACKLOG.md`
+  - `docs/PROGRESS.md`
+  - `finalreport.md`
+- **Status**: COMPLETED
+- **Decisions or problems**:
+  - Read-only `db.session.findUnique` used in 60s re-check instead of `getSession` so idle sessions are never artificially kept alive.
+  - Zero edits to `apps/api/prisma`, `session.ts`, `middleware/auth.ts`, `routes/auth.ts`, or `password.ts`; no packages installed; no git commits executed.

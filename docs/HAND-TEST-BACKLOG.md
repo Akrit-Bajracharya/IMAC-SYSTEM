@@ -1394,3 +1394,47 @@ The demo seed provisions 6 role-aligned test accounts in the `imac_demo` databas
 - **Expected Result**:
   - `demo_dev2` sees the `project.member_added` notification and clicking it navigates to the project page.
   - `boss` adding themselves sees nothing (actor excluded).
+
+## Step 18a: Live Notification Delivery (SSE)
+
+### TEST-18A-01: Live Badge Update Within 2 Seconds of Task Assignment
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `project_manager` (`demo_pm`), `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Open Browser A logged in as `demo_dev` (observe bell badge is 0/hidden).
+  2. Open Browser B logged in as `demo_pm` and assign a new task to `demo_dev`.
+- **Expected Result**:
+  - Within 2 seconds, `demo_dev`'s header bell badge updates to `1` without refreshing the page or waiting 60 seconds.
+
+### TEST-18A-02: Stop API Server and Verify Polling Fallback & Auto-Reconnect
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Log in as `demo_dev` and verify `/api/notifications/stream` is open in DevTools Network tab.
+  2. Stop the API server / Docker container.
+  3. Observe the UI and DevTools Network tab over 15–60 seconds.
+  4. Restart the API server.
+- **Expected Result**:
+  - No error popup or toast is shown to the user when the SSE stream drops.
+  - Client falls back to 60s polling of `/api/notifications/unread-count` and retries `/api/notifications/stream` with exponential backoff (`5s, 10s, 20s, 40s, max 60s`).
+  - Once the API restarts, SSE reconnects and backoff resets.
+
+### TEST-18A-03: Logout in Another Tab Ends Stream
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Log in as `demo_dev` in Tab 1 (keep `/api/notifications/stream` open).
+  2. Open Tab 2 and click Logout (`POST /api/auth/logout`).
+  3. Wait up to 60 seconds and inspect Tab 1's SSE stream status.
+- **Expected Result**:
+  - Within 60 seconds, the server's read-only session re-check detects the deleted session and closes the SSE stream.
+
+### TEST-18A-04: Deactivated User Stream Closes Within 60 Seconds
+- **Status**: `NOT RUN`
+- **Role to Log In As**: `system_admin` (`boss`), `employee` (`demo_dev`)
+- **Test Steps**:
+  1. Log in as `demo_dev` in Browser A (keep `/api/notifications/stream` open).
+  2. Log in as `boss` in Browser B and deactivate `demo_dev` (`isActive = false`).
+  3. Wait up to 60 seconds and inspect Browser A's SSE stream status.
+- **Expected Result**:
+  - Within 60 seconds, the server's read-only session re-check detects `isActive === false` and closes `demo_dev`'s SSE stream.

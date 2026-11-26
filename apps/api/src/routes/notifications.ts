@@ -2,11 +2,77 @@ import { Router, type Response } from 'express';
 import type { Prisma } from '@prisma/client';
 import { db } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { requireAuth, type AuthRequest } from '../middleware/auth.js';
+import {
+  requireAuth,
+  requirePasswordChanged,
+  type AuthRequest,
+} from '../middleware/auth.js';
 import { can } from '../lib/permissions.js';
 import { isValidUuid } from '../services/projectAccess.js';
+import {
+  canAcceptNewStream,
+  publishToUser,
+  registerNotificationStream,
+} from '../services/notificationStream.js';
 
 export const notificationsRouter = Router();
+
+// ── GET /api/notifications/stream (Registered BEFORE /:id/read) ─────────────────
+
+notificationsRouter.get(
+  '/stream',
+  requireAuth,
+  requirePasswordChanged,
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!can(req.user!, 'notification:read')) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'You do not have permission to access notifications',
+      });
+    }
+
+    // Amendment F: Return 503 as normal JSON BEFORE any SSE headers are written
+    if (!canAcceptNewStream()) {
+      return res.status(503).json({
+        error: 'service_unavailable',
+        message: 'Too many active notification streams',
+      });
+    }
+
+    const userId = req.user!.id;
+    const unreadCount = await db.notification.count({
+      where: {
+        userId,
+        readAt: null,
+      },
+    });
+
+    // Re-check cap right before setting headers in case of concurrent requests
+    if (!canAcceptNewStream()) {
+      return res.status(503).json({
+        error: 'service_unavailable',
+        message: 'Too many active notification streams',
+      });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.status(200);
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    const entry = registerNotificationStream(userId, req.sessionId, res);
+    if (!entry) {
+      res.end();
+      return;
+    }
+
+    publishToUser(userId, { unreadCount });
+  })
+);
 
 // ── GET /api/notifications/unread-count (Registered BEFORE /:id/read) ───────────
 

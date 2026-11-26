@@ -6,6 +6,10 @@ import {
   filterActiveProjectRecipients,
 } from '../services/notifications.js';
 import {
+  publishAfterCommit,
+  type PendingStreamNotification,
+} from '../services/notificationStream.js';
+import {
   requireAuth,
   requirePasswordChanged,
   type AuthRequest,
@@ -317,6 +321,8 @@ messagesRouter.post(
       return res.status(404).json({ error: 'not_found', message: 'Message not found' });
     }
 
+    const pendingNotifications: PendingStreamNotification[] = [];
+
     const result = await db.$transaction(async (tx) => {
       // Transaction advisory lock on message conversion to avoid concurrent duplication
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'to-task:' + messageId}))`;
@@ -384,7 +390,7 @@ messagesRouter.post(
       ]);
 
       for (const recipientId of eligibleRecipients) {
-        await createNotification(tx, {
+        const createdNotif = await createNotification(tx, {
           userId: recipientId,
           actorUserId: req.user!.id,
           type: NOTIFICATION_TYPES.MESSAGE_CONVERTED_TO_TASK,
@@ -398,6 +404,12 @@ messagesRouter.post(
             actorUserId: req.user!.id,
           },
         });
+        if (createdNotif) {
+          pendingNotifications.push({
+            userId: recipientId,
+            notificationId: createdNotif.id,
+          });
+        }
       }
 
       return { task };
@@ -409,6 +421,8 @@ messagesRouter.post(
         message: 'Message has already been converted to a task',
       });
     }
+
+    await publishAfterCommit(pendingNotifications);
 
     return res.status(201).json({
       ok: true,

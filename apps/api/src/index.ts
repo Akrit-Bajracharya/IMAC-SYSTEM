@@ -2,6 +2,7 @@ import { app } from './app.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { cleanExpiredSessions } from './services/session.js';
+import { closeAllNotificationStreams } from './services/notificationStream.js';
 
 const PORT = config.port;
 
@@ -27,6 +28,7 @@ const server = app.listen(PORT, () => {
 function handleShutdown(signal: string) {
   logger.info({ signal }, 'Received shutdown signal, closing server gracefully...');
   clearInterval(cleanupInterval);
+  closeAllNotificationStreams();
 
   server.close(() => {
     logger.info('HTTP server closed');

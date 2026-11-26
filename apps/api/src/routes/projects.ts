@@ -3,6 +3,10 @@ import { db } from '../db.js';
 import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
 import { createNotification } from '../services/notifications.js';
 import {
+  publishAfterCommit,
+  type PendingStreamNotification,
+} from '../services/notificationStream.js';
+import {
   requireAuth,
   requirePasswordChanged,
   type AuthRequest,
@@ -502,6 +506,8 @@ projectsRouter.post(
       });
     }
 
+    const pendingNotifications: PendingStreamNotification[] = [];
+
     try {
       const newMember = await db.$transaction(async (tx) => {
         const m = await tx.projectMember.create({
@@ -537,7 +543,7 @@ projectsRouter.post(
           },
         });
 
-        await createNotification(tx, {
+        const createdNotif = await createNotification(tx, {
           userId,
           actorUserId: req.user!.id,
           type: NOTIFICATION_TYPES.PROJECT_MEMBER_ADDED,
@@ -550,9 +556,17 @@ projectsRouter.post(
             actorUserId: req.user!.id,
           },
         });
+        if (createdNotif) {
+          pendingNotifications.push({
+            userId,
+            notificationId: createdNotif.id,
+          });
+        }
 
         return m;
       });
+
+      await publishAfterCommit(pendingNotifications);
 
       return res.status(201).json(newMember);
     } catch (err: any) {

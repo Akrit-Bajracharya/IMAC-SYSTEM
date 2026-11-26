@@ -1873,3 +1873,26 @@ Commit `e0f698c` claimed to deliver Project/Task pickers on `DailyWorkLogPage.ts
   - Added mock-based tests in `apps/api/src/__tests__/notificationTriggers.test.ts` covering all 5 triggers, actor exclusion, inactive/departed member exclusion, 409 conflict guard, transaction rollback, payload privacy, and bidirectional API <-> Web constants sync.
   - Updated `apps/api/src/__tests__/setup.ts` (`findMany` default `[]`) and `apps/api/src/__tests__/projectMessages.test.ts` (added `projectMember` and `notification` delegates to inline `tx` mocks).
   - Created read-only `docs/notification-triggers-check.sql` for `imac_demo` inspection.
+
+---
+
+## Current Milestone: Step 18a — Live Notification Delivery with Server-Sent Events (SSE) — COMPLETED
+
+### 1. What Was Built
+- **In-Memory SSE Stream Registry (`apps/api/src/services/notificationStream.ts`)**:
+  - `Map<userId, Set<StreamEntry>>` capping at **5 concurrent streams per user** (evicting the oldest and clearing both its ping and session timers) and **500 total streams** (returning HTTP 503 JSON before any SSE headers are written).
+  - Removes entry and clears both timers on response `close`/`error`.
+  - Emits `: ping\n\n` keep-alive every 25 seconds.
+  - Re-checks session validity every 60 seconds using a **read-only** `db.session.findUnique({ where: { id: sessionId }, include: { user: true } })` lookup (never calling `getSession` so `lastActiveAt`/`expiresAt` are not refreshed) and closes the stream if missing, expired, `isActive === false`, or `mustChangePassword === true`.
+  - `publishToUser(userId, event)` emits ONLY `{ unreadCount }` and optional `{ notificationId }` (zero titles/payloads/text).
+  - `publishAfterCommit(notifications)` runs AFTER `$transaction` commits, catching all sync/async errors so publish failures never alter or delay the HTTP response.
+  - Wired `closeAllNotificationStreams()` into the existing `SIGTERM`/`SIGINT` `handleShutdown` in `apps/api/src/index.ts`.
+- **SSE Route & Trigger Publishing (`apps/api/src/routes/notifications.ts`, `tasks.ts`, `messages.ts`, `projects.ts`)**:
+  - Registered `GET /api/notifications/stream` BEFORE `/:id/read`, protected by `requireAuth`, `requirePasswordChanged`, and `can(user, 'notification:read')`. Sets `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform`, `Connection: keep-alive`, `X-Accel-Buffering: no`.
+  - Updated all 5 trigger routes to collect `{ userId, notificationId }` inside `$transaction` and call `publishAfterCommit` only after `$transaction` resolves.
+- **Web SSE Integration & Helpers (`apps/web`)**:
+  - Created `apps/web/src/lib/notificationStreamHelpers.ts` (exponential backoff `5s..60s`, safe JSON `parseNotificationStreamEvent`, fallback 60s poll interval, and `decideStreamActionOnVisibility` for 2-minute hidden-tab close & timer cancellation on return).
+  - Updated `NotificationBell.tsx` to maintain a single `EventSource('/api/notifications/stream', { withCredentials: true })` per tab (StrictMode-safe cleanup on unmount), invalidate `notificationKeys.all` on `'unread'` events, fall back to 60s polling on error/close with exponential backoff, and close after 2 minutes when hidden.
+- **Tests**:
+  - `apps/api/src/__tests__/notificationStream.test.ts` (14 mock-based tests) + `routeInventory.test.ts` (+1 test).
+  - `apps/web/src/lib/__tests__/notificationStreamHelpers.test.ts` (24 pure Node Vitest tests).
